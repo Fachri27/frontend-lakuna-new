@@ -1,0 +1,1980 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Theme tokens (flip on .dark) ─────────────────────────────── */
+/**
+ * TANGGA NADA KERTAS
+ *
+ * Halaman ini bukan kumpulan section terang dan gelap yang ditempel
+ * bergantian — ia satu cetakan yang muncul di baki pengembang: mulai dari
+ * kamar gelap (hero), lewat baki (arsip, peta, koridor), keluar ke meja
+ * terang (contact sheet, langganan). Karena itu nada latar disimpan sebagai
+ * TANGGA berurut, bukan pasangan terang/gelap:
+ *
+ *   --paper     nada paling terang (pelat, kartu yang harus naik dari latar)
+ *   --bg        kertas dasar
+ *   --wash      baki pengembang — satu langkah lebih dalam dari kertas
+ *   --darkroom  langkah terdalam
+ *
+ * Tiap tema mengisi keempatnya, jadi urutannya tetap sama dan section tidak
+ * perlu tahu tema apa yang sedang aktif — cukup memilih anak tangganya.
+ *
+ * Di tema terang `--darkroom` SENGAJA bukan hitam. Zona gelap di sini adalah
+ * bayangan di atas kertas, bukan lubang yang dilubangi di halaman; hitam pekat
+ * membuat surround-nya lebih berkontras daripada fotonya sendiri — persis yang
+ * tidak boleh terjadi di arsip foto.
+ */
+:root {
+  /* Google Fonts (dimuat via app.html) — pengganti next/font */
+  --font-fraunces: "Fraunces";
+  --font-hanken: "Hanken Grotesk";
+
+  /* ── Mode terang = RUANG LIHAT CETAK ──────────────────────────────────
+     Mode gelap adalah kamar gelap di bawah safelight. Mode terang bukan
+     "halaman yang sama tapi pucat" — ia ruangan kedua di gedung yang sama:
+     bilik tempat cetakan dinilai setelah lampu dinyalakan.
+
+     Karena itu surround-nya abu NETRAL, bukan krem hangat. Bilik penilaian
+     cetak memang memakai surround abu netral supaya mata menilai warna
+     cetakan tanpa dipengaruhi sekitarnya — dan halaman ini isinya thumbnail
+     semua, jadi krem hangat menempelkan rona ke setiap foto. Netral bikin
+     fotonya terbaca jujur.
+
+     Tangga nadanya tetap sama arahnya, hanya rona hangatnya yang dilepas.
+     Cetakan lebih terang daripada surround; baki lebih gelap:
+       wash 0.724 < bg 0.838 < paper 0.929 < surface 0.982 (luminance) */
+  --paper: #f7f7f6;         /* cetakannya sendiri — pelat & kartu */
+  --bg: #ececeb;            /* surround bilik */
+  --wash: #dedddb;          /* baki */
+  --darkroom: #1f2022;      /* arang netral — bayangan, bukan lubang */
+
+  --fg: #16171a;
+  /* Netral, tanpa bias hangat. 5.41 di atas --bg, 4.71 di atas --wash. */
+  --fg-muted: #5e5f61;
+
+  /* Safelight itu lampu: ia menyala DI DALAM kamar gelap. Di atas kertas,
+     pigmen yang sama datang sebagai tinta — hue-nya dipertahankan, kepekatannya
+     yang naik. #ff4d12 dapat 5.85 di atas #0c0d0f tapi cuma 2.89 di atas
+     kertas #f2efe8; satu nilai tidak bisa melayani dua medium.
+     --safelight-lamp tetap dipakai komponen yang latarnya gelap di KEDUA tema
+     (preloader, peta, hero & penutup yang beralas foto) lewat .on-darkroom.
+
+     #b83007 = merah cetak; nilai terdekat dengan #d8330a yang masih lolos
+     4.5 di ruang lihat (5.13 di --bg, 4.47 di --wash). #d8330a sendiri cuma
+     dapat 4.04 dan 3.52. */
+  --safelight: #b83007;
+  --safelight-lamp: #ff4d12;
+  /* Halo tombol/kartu. Harus token, bukan color-mix() langsung di kelas
+     arbitrary Tailwind: parser-nya tidak menerima koma bersarang di sana dan
+     aturannya batal terkompilasi — tombolnya kehilangan bayangan sama sekali.
+     Satu var() tunggal aman. */
+  --safelight-glow: color-mix(in srgb, var(--safelight) 55%, transparent);
+  --safelight-glow-soft: color-mix(in srgb, var(--safelight) 32%, transparent);
+  --safelight-ring: color-mix(in srgb, var(--safelight) 18%, transparent);
+  /* Dinaikkan dari 0.14: surround abu lebih gelap daripada krem sebelumnya,
+     jadi garis rambut dengan alpha yang sama jadi kurang terbaca. */
+  --hair: rgba(22, 23, 26, 0.16);
+  --surface: #fdfdfc;
+  --surface-2: var(--wash);
+  --plate: var(--paper);
+  --shadow: 0 30px 80px -40px rgba(22, 23, 26, 0.32);
+}
+.dark {
+  --paper: #16181c;
+  --bg: #0c0d0f;            /* neutral near-black — no blue cast so photos read true */
+  --wash: #0a0b0d;
+  --darkroom: #050608;
+
+  --safelight: var(--safelight-lamp);
+
+  --fg: #f1efe9;            /* warm off-white */
+  --fg-muted: #9aa0a6;      /* neutral gray (was blue-slate) */
+  --hair: rgba(241, 239, 233, 0.12);
+  --surface: #16181c;
+  --surface-2: var(--wash);
+  --plate: var(--darkroom);
+  --shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.7);
+}
+
+@theme inline {
+  --font-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+  --font-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-bg: var(--bg);
+  --color-paper: var(--paper);
+  --color-wash: var(--wash);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-hair: var(--hair);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-plate: var(--plate);
+  --color-darkroom: var(--darkroom);
+  --color-safelight: var(--safelight);
+  --color-safelight-lamp: var(--safelight-lamp);
+  --color-safelight-soft: #ff7a4a;
+  --color-ocean: #0c0d0f;       /* neutral near-black (brand "ocean" lives on as a name) */
+  --color-ocean-deep: #050608; /* neutral darker — used as photo overlays, so no blue tint on images */
+  --color-ivory: #f4f1ea;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: auto; /* Lenis owns smoothing; reduced-motion keeps auto */
+  }
+  /* Lenis smooth-scroll essentials (inlined to avoid bare-specifier @import) */
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis:not(.lenis-autoToggle).lenis-stopped {
+    overflow: clip;
+  }
+  .lenis [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+
+  /* ── Accessibility panel hooks (driven by <html data-*> from AccessProvider) ── */
+  html[data-text-size="sm"] {
+    font-size: 93.75%;
+  }
+  html[data-text-size="lg"] {
+    font-size: 112.5%;
+  }
+
+  html[data-contrast="high"] {
+    --fg: #000000;
+    --fg-muted: #1a1a1a;
+    --hair: rgba(0, 0, 0, 0.5);
+  }
+  html[data-contrast="high"].dark {
+    --fg: #ffffff;
+    --fg-muted: #e8e8e8;
+    --hair: rgba(255, 255, 255, 0.45);
+  }
+
+  html[data-reduce-motion="true"] *,
+  html[data-reduce-motion="true"] *::before,
+  html[data-reduce-motion="true"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  html[data-reduce-motion="true"] .marquee__track {
+    animation: none !important;
+  }
+
+  /* CVD correction — media only, never text/logos. Matches apps/web app.css. */
+  html[data-cvd] img:not(.no-cvd),
+  html[data-cvd] video:not(.no-cvd),
+  html[data-cvd] picture img:not(.no-cvd),
+  html[data-cvd] .cvd-target {
+    filter: url(#cvd-filter) !important;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    transition: background 0.5s ease, color 0.5s ease;
+  }
+  ::selection {
+    background: #ff4d12;
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid #ff4d12;
+    outline-offset: 3px;
+  }
+}
+
+@layer utilities {
+  /* ── Scrim hero ──────────────────────────────────────────────────────
+     Di mobile teks hero selebar layar dan menumpuk di bawah, jadi gradien
+     horizontal rancangan desktop tidak berarti apa pun di sini: pada 390px
+     SELURUH lebar jatuh di bagian gelapnya (70% di x=0, masih 52% di 179px),
+     sehingga fotonya mati sepenuhnya. Versi mobile karena itu hanya vertikal,
+     berbobot ke bawah tempat teksnya berada; bagian atas foto dibiarkan hidup. */
+  .hero-scrim {
+    /* Mobile: layarnya potret, jadi fotonya harus tetap foto di dua pertiga
+       atas — gelapnya baru datang di 34% ke bawah, tepat sebelum judul, bukan
+       merata dari tengah. Stop 48%/62% adalah alas judul dan paragraf. */
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-ocean-deep) 76%, transparent),
+      color-mix(in srgb, var(--color-ocean-deep) 14%, transparent) 22%,
+      color-mix(in srgb, var(--color-ocean-deep) 12%, transparent) 34%,
+      color-mix(in srgb, var(--color-ocean-deep) 58%, transparent) 48%,
+      color-mix(in srgb, var(--color-ocean-deep) 86%, transparent) 62%,
+      color-mix(in srgb, var(--color-ocean-deep) 94%, transparent)
+    );
+  }
+  @media (min-width: 640px) {
+    /* Desktop: dua lapis yang sudah disetel — horizontal untuk kolom teks
+       kiri, vertikal hanya untuk navbar dan rel bawah. */
+    .hero-scrim {
+      background:
+        linear-gradient(to right, color-mix(in srgb, var(--color-ocean-deep) 70%, transparent), color-mix(in srgb, var(--color-ocean-deep) 52%, transparent) 46%, transparent 82%),
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-ocean-deep) 70%, transparent), color-mix(in srgb, var(--color-ocean-deep) 18%, transparent) 30%, color-mix(in srgb, var(--color-ocean-deep) 18%, transparent) 58%, color-mix(in srgb, var(--color-ocean-deep) 88%, transparent));
+    }
+  }
+
+  /* Dipasang di komponen yang latarnya gelap di kedua tema. Satu override
+     variabel di sini mengubah seluruh text-/bg-/border-safelight di dalamnya,
+     jadi tidak perlu menyunting ratusan pemanggilan. */
+  .on-darkroom {
+    /* Meng-override --safelight (token mentah), BUKAN --color-safelight:
+       Tailwind meratakan indireksinya saat build, jadi .text-safelight
+       dikompilasi menjadi `color: var(--safelight)` dan sama sekali tidak
+       membaca --color-safelight saat runtime. */
+    --safelight: var(--safelight-lamp);
+  }
+  .kicker {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .rule {
+    height: 1px;
+    width: 100%;
+    background: var(--hair);
+  }
+  .arrow-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+  .arrow-link .arr {
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .arrow-link:hover .arr {
+    transform: translateX(7px);
+  }
+  /* CVD strength slider — matches apps/web ColorVisionToggle */
+  .cvd-range {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--hair);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+  .cvd-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 9999px;
+    background: #ff4d12;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  }
+  .cvd-range::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    background: #ff4d12;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  /* Mobile orbit-gallery filmstrip — native momentum scroll, no visible bar */
+  .filmstrip {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filmstrip::-webkit-scrollbar {
+    display: none;
+  }
+  .serif-em {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 400;
+  }
+  /* ── Darkroom payment proof slip ───────────────────────────── */
+  .proof-slip {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%),
+      var(--surface);
+  }
+  /* Tear-off perforation strip (receipt edge) — row of punched holes */
+  .proof-perf {
+    height: 13px;
+    background-image: radial-gradient(
+      circle,
+      var(--bg, #050608) 3px,
+      transparent 3.5px
+    );
+    background-size: 13px 13px;
+    background-position: 0 50%;
+    background-repeat: repeat-x;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 6px,
+      #000 7px,
+      transparent 13px
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 6px,
+      #000 7px,
+      transparent 13px
+    );
+  }
+  /* Safelight lamp glow — steady for paid, pulsing for pending */
+  .safelight-glow {
+    background: radial-gradient(
+      circle at 50% 42%,
+      var(--color-safelight),
+      rgba(255, 77, 18, 0) 62%
+    );
+    filter: blur(22px);
+  }
+  .safelight-pulse {
+    animation: safelight-pulse 2.8s ease-in-out infinite;
+  }
+  /* Rotated rubber-stamp mark for the PAID state */
+  .darkroom-stamp {
+    border: 2px solid var(--color-safelight);
+    color: var(--color-safelight);
+    box-shadow: inset 0 0 0 1px rgba(255, 77, 18, 0.25);
+    transform: rotate(-7deg);
+    animation: stamp-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  /* Exposing scan bar for the PENDING state — light travelling across the frame */
+  .expose-scan {
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(255, 77, 18, 0.55),
+      transparent
+    );
+    animation: expose-scan 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  /* Staggered entrance for slip rows */
+  .proof-row {
+    animation: proof-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  /* Hero entrance — hidden only when JS is active (SSR-safe, no flash; visible w/o JS) */
+  .js .hero-anim {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  .js .hero-img-anim {
+    transform: scale(1.09);
+  }
+  /* Scroll-reveal targets — hidden only with JS, revealed by gsap.to */
+  .js [data-reveal] {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+  /* Word-by-word mask reveal (RevealText) — hidden only with JS */
+  .js .rt-word {
+    display: inline-block;
+    overflow: hidden;
+    padding-bottom: 0.12em;
+    vertical-align: top;
+  }
+  .js .rt-word > span {
+    display: inline-block;
+    transform: translateY(110%);
+    will-change: transform;
+  }
+  /* Infinite marquee */
+  .marquee {
+    overflow: hidden;
+  }
+  .marquee__track {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    animation: marquee 34s linear infinite;
+    will-change: transform;
+  }
+  .marquee:hover .marquee__track {
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .hero-anim,
+  .js [data-reveal],
+  .lk-shape,
+  .js .lk-head > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .hero-img-anim {
+    transform: none !important;
+  }
+  .js .rt-word > span {
+    transform: none !important;
+  }
+  .marquee__track {
+    animation: none !important;
+  }
+  .safelight-pulse,
+  .expose-scan,
+  .darkroom-stamp,
+  .proof-row {
+    animation: none !important;
+  }
+  .darkroom-stamp {
+    transform: rotate(-7deg);
+  }
+}
+
+@keyframes safelight-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.09);
+  }
+}
+
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    transform: rotate(-20deg) scale(2.6);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(1);
+  }
+}
+
+@keyframes expose-scan {
+  0% {
+    transform: translateY(-110%);
+  }
+  100% {
+    transform: translateY(110%);
+  }
+}
+
+@keyframes proof-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Darkroom preloader — iris pembuka lensa, tanpa badan lensa ────────────
+   Selalu gelap (darkroom) terlepas dari tema. Tekstur bilahnya mengisi bingkai
+   sampai ke tepi: tidak ada barel, bibir kaca, atau batas lingkaran apa pun.
+   Yang mengungkap halaman cuma lubang segi-9 yang membesar di tengah.
+
+   Yang menentukan ini kebaca sebagai bilah aperture atau cuma bidang hitam
+   bersudut adalah SKALA MEKANISMENYA terhadap layar. Poros bilah ada di r=505
+   unit dari 1000 unit viewBox, jadi jari-jari mekanisme = 0.505 × sisi SVG, dan
+   itu HARUS melebihi setengah diagonal layar supaya sudut layar tidak menganga.
+
+   CSS tidak punya satuan diagonal, tapi √(a²+b²) ≤ a + b/2 untuk b ≤ a, jadi
+   setengah diagonal ≤ 50vmax + 25vmin. Ambil 6% margin lalu bagi 0.505:
+
+       sisi SVG = 1.06 × (50vmax + 25vmin) / 0.505 = 105vmax + 52.5vmin
+
+   Hasilnya layar selalu melihat ~85% jari-jari mekanisme di rasio mana pun —
+   cukup untuk melihat kesembilan pelatnya saling tumpang tindih. Versi paling
+   awal memakai poros r=900 unit di SVG 105vmax; di sana layar cuma melihat 61%,
+   dan tiap bilah jadi bidang raksasa tanpa struktur.                          */
+@property --pl-rot {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+/* Wajib terdaftar: scale() dari custom property yang tak terdaftar akan
+   di-animasi diskret (patah), bukan interpolasi. */
+@property --pl-s {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+.pl-preloader {
+  /* Pelat kamar gelap, apa pun temanya — safelight di sini selalu lampu. */
+  --safelight: var(--safelight-lamp);
+  --pl-span: calc(105vmax + 52.5vmin);
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow: hidden;
+  color: #f1efe9;
+  /* Tanpa latar sendiri: bilahnya yang menutupi layar, supaya yang mengungkap
+     benar-benar lubang irisnya. */
+  background: transparent;
+  /* Ekor animasi (lubang sudah melewati layar tapi overlay belum di-unmount)
+     tidak boleh menahan klik. */
+  animation: pl-passthrough 0.01s linear 1.6s both;
+}
+@keyframes pl-passthrough {
+  to { pointer-events: none; }
+}
+/* Butiran film tipis di seluruh bingkai. */
+.pl-preloader::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  animation: pl-grain-out 0.45s 1.15s ease both;
+}
+@keyframes pl-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pl-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes pl-grain-out {
+  from { opacity: 0.13; }
+  to { opacity: 0; }
+}
+
+/* ── Iris ── */
+.pl-iris {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  display: block;
+  /* Kotak, bukan diregangkan: bilah tidak boleh gepeng. */
+  width: var(--pl-span);
+  height: var(--pl-span);
+  transform: translate(-50%, -50%) scale(var(--pl-s, 1));
+  will-change: transform;
+  /* Mekanismenya maju sedikit ke arah penonton sementara membuka — parallax
+     tipis terhadap halaman di baliknya, tanpa perlu men-transform halaman
+     (yang akan mengacaukan pin/ScrollTrigger di home). */
+  animation: pl-push 1.65s cubic-bezier(0.5, 0, 0.85, 0.35) 0.45s both;
+}
+@keyframes pl-push {
+  0% { --pl-s: 1; }
+  100% { --pl-s: 1.35; }
+}
+
+.pl-blade {
+  --pl-rot: -9deg;
+  transform-box: view-box;
+  transform: rotate(var(--pl-rot));
+  /* Stagger kecil per bilah: terasa mekanis, dan aman — lubangnya adalah
+     irisan semua bilah, jadi bilah yang start duluan tidak membocorkan apa pun. */
+  animation: pl-iris-open 1.4s calc(450ms + var(--pl-d, 0ms)) both;
+  will-change: transform;
+}
+/* Empat tahap, bukan satu sapuan rata: menegang (menutup lebih rapat),
+   menghentak buka, menahan napas sekejap, lalu dilepas. */
+@keyframes pl-iris-open {
+  0% { --pl-rot: -9deg; animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  12% { --pl-rot: -13deg; animation-timing-function: cubic-bezier(0.2, 0, 0.12, 1); }
+  40% { --pl-rot: 30deg; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  62% { --pl-rot: 34deg; animation-timing-function: cubic-bezier(0.5, 0, 0.25, 1); }
+  100% { --pl-rot: 58deg; }
+}
+
+.pl-bloom {
+  transform-box: view-box;
+  animation: pl-bloom 2s linear both;
+}
+@keyframes pl-bloom {
+  0% { opacity: 0; }
+  18% { opacity: 0.45; }
+  42% { opacity: 0.5; }
+  60% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+/* Coating multi-lapis + vignette, sekarang selebar bingkai karena tidak ada
+   lingkaran kaca yang membatasinya. Ini yang menyisakan kesan permukaan kaca
+   setelah badan lensanya dibuang. */
+.pl-coat {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 33% 27%, rgba(96, 150, 255, 0.11), transparent 46%),
+    radial-gradient(circle at 71% 75%, rgba(255, 120, 40, 0.13), transparent 44%),
+    radial-gradient(circle at 50% 50%, transparent 42%, rgba(0, 0, 0, 0.62));
+  animation: pl-coat 2s linear both;
+}
+@keyframes pl-coat {
+  0% { opacity: 0.75; }
+  42% { opacity: 0.85; }
+  60% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Tanda bidik kecil di titik lensa. */
+.pl-reticle {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  animation: pl-fade-out 0.35s 0.75s ease both;
+}
+.pl-ch {
+  position: absolute;
+  background: var(--color-safelight);
+  opacity: 0;
+}
+.pl-ch-h {
+  left: 46.5%;
+  right: 46.5%;
+  top: 50%;
+  height: 1px;
+  transform: scaleX(0);
+  animation: pl-chh 0.45s 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.pl-ch-v {
+  top: 44%;
+  bottom: 44%;
+  left: 50%;
+  width: 1px;
+  transform: scaleY(0);
+  animation: pl-chv 0.45s 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes pl-chh { to { transform: scaleX(1); opacity: 0.5; } }
+@keyframes pl-chv { to { transform: scaleY(1); opacity: 0.5; } }
+.pl-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-safelight);
+  box-shadow: 0 0 14px var(--color-safelight);
+  transform: translate(-50%, -50%) scale(0);
+  animation: pl-dot 0.35s 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes pl-dot {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+}
+
+/* ── Ghost flare — bentuknya mengikuti aperture, berbaris pada satu diagonal ── */
+.pl-ghosts {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  animation: pl-ghosts 1.2s cubic-bezier(0.2, 0, 0.2, 1) 0.8s both;
+}
+.pl-ghosts span {
+  position: absolute;
+  left: calc(50% + var(--gx));
+  top: calc(50% + var(--gy));
+  width: var(--gs);
+  height: var(--gs);
+  transform: translate(-50%, -50%);
+}
+@keyframes pl-ghosts {
+  0% { opacity: 0; transform: scale(0.78); }
+  28% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.34); }
+}
+
+/* Kilatan saat mekanismenya melepas. */
+.pl-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.42), rgba(255, 77, 18, 0.14) 30%, transparent 56%);
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: pl-flash 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.9s both;
+}
+@keyframes pl-flash {
+  0% { opacity: 0; transform: scale(0.5); }
+  24% { opacity: 0.7; transform: scale(0.92); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+
+/* ── Chrome (film, label, meta) ── */
+/* Logo, bar, label, dan strip film adalah perkakas keadaan TERTUTUP. Mereka
+   harus sudah habis sebelum lubangnya bersih dari layar (φ≈47° di desktop,
+   50.7° di viewport persegi — sekitar 1550ms), bukan mulai luruh di situ.
+   Sebelumnya luruh 1500→1950ms, jadi logo dan bar sempat menumpang di atas
+   halaman yang sudah terungkap. */
+.pl-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  animation: pl-fade-out 0.45s 0.95s ease both;
+}
+.pl-film {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: #050608;
+}
+.pl-film::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 16px,
+    rgba(241, 239, 233, 0.42) 16px 20px,
+    transparent 20px 36px
+  );
+}
+.pl-film-top { top: 0; }
+.pl-film-bottom { bottom: 0; }
+
+.pl-label {
+  position: absolute;
+  top: calc(16px + 2.2vh);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(241, 239, 233, 0.5);
+  animation: pl-in 0.35s 0.05s both;
+}
+.pl-label-tl { left: 6vw; }
+.pl-label-tr { right: 6vw; }
+
+.pl-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 7vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: pl-in 0.4s 0.08s both;
+}
+.pl-logo {
+  height: clamp(2.8rem, 8vw, 4.4rem);
+  width: auto;
+  filter: brightness(0) invert(1);
+}
+.pl-bar {
+  width: min(220px, 54vw);
+  height: 1px;
+  background: rgba(241, 239, 233, 0.16);
+  position: relative;
+  overflow: hidden;
+}
+.pl-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--color-safelight);
+  box-shadow: 0 0 10px var(--color-safelight);
+  animation: pl-bar 0.9s linear both;
+}
+@keyframes pl-bar { to { width: 100%; } }
+.pl-metarow {
+  width: min(220px, 54vw);
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(241, 239, 233, 0.6);
+}
+.pl-metarow .pl-frame { color: rgba(241, 239, 233, 0.75); }
+
+@media (max-width: 480px) {
+  .pl-label { font-size: 0.52rem; }
+  .pl-meta { bottom: 6vh; }
+}
+
+/* ── Arsip — strip bingkai yang hanyut ────────────────────────────────────
+   Marquee, tapi disetel ke rumah ini: tinggi seragam dengan lebar mengikuti
+   rasio asli foto (contact strip film, bukan kisi persegi), sudut `rounded-md`
+   dan garis rambut alih-alih `rounded-xl` + drop shadow, dan latar
+   var(--darkroom) supaya di mode gelap ia menyatu dengan halaman — pelat hitam
+   pekat akan mengembalikan sambungan yang sudah dibereskan. */
+.as {
+  position: relative;
+  /* Satu anak tangga di atas kamar gelap. Ini strip film yang diangkat ke
+     safelight — benda yang menyala di antara dua zona gelap — dan sekaligus
+     memutus empat section gelap beruntun yang membuat tema terang tak pernah
+     benar-benar terang. */
+  background: var(--wash);
+  padding: clamp(4rem, 10vh, 7rem) 0 clamp(4.5rem, 11vh, 8rem);
+  overflow: hidden;
+}
+.as-inner {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+@media (min-width: 1024px) {
+  .as-inner { padding: 0 2.5rem; }
+}
+.as-head {
+  max-width: min(34rem, 92%);
+  margin-bottom: clamp(2rem, 5vh, 3.25rem);
+}
+.as-title {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(1.7rem, 3.6vw, 2.9rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+
+/* Tepi memudar supaya strip masuk dan keluar dari latar, bukan terpotong. */
+.as .ias-mask {
+  /* overflow + no-repeat wajib: track jauh lebih lebar dari kotaknya, dan
+     mask bawaan `repeat` akan menge-tile gradiennya ke bagian yang meluber. */
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+}
+.ias-track {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: max-content;
+  will-change: transform;
+}
+.ias-card {
+  display: block;
+  flex: 0 0 auto;
+  /* Tinggi tetap, lebar bebas — bingkai potret dan lanskap tetap utuh. */
+  height: clamp(190px, 26vw, 320px);
+  overflow: hidden;
+  border-radius: 3px;
+  border: 1px solid var(--hair);
+  background: var(--surface-2);
+}
+.ias-card img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  object-fit: cover;
+  transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Yang lain meredup saat satu kartu disentuh — perhatian tertuju ke satu
+   bingkai, bukan seluruh baris menyala sekaligus. */
+.ias-track:hover img { opacity: 0.45; }
+.ias-card:hover img,
+.ias-card:focus-visible img {
+  opacity: 1;
+  transform: scale(1.03);
+}
+a.ias-card:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ias-card img { transition: none; }
+  /* Tanpa gerak, strip jadi baris yang bisa digeser sendiri. */
+  .as .ias-mask { overflow-x: auto; }
+}
+
+/* ── Perajangga — daftar kredit ───────────────────────────────────────────
+   Section paling tenang di beranda, dan itu disengaja: ia duduk di antara dua
+   tontonan (koridor di atas, orbit di bawah) dan memberi halaman napas.
+   Karena itu tidak ada pelat gelap, tidak ada gerak ambien, tidak ada palet
+   baru — hanya token situs dan jarak yang disetel. Satu-satunya kemewahan:
+   karya orang yang disorot muncul di belakang daftar. */
+.mk {
+  position: relative;
+  background: var(--bg);
+  padding: clamp(5rem, 12vh, 9rem) 0;
+}
+.mk-inner {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+@media (min-width: 1024px) {
+  .mk-inner { padding: 0 2.5rem; }
+}
+
+.mk-head {
+  max-width: min(34rem, 92%);
+  margin-bottom: clamp(2.5rem, 6vh, 4rem);
+}
+.mk-title {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(1.7rem, 3.6vw, 2.9rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.mk-meta {
+  margin-top: 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.mk-dot { color: color-mix(in srgb, var(--fg-muted) 45%, transparent); }
+
+/* ── daftar ──────────────────────────────────────────────────────────────── */
+.mk-list {
+  position: relative;
+  border-top: 1px solid var(--hair);
+}
+
+/* ── baris ───────────────────────────────────────────────────────────────── */
+.mk-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto 1.5rem;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: clamp(1.1rem, 2.4vh, 1.7rem) 0;
+  border-bottom: 1px solid var(--hair);
+  transition: padding-left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mk-row:hover,
+.mk-row:focus-visible {
+  padding-left: 0.9rem;
+}
+.mk-row:hover .mk-name,
+.mk-row:focus-visible .mk-name {
+  color: var(--color-safelight);
+}
+.mk-row:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: 4px;
+}
+.mk-name {
+  transition: color 0.35s;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(1.15rem, 2.4vw, 1.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.mk-where,
+.mk-count {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.mk-count { justify-self: end; white-space: nowrap; }
+.mk-arrow {
+  justify-self: end;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.35s, transform 0.35s, color 0.35s;
+}
+.mk-row:hover .mk-arrow,
+.mk-row:focus-visible .mk-arrow {
+  opacity: 1;
+  transform: none;
+  color: var(--color-safelight);
+}
+
+@media (max-width: 720px) {
+  .mk-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name count" "where where";
+    gap: 0.35rem 1rem;
+  }
+  .mk-name { grid-area: name; }
+  .mk-count { grid-area: count; }
+  .mk-where { grid-area: where; }
+  .mk-arrow { display: none; }
+  .mk-title { font-size: clamp(1.4rem, 6.5vw, 1.9rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-row,
+  .mk-name,
+  .mk-arrow {
+    transition: none;
+  }
+}
+
+/* ── Perjalanan — koridor bingkai ─────────────────────────────────────────
+   Koridornya ambien dan tidak bisa diklik, jadi seluruh beban desain ada di
+   dua hal: tepinya harus lebur ke halaman (kalau tidak, ia kembali jadi kotak
+   yang ditempel — persis sambungan yang baru saja dibereskan), dan bingkainya
+   harus terbaca sebagai cetakan di bawah safelight, bukan pelangi thumbnail. */
+.jr {
+  position: relative;
+  background: var(--darkroom);
+}
+.jr-corridor {
+  height: 100svh;
+  min-height: 560px;
+  width: 100%;
+  background: var(--darkroom);
+}
+
+/* Cetakan di bawah safelight: saturasi diturunkan sedikit dan kontras
+   dinaikkan tipis. Yang jauh di koridor lebih redup daripada yang dekat —
+   ditangani oleh scrim tepi, bukan per kartu, supaya tidak ada filter per
+   elemen yang harus di-raster ulang tiap frame. */
+.jr-corridor img {
+  filter: saturate(0.82) contrast(1.06);
+}
+
+/* Tepi: koridor MUNCUL dari latar halaman di keempat sisi.
+   PAKAI MASK, bukan overlay. Kartu-kartunya hidup di subtree `preserve-3d`
+   yang dikomposit di ruang 3D — overlay setinggi apa pun z-index-nya tetap
+   tertimpa. Mask memudarkan kartunya sendiri jadi transparan, jadi latar
+   section yang terlihat, dan lapisan tipografi tidak ikut terkena karena
+   mask hanya dipasang di pembungkus perspektif. */
+.jr-corridor > div[aria-hidden] {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 24%, #000 76%, transparent),
+    linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 24%, #000 76%, transparent),
+    linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  mask-composite: intersect;
+}
+/* ── lapisan konten ──────────────────────────────────────────────────────── */
+.jr-plate {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0 1.5rem;
+}
+.jr-scrim {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(90vw, 46rem);
+  height: min(70%, 26rem);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    var(--darkroom),
+    color-mix(in srgb, var(--darkroom) 78%, transparent) 55%,
+    transparent 100%
+  );
+}
+.jr-content {
+  position: relative;
+  max-width: min(30rem, 92%);
+  text-align: center;
+}
+.jr-title {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(1.7rem, 3.6vw, 2.9rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--color-ivory);
+  text-wrap: balance;
+}
+.jr-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, 0.6);
+  transition: color 0.3s;
+}
+.jr-cta:hover {
+  color: var(--color-safelight);
+}
+.jr-cta:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  .jr-corridor {
+    height: 88svh;
+  }
+  .jr-title {
+    font-size: clamp(1.4rem, 6.5vw, 1.9rem);
+  }
+}
+
+/* ── Peta Nusantara — bidang satelit gelap + chrome HUD instrumen ──────────
+   Ground near-black, tinta warm-white, bracket/rel amber redup, safelight
+   hanya untuk titik yang sedang dipandang. Tile Esri digelapkan lewat filter
+   pada tile-pane saja — marker (thumbnail foto) tetap berwarna penuh. */
+.im-wrap {
+  --im-ground: var(--darkroom);
+  --im-ink: #efe7dc;
+  --im-ink-dim: rgba(239, 231, 220, 0.55);
+  --im-ink-faint: rgba(239, 231, 220, 0.28);
+  --im-amber: rgba(201, 154, 106, 0.75);
+  --im-amber-dim: rgba(201, 154, 106, 0.3);
+  background: var(--im-ground);
+}
+.im-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  will-change: transform;
+}
+.im-fallback,
+.im-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.im-fallback {
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* Permukaan "bulan": desaturasi + gelap + kontras naik. Hanya tile-pane —
+   marker dan overlay lain tidak ikut terfilter. */
+.im-fallback,
+.im-wrap .leaflet-tile-pane {
+  filter: grayscale(0.9) brightness(0.62) contrast(1.18) sepia(0.18);
+}
+.im-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 105% at 50% 50%, transparent 52%, color-mix(in srgb, var(--darkroom) 62%, transparent) 100%),
+    linear-gradient(
+      to bottom,
+      var(--darkroom) 0%,
+      color-mix(in srgb, var(--darkroom) 45%, transparent) 9%,
+      transparent 22%,
+      transparent 60%,
+      color-mix(in srgb, var(--darkroom) 55%, transparent) 84%,
+      var(--darkroom) 100%
+    );
+}
+.im-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 410;
+  pointer-events: none;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+.im-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  user-select: none;
+}
+.im-hud button {
+  pointer-events: auto;
+}
+.js .im-reveal {
+  opacity: 0;
+}
+
+/* ── bracket sudut + rel tepi ────────────────────────────────────────────── */
+.im-bracket {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--im-amber);
+}
+.im-bracket span {
+  position: absolute;
+  display: block;
+}
+.im-bracket-tl,
+.im-bracket-tr,
+.im-bracket-bl,
+.im-bracket-br {
+  width: clamp(34px, 4vw, 58px);
+  height: clamp(34px, 4vw, 58px);
+  border: 0 solid currentColor;
+  opacity: 0.9;
+}
+.im-bracket-tl {
+  top: 12px;
+  left: 12px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.im-bracket-tr {
+  top: 12px;
+  right: 12px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+.im-bracket-bl {
+  bottom: 12px;
+  left: 12px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+.im-bracket-br {
+  bottom: 12px;
+  right: 12px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+/* rel tipis yang menyentuh tepi atas layar — detail kecil yang bikin bingkai
+   terbaca sebagai instrumen, bukan sekadar border. */
+.im-bracket-rail-l,
+.im-bracket-rail-r {
+  top: 4px;
+  height: 1px;
+  width: clamp(70px, 9vw, 130px);
+  background: currentColor;
+  opacity: 0.7;
+}
+.im-bracket-rail-l {
+  left: 0;
+}
+.im-bracket-rail-r {
+  right: 0;
+}
+
+/* ── tipografi HUD ───────────────────────────────────────────────────────── */
+.im-mono {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--im-ink-dim);
+}
+
+/* ── kluster kontrol kiri-atas ───────────────────────────────────────────── */
+.im-cluster {
+  position: absolute;
+  top: clamp(16px, 2.2vh, 26px);
+  left: clamp(16px, 2vw, 26px);
+  display: flex;
+  gap: 0.45rem;
+}
+.im-round {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 231, 220, 0.35);
+  background: rgba(7, 9, 10, 0.4);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: var(--im-ink);
+  cursor: pointer;
+  transition:
+    border-color 0.3s,
+    color 0.3s,
+    background 0.3s,
+    transform 0.25s;
+}
+.im-round:hover {
+  border-color: var(--color-safelight);
+  color: var(--color-safelight);
+}
+/* Umpan balik tekan — tombol instrumen yang merespons jari, bukan cuma kursor. */
+.im-round:active,
+.im-dv-step:active {
+  transform: scale(0.92);
+}
+.im-round:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: 2px;
+}
+
+/* ── slate kiri-atas (kicker + status) ───────────────────────────────────── */
+.im-slate {
+  position: absolute;
+  top: calc(clamp(16px, 2.2vh, 26px) + 2.9rem);
+  left: clamp(16px, 2vw, 26px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.im-slate-kicker {
+  color: var(--im-ink);
+}
+.im-slate-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.5rem;
+}
+.im-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-safelight);
+  box-shadow: 0 0 8px var(--color-safelight);
+  animation: im-live 2.4s ease-in-out infinite;
+}
+@keyframes im-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* ── hint tengah-atas ────────────────────────────────────────────────────── */
+.im-hint {
+  position: absolute;
+  top: clamp(18px, 2.4vh, 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  line-height: 1.5;
+  color: var(--im-ink-dim);
+  transition: opacity 0.8s ease;
+}
+.im-hint.is-done {
+  opacity: 0;
+}
+
+/* ── marker HUD ──────────────────────────────────────────────────────────── */
+.im-mk-wrap {
+  background: transparent;
+  border: 0;
+}
+.im-mk {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  color: var(--im-ink);
+}
+.im-mk-label {
+  position: absolute;
+  left: calc(100% + 0.6rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 0.42rem;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(239, 231, 220, 0.55);
+  text-shadow: 0 1px 10px rgba(4, 6, 7, 0.95);
+  transition: color 0.3s, opacity 0.3s;
+}
+.im-mk-name {
+  font-weight: 500;
+}
+.im-mk-num {
+  font-size: 0.44rem;
+  color: rgba(239, 231, 220, 0.4);
+}
+
+/* plate — semua titik kini bingkai foto: thumbnail bingkai pertama +
+   bracket sudut, tergeletak di atas bidang satelit. Jenis isi (galeri /
+   panorama / titik tunggal) dibaca dari glyph di tengah plate. */
+.im-mk-plate-inner {
+  position: absolute;
+  inset: 0;
+  color: rgba(239, 231, 220, 0.85);
+}
+.im-mk-plate-img {
+  position: absolute;
+  inset: 4px;
+  border-radius: 3px;
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.85) contrast(1.05);
+  transition: filter 0.4s, transform 0.4s;
+}
+.im-mk-br {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.im-mk-plate-glyph {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: rgba(7, 9, 10, 0.55);
+  color: #fff;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+/* hover + titik yang sedang dipandang */
+.im-mk:hover .im-mk-label {
+  color: var(--im-ink);
+}
+/* Titik yang dipandang sudah dinamai judul display di terrain — label mono di
+   sebelahnya cuma mengulang nama yang sama di jarak beberapa piksel. */
+.im-mk.is-focus .im-mk-label {
+  opacity: 0;
+}
+.im-mk:hover .im-mk-plate-img {
+  filter: saturate(1) contrast(1.1);
+  transform: scale(1.03);
+}
+.im-mk.is-focus {
+  color: var(--color-safelight);
+}
+.im-mk.is-focus .im-mk-num {
+  color: var(--color-safelight);
+}
+/* Titik yang dipandang menandai fokus lewat bracket sudutnya yang menyala
+   (lihat .im-mk-plate.is-focus di bawah) — tanpa denyut tambahan. */
+.im-mk-plate.is-focus .im-mk-plate-inner {
+  color: var(--color-safelight);
+}
+.im-mk-plate.is-focus .im-mk-plate-img {
+  filter: saturate(1) contrast(1.1);
+}
+
+/* ── index bar bawah ─────────────────────────────────────────────────────── */
+.im-index {
+  --im-index-pad: clamp(14px, 2vh, 22px);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 clamp(18px, 3.2vw, 46px) var(--im-index-pad);
+}
+.im-index-bar {
+  position: relative;
+}
+.im-index-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(239, 231, 220, 0.12);
+}
+.im-index-progress-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: rgba(239, 231, 220, 0.5);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.im-index-cells {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-top: 1px solid rgba(239, 231, 220, 0.22);
+  pointer-events: auto;
+}
+.im-index-cells::-webkit-scrollbar {
+  display: none;
+}
+.im-index-cell {
+  position: relative;
+  flex: 0 0 clamp(94px, 10.5vw, 150px);
+  /* Sel tak berisi teks lagi, jadi tingginya disetel eksplisit. */
+  height: 1.35rem;
+  border-left: 1px solid rgba(239, 231, 220, 0.14);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.im-index-cell:first-child {
+  border-left: 0;
+}
+.im-index-cell:hover {
+  background: rgba(239, 231, 220, 0.05);
+}
+.im-index-cell:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: -1px;
+}
+.im-index-caret {
+  position: absolute;
+  top: -0.62rem;
+  left: 0.5rem;
+  font-size: 0.5rem;
+  line-height: 1;
+  color: var(--im-ink);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.im-index-cell.is-active .im-index-caret {
+  opacity: 1;
+}
+/* ── readout koordinat kanan-bawah ───────────────────────────────────────── */
+.im-coord {
+  position: absolute;
+  right: clamp(18px, 3.2vw, 46px);
+  bottom: calc(clamp(10px, 1.6vh, 18px) + 4.2rem);
+  color: var(--color-safelight);
+  font-size: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .im-slate,
+  .im-coord {
+    display: none;
+  }
+  .im-mk-label {
+    font-size: 0.46rem;
+  }
+  .im-index-cell {
+    flex-basis: 82px;
+  }
+}
+
+/* ── detail view ─────────────────────────────────────────────────────────── */
+.im-dv {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: #07090a;
+  color: var(--im-ink, #efe7dc);
+  animation: im-dv-in 0.45s ease both;
+  --im-ink: #efe7dc;
+  --im-ink-dim: rgba(239, 231, 220, 0.55);
+  --im-amber: rgba(201, 154, 106, 0.75);
+}
+@keyframes im-dv-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.im-dv-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.im-dv-stage.is-zoomed {
+  cursor: zoom-out;
+}
+.im-dv-imgwrap {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.im-dv-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 110% at 50% 45%, transparent 46%, rgba(4, 6, 7, 0.62) 100%),
+    linear-gradient(to bottom, rgba(4, 6, 7, 0.55) 0%, transparent 18%, transparent 52%, rgba(4, 6, 7, 0.9) 100%);
+}
+.im-dv .im-bracket,
+.im-dv .im-hint,
+.im-dv-reticle,
+.im-dv-compass,
+.im-dv-meta,
+.im-dv-caption {
+  pointer-events: none;
+}
+.im-dv-hint {
+  z-index: 10;
+}
+.im-dv-close {
+  position: absolute;
+  top: clamp(16px, 2.2vh, 26px);
+  right: clamp(16px, 2vw, 26px);
+  z-index: 10;
+}
+.im-dv-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.im-dv-compass {
+  position: relative;
+  order: -2;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 64px;
+  height: 64px;
+  /* ruang untuk huruf N/E/S/W yang menggantung di luar lingkaran */
+  margin: 0 1rem 0 1.1rem;
+  color: rgba(239, 231, 220, 0.75);
+}
+.im-dv-compass svg {
+  width: 100%;
+  height: 100%;
+}
+.im-dv-compass span {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: rgba(239, 231, 220, 0.7);
+}
+.im-dv-compass-n { top: -0.75rem; left: 50%; transform: translateX(-50%); }
+.im-dv-compass-s { bottom: -0.75rem; left: 50%; transform: translateX(-50%); }
+.im-dv-compass-w { left: -0.85rem; top: 50%; transform: translateY(-50%); }
+.im-dv-compass-e { right: -0.85rem; top: 50%; transform: translateY(-50%); }
+
+.im-dv-meta {
+  position: absolute;
+  left: clamp(16px, 2vw, 30px);
+  bottom: calc(clamp(92px, 13vh, 120px) + 2.6rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(62ch, 60vw);
+}
+.im-dv-meta-name {
+  color: var(--im-ink);
+}
+.im-dv-meta-sep {
+  color: rgba(239, 231, 220, 0.25);
+}
+.im-dv-meta-clock {
+  color: var(--color-safelight);
+}
+.im-dv-caption {
+  position: absolute;
+  left: clamp(16px, 2vw, 30px);
+  bottom: calc(clamp(92px, 13vh, 120px) + 0.6rem);
+  max-width: min(52ch, 55vw);
+  font-family: var(--font-body);
+  font-size: clamp(0.85rem, 1.5vw, 1.05rem);
+  line-height: 1.35;
+  color: rgba(239, 231, 220, 0.9);
+}
+
+/* filmstrip */
+.im-dv-strip-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 1.6rem clamp(10px, 1.6vw, 20px) clamp(10px, 1.6vh, 18px);
+  background: linear-gradient(
+    to top,
+    rgba(4, 6, 7, 0.94) 0%,
+    rgba(4, 6, 7, 0.86) 55%,
+    transparent 100%
+  );
+}
+.im-dv-strip {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-top: 1px solid rgba(239, 231, 220, 0.22);
+}
+.im-dv-strip::-webkit-scrollbar {
+  display: none;
+}
+.im-dv-group {
+  flex: 0 0 auto;
+  border-left: 1px solid rgba(239, 231, 220, 0.14);
+  padding: 0.45rem 0.55rem 0;
+}
+.im-dv-group:first-child {
+  border-left: 0;
+}
+.im-dv-grouplabel {
+  margin: 0 0 0.4rem;
+  font-size: 0.48rem;
+  color: rgba(239, 231, 220, 0.45);
+}
+.im-dv-thumbs {
+  display: flex;
+  gap: 0.3rem;
+}
+.im-dv-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: clamp(48px, 5vw, 62px);
+  height: clamp(36px, 3.8vw, 48px);
+  overflow: hidden;
+  border: 1px solid transparent;
+  background: #0b0e10;
+  opacity: 0.62;
+  cursor: pointer;
+  transition: opacity 0.3s, border-color 0.3s;
+}
+.im-dv-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.im-dv-thumb:hover {
+  opacity: 0.85;
+}
+.im-dv-thumb.is-active {
+  opacity: 1;
+  border-color: var(--color-safelight);
+}
+.im-dv-thumb:focus-visible {
+  outline: 1px solid var(--color-safelight);
+  outline-offset: 1px;
+}
+.im-dv-step-prev {
+  order: -1;
+}
+.im-dv-step-next {
+  order: 1;
+}
+.im-dv-step {
+  flex: 0 0 auto;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(239, 231, 220, 0.25);
+  background: rgba(7, 9, 10, 0.45);
+  color: var(--im-ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 0.3s,
+    color 0.3s,
+    transform 0.25s;
+}
+.im-dv-step:hover {
+  border-color: var(--color-safelight);
+  color: var(--color-safelight);
+}
+
+@media (max-width: 640px) {
+  .im-dv-compass,
+  .im-dv-meta {
+    display: none;
+  }
+  .im-dv-caption {
+    max-width: 88vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im-live-dot {
+    animation: none;
+  }
+  .im-name-in {
+    animation: none;
+  }
+  .im-index-progress-fill,
+  .im-hint {
+    transition: none;
+  }
+}
+
+/* Leaflet chrome — minimal dark */
+.im-wrap .leaflet-container {
+  background: #07090a;
+  outline: none;
+  font-family: var(--font-mono);
+}
+.im-wrap .leaflet-control-attribution {
+  background: rgba(7, 9, 10, 0.7) !important;
+  color: rgba(239, 231, 220, 0.35) !important;
+  font-size: 0.5rem !important;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px 0 0 0;
+}
+.im-wrap .leaflet-control-attribution a {
+  color: rgba(239, 231, 220, 0.55) !important;
+}
+.im-wrap .leaflet-bar {
+  display: none;
+}
+
+/* Sembunyikan bar atas (navbar + banner voucher) selama section peta memenuhi
+   viewport — `data-map-pinned` disetel di <html> oleh IntersectionObserver di
+   IndonesiaMap. Unlayered supaya menang atas utility Tailwind
+   `transition-[top]` / `transition-[height]`. */
+[data-topbar] {
+  transition:
+    top 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-map-pinned="true"] [data-topbar] {
+  transform: translateY(-130%);
+}
+@media (prefers-contrast: more) {
+  :root {
+    --fg: #000000;
+    --fg-muted: #1a1a1a;
+    --hair: rgba(0, 0, 0, 0.5);
+  }
+  .dark {
+    --fg: #ffffff;
+    --fg-muted: #e8e8e8;
+    --hair: rgba(255, 255, 255, 0.45);
+  }
+}
+
+/* Skip navigation link */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.75rem 1.5rem;
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  border-radius: 0 0 0.5rem 0;
+}
+.skip-link:focus {
+  left: 0;
+  outline: 2px solid #ff4d12;
+  outline-offset: 2px;
+}
+
+/* ── Film-strip emergence seam (GsapGallery → Category) ───────────────
+   Darkroom (#050608) → developing warm midtone → ivory light table. Sebuah
+   pita film 35mm (emulsi cream + sprocket holes + 3 jendela bingkai) menjahit
+   kontras tinggi dark→ivory; hairline safelight "print edge" + stempel mono
+   menandai tempat cetakan diletakkan di meja light-table. Subject-true: momen
+   contact sheet dibaca dari roll yang sudah dikembangkan. */
+.film-seam { position: relative; width: 100%; overflow: hidden; }
+.film-seam-grad { position: absolute; inset: 0; }
+.film-seam-glow { position: absolute; inset: 0; mix-blend-mode: screen; pointer-events: none; }
+
+.film-seam-strip {
+  position: absolute; left: 0; right: 0; top: 42%;
+  transform: translateY(-50%); display: flex; justify-content: center;
+  padding: 0 1rem; pointer-events: none;
+}
+.film-seam-ribbon {
+  position: relative; width: 100%; max-width: 1120px;
+  display: grid; grid-template-rows: 14px 1fr 14px;
+  background: linear-gradient(to bottom, #efe7d6, #e2d6bd);
+  box-shadow: 0 14px 44px -20px rgba(5, 6, 8, 0.75);
+  border-top: 1px solid rgba(5, 6, 8, 0.16);
+  border-bottom: 1px solid rgba(5, 6, 8, 0.16);
+  /* Feather tepi atas/bawah → pita film "muncul dari developer", bukan kartu
+     hard-edged yang menabrak gradien. Mask komposit (standar + webkit) supaya
+     cross-browser; grain/teks di luar ribbon tak terdampak. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+}
+.film-seam-perf {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 9px; background: rgba(5, 6, 8, 0.04);
+}
+.perf-tick { width: 9px; height: 7px; background: #050608; border-radius: 1px; flex: 0 0 auto; }
+.film-seam-frames { display: grid; grid-template-columns: repeat(3, 1fr); }
+.film-seam-frame { position: relative; height: 54px; overflow: hidden; border-left: 1px solid rgba(5, 6, 8, 0.4); }
+.film-seam-frame:first-child { border-left: 0; }
+.film-seam-frame img { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.62) contrast(0.96) brightness(0.92); }
+.film-seam-framenum {
+  position: absolute; left: 5px; bottom: 2px; font-family: var(--font-mono);
+  font-size: 8px; letter-spacing: 0.1em; color: #f4f1ea;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.film-seam-edge {
+  position: absolute; left: 0; right: 0; top: 80%; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center; gap: 0.85rem;
+  padding: 0 1.5rem; pointer-events: none;
+}
+.film-seam-edge .edge-line {
+  height: 1px; flex: 1 1 auto; max-width: 340px;
+  background: linear-gradient(to right, transparent, rgba(255, 77, 18, 0.55), transparent);
+}
+.film-seam-edge .edge-stamp {
+  font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.22em;
+  text-transform: uppercase; color: #ff4d12; white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .film-seam-ribbon { max-width: 100%; }
+  .perf-tick { width: 7px; height: 6px; }
+  .film-seam-frame { height: 46px; }
+  .film-seam-edge .edge-stamp { font-size: 0.5rem; letter-spacing: 0.16em; }
+  .film-seam-edge { gap: 0.6rem; padding: 0 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .film-seam-strip { transform: translateY(-50%) !important; }
+}
