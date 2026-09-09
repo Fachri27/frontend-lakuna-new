@@ -69,21 +69,40 @@
 	const bladePath = `${edgePath} L ${BX0},${BY} L ${BX1},${BY} Z`;
 
 	// Cahaya tepi: alpha 0 di kedua ujung + spreadMethod pad-lah yang memotong
-	// tepi, bukan panjang path-nya. Rentangnya harus memuat seluruh bagian tepi
-	// yang kelihatan di layar — titik on-screen menjangkau x lokal 72…926 pada
-	// keadaan tertutup — kalau tidak, seam antar bilah lenyap sebelum sampai tepi
-	// bingkai dan yang tersisa cuma gradien gelap tanpa tekstur. Dataran
-	// terangnya tetap dipusatkan di 267…492, tempat tepi membentuk lubang.
-	const EDGE_A = 100;
-	const EDGE_B = 820;
+	// tepi, bukan panjang path-nya.
+	//
+	// Rentangnya sengaja PENDEK. Sebelumnya 100…820 — 720 unit ≈ 1640 px di
+	// layar, jadi kesembilan seam membentang dari tepi ke tepi dan saling
+	// menyilang jauh dari pusat: bukan iris, melainkan jaring laba-laba. Pada
+	// iris sungguhan, tepi bilah hanya terbaca terang di dekat bibir lubang lalu
+	// meredup ke luar.
+	//
+	// Rentangnya juga TIDAK simetris terhadap pusat, dan itu yang menentukan.
+	// Pusat layar ada di x lokal 505 (poros berjarak 505 dari pusat, sumbu x
+	// lokal mengarah ke sana). Rentang yang menaungi pusat di tengah-tengahnya
+	// membuat tiap tepi menyala di KEDUA sisi lubang — jadilah sembilan tali yang
+	// saling menyilang: bintang, bukan iris. Pada iris sungguhan tiap seam hanya
+	// terlihat dari bibir lubang MENJAUH ke luar, dan sembilannya tidak pernah
+	// bersilangan. Maka rentangnya berhenti tepat setelah pusat (540) dan
+	// memanjang ke luar (140).
+	//
+	// Puncak terangnya ditaruh di ~472, bukan 505: selama membuka, titik tepi
+	// yang terdekat ke pusat bergeser dari x 505 (tertutup) ke 268 (φ=58°), jadi
+	// 472 melayani keadaan tertutup sekaligus paruh pertama bukaan.
+	const EDGE_A = 215;
+	const EDGE_B = 540;
 
 	// Pencahayaan per bilah: bilah yang menghadap sumber cahaya sedikit lebih
 	// terang, jadi tumpukan pelatnya kebaca punya bahan — bukan sembilan siluet
 	// hitam yang sama persis.
 	const LIGHT_DEG = 292;
 	const shade = (t: number) => {
-		const lo = [6, 7, 9];
-		const hi = [34, 39, 47];
+		// Rentangnya diturunkan drastis. Sebelumnya pelat paling terang #22262f
+		// menutupi 85–100% layar (diukur), jadi keadaan tertutup terbaca sebagai
+		// kabut biru-abu, bukan logam gelap. Sekarang pelatnya nyaris hitam dan
+		// yang memikul strukturnya adalah seam-nya, bukan luminansi bidangnya.
+		const lo = [4, 5, 7];
+		const hi = [19, 22, 27];
 		return `#${lo
 			.map((v, i) => Math.round(v + (hi[i] - v) * t).toString(16).padStart(2, "0"))
 			.join("")}`;
@@ -175,8 +194,8 @@
 			<defs>
 				<linearGradient id="pl-edge-g" gradientUnits="userSpaceOnUse" x1={EDGE_A} y1="0" x2={EDGE_B} y2="0">
 					<stop offset="0" stop-color="rgba(241,239,233,0)" />
-					<stop offset="0.25" stop-color="rgba(241,239,233,0.32)" />
-					<stop offset="0.78" stop-color="rgba(241,239,233,0.26)" />
+					<stop offset="0.5" stop-color="rgba(241,239,233,0.14)" />
+					<stop offset="0.83" stop-color="rgba(241,239,233,0.34)" />
 					<stop offset="1" stop-color="rgba(241,239,233,0)" />
 				</linearGradient>
 				<!-- Garis gelap tepat di dalam tepi terang → bevel, bikin pelatnya
@@ -193,14 +212,34 @@
 				</radialGradient>
 			</defs>
 
+			<!-- Lapis 1 — BADAN bilah. Tugasnya cuma satu: menutup bingkai rapat.
+			     Tetap memakai bladeOrder (dengan salinan bilah 0) supaya tumpang
+			     tindihnya melingkar penuh dan tidak ada celah. -->
 			{#each bladeOrder as b (b.key)}
 				<!-- Rotasi CSS harus di elemen terpisah dari atribut transform:
 				     properti CSS `transform` menimpa atribut, bukan menyusul. -->
 				<g class="pl-blade" style={`transform-origin:${b.px}px ${b.py}px; --pl-d:${b.i * 8}ms`}>
 					<g transform={`translate(${b.px} ${b.py}) rotate(${b.base})`}>
 						<path d={bladePath} fill={b.fill} />
+					</g>
+				</g>
+			{/each}
+
+			<!-- Lapis 2 — TEPI, digambar di atas seluruh badan.
+			     Ini inti perbaikannya. Sebelumnya tepi tiap bilah digambar bersama
+			     badannya, lalu tertimbun badan bilah berikutnya: diukur, tiap bilah
+			     menutupi 85–100% layar pada keadaan tertutup, jadi delapan seam
+			     terkubur dan yang tersisa cuma beberapa garis nyasar di satu sudut —
+			     terbaca sebagai cakrawala, bukan iris.
+			     Digambar terpisah, kesembilan seam terlihat penuh dan membentuk
+			     bintang yang berpusat tepat di tengah layar, tempat tanda bidik
+			     berada. Ini juga yang benar secara fisik: pada iris sungguhan, tepi
+			     tiap bilah memang terlihat dari bibir lubang sampai ke luar. -->
+			{#each blades as b (b.key)}
+				<g class="pl-blade" style={`transform-origin:${b.px}px ${b.py}px; --pl-d:${b.i * 8}ms`}>
+					<g transform={`translate(${b.px} ${b.py}) rotate(${b.base})`}>
 						<path d={edgePath} transform="translate(0 3)" fill="none" stroke="url(#pl-bevel-g)" stroke-width="2.4" />
-						<path d={edgePath} fill="none" stroke="url(#pl-edge-g)" stroke-opacity="0.12" stroke-width="16" />
+						<path d={edgePath} fill="none" stroke="url(#pl-edge-g)" stroke-opacity="0.085" stroke-width="11" />
 						<path d={edgePath} fill="none" stroke="url(#pl-edge-g)" stroke-width="1.4" />
 					</g>
 				</g>

@@ -46,6 +46,11 @@
 	let downloading = $state(false);
 
 	let rootEl: HTMLDivElement | undefined = $state();
+	// Tombol asli di lembar lisensi. Rel bawah mobile hanya hadir saat tombol ini
+	// sudah tergulung keluar layar — supaya tidak pernah ada dua tombol yang
+	// sama terlihat bersamaan.
+	let ctaEl: HTMLButtonElement | undefined = $state();
+	let ctaPassed = $state(false);
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let lightbox = $state<any>(null);
 
@@ -82,7 +87,45 @@
 		};
 	});
 
+	// Aturannya arah, bukan sekadar "tidak terlihat": rel baru muncul setelah
+	// tombolnya lewat KE ATAS. "Tidak terlihat" juga benar saat pembaca masih di
+	// puncak halaman — di situ rel cuma menawarkan harga untuk foto yang belum
+	// sempat dilihat.
+	$effect(() => {
+		const el = ctaEl;
+		if (!el) return;
+		const update = () => (ctaPassed = el.getBoundingClientRect().bottom < 0);
+		update();
+		window.addEventListener("scroll", update, { passive: true });
+		window.addEventListener("resize", update);
+		return () => {
+			window.removeEventListener("scroll", update);
+			window.removeEventListener("resize", update);
+		};
+	});
+
+	// Tombol "ke atas" dan panel aksesibilitas mengambang di bottom-6 — persis di
+	// belakang rel. Selama rel terangkat, keduanya ikut naik.
+	//
+	// Diangkat lewat style inline, bukan aturan CSS: kedua tombol itu memakai
+	// utility bottom-6 dari Tailwind, dan aturan buatan sendiri di @layer
+	// utilities tidak memenangkannya di sini. Style inline selalu menang, dan
+	// dilepas lagi begitu rel turun atau halaman ditinggalkan.
+	$effect(() => {
+		const naik = ctaPassed && window.innerWidth < 640;
+		const els = [...document.querySelectorAll<HTMLElement>(".fab-mengambang")];
+		for (const el of els) el.style.bottom = naik ? "6.25rem" : "";
+		return () => {
+			for (const el of els) el.style.bottom = "";
+		};
+	});
+
 	const fav = $derived(photo ? store.isFavorite(photo.id) : false);
+	// Nomor katalog untuk dibaca manusia. Id-nya UUID: di 390px, 36 karakter
+	// ber-tracking lebar membungkus jadi tiga baris dan menabrak tombol
+	// Perbesar. Enam digit terakhir cukup untuk menyebut satu bingkai; id
+	// penuhnya tetap hidup di URL dan di keranjang.
+	const frameNo = $derived(photo ? photo.id.slice(-6).toUpperCase() : "");
 	const price = $derived(photo ? (license === "personal" ? photo.price : photo.price * 2) : 0);
 	// Event diskon terbaik untuk harga lisensi saat ini (take-largest bersama voucher
 	// di pembayaran; di sini sekadar menampilkan info perkiraan).
@@ -141,9 +184,9 @@
 </script>
 
 {#snippet meta(label: string, value: string)}
-	<div>
-		<p class="kicker text-fg-muted">{label}</p>
-		<p class="mt-1.5 text-sm text-fg">{value}</p>
+	<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
+		<p class="kicker shrink-0 text-fg-muted">{label}</p>
+		<p class="text-right text-sm text-fg sm:mt-1.5 sm:text-left">{value}</p>
 	</div>
 {/snippet}
 
@@ -183,9 +226,9 @@
 {/snippet}
 
 {#if !photo}
-	<div class="min-h-screen pt-28"></div>
+	<div class="min-h-screen pt-20 sm:pt-28"></div>
 {:else}
-	<div bind:this={rootEl} class="min-h-screen pt-28">
+	<div bind:this={rootEl} class="min-h-screen pt-20 sm:pt-28">
 		<!-- Top strip -->
 		<!-- Nomor bingkai sempat muncul tiga kali di satu layar: di sini, di kaki
 			pelat, dan di kepala lembar lisensi. Yang di sini murni pengulangan —
@@ -197,9 +240,9 @@
 			</a>
 		</div>
 
-		<div class="mx-auto grid max-w-[1500px] gap-10 px-6 pb-20 lg:grid-cols-[1fr_22rem] lg:px-10">
+		<div class="mx-auto flex max-w-[1500px] flex-col gap-8 px-6 pb-20 lg:grid lg:grid-cols-[1fr_22rem] lg:gap-10 lg:px-10">
 			<!-- ───────── Plate ───────── -->
-			<div>
+			<div class="lg:col-start-1 lg:row-start-1">
 				<!-- Tanpa paspartu. Sebelumnya figure ini punya p-4 berlatar #0c0d0f —
 					papan alas yang di mode gelap warnanya sama persis dengan latar
 					halaman, jadi tak terlihat. Yang tampak hanya foto yang masuk 16px
@@ -214,7 +257,10 @@
 					onclick={() => lightbox?.open()}
 				>
 					<div class="pointer-events-none absolute -inset-10 bg-[radial-gradient(circle_at_50%_40%,color-mix(in_srgb,var(--safelight)_18%,transparent),transparent_60%)] blur-2xl"></div>
-					<div class="relative aspect-[4/5] w-full overflow-hidden sm:aspect-[3/2]">
+					<div
+						class="relative aspect-[var(--plate-ar)] max-h-[76svh] w-full overflow-hidden sm:aspect-[3/2] sm:max-h-none"
+						style={`--plate-ar: ${photo.w} / ${photo.h}`}
+					>
 						<ApiImage
 							src={imgFor(photo.seed, 1600, 2000, photo.thumbUrl || photo.watermarkUrl)}
 							alt={photo.title[lang]}
@@ -240,7 +286,7 @@
 				<!-- Strip bukti: nomor bingkai + dimensi + perbesar -->
 				<div class="mt-3 flex items-center justify-between gap-4">
 					<p class="kicker text-fg-muted">
-						No. {photo.id.toUpperCase()} — {photo.w} × {photo.h} px
+						No. {frameNo}<span class="hidden sm:inline"> — {photo.w} × {photo.h} px</span>
 					</p>
 					<button
 						type="button"
@@ -251,7 +297,9 @@
 					</button>
 				</div>
 
-				<!-- Caption -->
+				<!-- Keterangan cetakan: judul dan perajangga menempel pada foto,
+					bukan pada lembar lisensi — keduanya menjawab "ini foto apa",
+					sementara slip menjawab "berapa dan dapat apa". -->
 				<div class="mt-8 max-w-2xl">
 					<h1 class="font-display text-[clamp(2.2rem,4.2vw,3.6rem)] font-light leading-[1.02] tracking-[-0.02em] text-fg">
 						{photo.title[lang]}
@@ -259,26 +307,6 @@
 					<p class="mt-3 kicker text-fg-muted">
 						{t.by} <span class="text-safelight">{photo.author}</span>
 					</p>
-					<p class="mt-6 text-[1.02rem] leading-relaxed text-fg-muted">{photo.desc[lang]}</p>
-
-					<div class="mt-8 grid grid-cols-2 gap-x-8 gap-y-5 border-t border-hair pt-8 sm:grid-cols-3">
-						{@render meta(t.cat, photo.categories.join(", ") || catLabel[photo.cat][lang])}
-						{@render meta(t.dims, `${photo.w} × ${photo.h} px`)}
-						<div>
-							<p class="kicker text-fg-muted">{t.tags}</p>
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								{#if photo.keywords.length}
-									{#each photo.keywords as kw (kw)}
-										<span class="kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted">
-											#{kw}
-										</span>
-									{/each}
-								{:else}
-									<span class="text-sm text-fg/40">—</span>
-								{/if}
-							</div>
-						</div>
-					</div>
 				</div>
 			</div>
 
@@ -288,11 +316,11 @@
 				.proof-slip, jadi dua ujung alur pembelian adalah satu benda.
 				Sudutnya siku dan tanpa bayangan: dokumen, bukan kartu. Struktur
 				dipikul garis rambut antar-baris, bukan kotak bersarang. -->
-			<aside class="lg:sticky lg:top-28 lg:self-start">
+			<aside class="lg:sticky lg:top-28 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
 				<div class="proof-slip border border-hair">
 					<div class="flex items-baseline justify-between gap-4 border-b border-hair px-5 py-4">
 						<span class="kicker text-fg-muted">{t.slip}</span>
-						<span class="font-mono text-[0.7rem] tracking-[0.14em] text-fg-muted">{photo.id.toUpperCase()}</span>
+						<span class="font-mono text-[0.7rem] tracking-[0.14em] text-fg-muted">{frameNo}</span>
 					</div>
 
 					{#if activeEvent && eventAmt > 0}
@@ -328,6 +356,7 @@
 						sehingga tidak ada yang memimpin. -->
 					<div class="px-5 py-5">
 						<button
+							bind:this={ctaEl}
 							type="button"
 							onclick={handleAdd}
 							class="w-full rounded-full bg-safelight py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
@@ -364,6 +393,35 @@
 					</div>
 				</div>
 			</aside>
+
+			<!-- Deskripsi dan data cetakan. Di mobile ini duduk SETELAH lembar
+				lisensi: yang dicari orang di layar sempit adalah harga dan tombol,
+				bukan paragraf. Di lg ia kembali ke kolom kiri, baris kedua. -->
+			<div class="max-w-2xl lg:col-start-1 lg:row-start-2 lg:-mt-4">
+				<p class="text-[1.02rem] leading-relaxed text-fg-muted">{photo.desc[lang]}</p>
+
+				<!-- Data cetakan. Di mobile jadi baris-baris bergaris rambut —
+					bahasa yang sama dengan lembar lisensi — bukan grid dua kolom
+					yang ragged karena nilainya panjang-pendek. -->
+				<div class="mt-8 border-t border-hair pt-2 sm:grid sm:grid-cols-3 sm:gap-x-8 sm:gap-y-5 sm:pt-8">
+					{@render meta(t.cat, photo.categories.join(", ") || catLabel[photo.cat][lang])}
+					{@render meta(t.dims, `${photo.w} × ${photo.h} px`)}
+					<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
+						<p class="kicker shrink-0 text-fg-muted">{t.tags}</p>
+						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
+							{#if photo.keywords.length}
+								{#each photo.keywords as kw (kw)}
+									<span class="kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted">
+										#{kw}
+									</span>
+								{/each}
+							{:else}
+								<span class="text-sm text-fg/40">—</span>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<!-- ───────── Related ───────── -->
@@ -380,6 +438,34 @@
 				{/each}
 			</Reveal>
 		</section>
+
+		<!-- ───────── Rel lisensi (mobile) ─────────
+			Di layar sempit, harga dan tombolnya berada satu setengah layar di
+			bawah tepi atas. Rel ini membawa keduanya kembali ke jempol, dan baru
+			muncul setelah tombol asli lewat — jadi tidak pernah ada dua tombol
+			yang sama sekaligus. Bahasanya lembar lisensi: garis rambut di atas,
+			angka mono, satu tombol safelight yang sama bentuknya. -->
+		<div
+			inert={!ctaPassed}
+			aria-hidden={!ctaPassed}
+			class={`fixed inset-x-0 bottom-0 z-40 border-t border-hair bg-bg/95 backdrop-blur-md transition-transform duration-300 ease-out motion-reduce:transition-none sm:hidden ${
+				ctaPassed ? "translate-y-0" : "translate-y-full"
+			}`}
+		>
+			<div class="flex items-center gap-4 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+				<div class="min-w-0">
+					<p class="kicker truncate text-fg-muted">{license === "personal" ? t.personal : t.commercial}</p>
+					<p class="mt-1 font-mono text-[0.95rem] tabular-nums text-fg">{fmtIDR(finalPrice)}</p>
+				</div>
+				<button
+					type="button"
+					onclick={handleAdd}
+					class="ml-auto shrink-0 rounded-full bg-safelight px-6 py-3 text-sm font-medium text-ivory transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
+				>
+					{added ? `✓ ${t.added}` : t.addToCart}
+				</button>
+			</div>
+		</div>
 	</div>
 {/if}
 

@@ -643,13 +643,17 @@
   z-index: 2;
   pointer-events: none;
   background:
-    radial-gradient(circle at 33% 27%, rgba(96, 150, 255, 0.11), transparent 46%),
-    radial-gradient(circle at 71% 75%, rgba(255, 120, 40, 0.13), transparent 44%),
-    radial-gradient(circle at 50% 50%, transparent 42%, rgba(0, 0, 0, 0.62));
+    radial-gradient(circle at 33% 27%, rgba(96, 150, 255, 0.07), transparent 40%),
+    radial-gradient(circle at 68% 70%, rgba(255, 120, 40, 0.055), transparent 30%),
+    /* Vignette dimulai lebih rapat (28%) dan lebih pekat: pada keadaan tertutup,
+       tepi bingkai harus benar-benar gelap supaya mata jatuh ke bintang seam di
+       tengah. Sebelumnya mulai di 42% dengan 0.62, dan seluruh bingkai
+       terbaca sebagai kabut merata. */
+    radial-gradient(circle at 50% 50%, transparent 28%, rgba(0, 0, 0, 0.8));
   animation: pl-coat 2s linear both;
 }
 @keyframes pl-coat {
-  0% { opacity: 0.75; }
+  0% { opacity: 0.55; }
   42% { opacity: 0.85; }
   60% { opacity: 0.8; }
   100% { opacity: 0; }
@@ -1508,81 +1512,14 @@ a.ias-card:focus-visible {
 }
 
 /* ── index bar bawah ─────────────────────────────────────────────────────── */
-.im-index {
-  --im-index-pad: clamp(14px, 2vh, 22px);
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0 clamp(18px, 3.2vw, 46px) var(--im-index-pad);
-}
-.im-index-bar {
-  position: relative;
-}
-.im-index-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: rgba(239, 231, 220, 0.12);
-}
-.im-index-progress-fill {
-  display: block;
-  height: 100%;
-  width: 100%;
-  transform-origin: left center;
-  background: rgba(239, 231, 220, 0.5);
-  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.im-index-cells {
-  display: flex;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  border-top: 1px solid rgba(239, 231, 220, 0.22);
-  pointer-events: auto;
-}
-.im-index-cells::-webkit-scrollbar {
-  display: none;
-}
-.im-index-cell {
-  position: relative;
-  flex: 0 0 clamp(94px, 10.5vw, 150px);
-  /* Sel tak berisi teks lagi, jadi tingginya disetel eksplisit. */
-  height: 1.35rem;
-  border-left: 1px solid rgba(239, 231, 220, 0.14);
-  cursor: pointer;
-  transition: background 0.3s;
-}
-.im-index-cell:first-child {
-  border-left: 0;
-}
-.im-index-cell:hover {
-  background: rgba(239, 231, 220, 0.05);
-}
-.im-index-cell:focus-visible {
-  outline: 1px solid var(--color-safelight);
-  outline-offset: -1px;
-}
-.im-index-caret {
-  position: absolute;
-  top: -0.62rem;
-  left: 0.5rem;
-  font-size: 0.5rem;
-  line-height: 1;
-  color: var(--im-ink);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.im-index-cell.is-active .im-index-caret {
-  opacity: 1;
-}
 /* ── readout koordinat kanan-bawah ───────────────────────────────────────── */
 .im-coord {
   position: absolute;
   right: clamp(18px, 3.2vw, 46px);
-  bottom: calc(clamp(10px, 1.6vh, 18px) + 4.2rem);
+  /* Offset 4.2rem dulu menyediakan ruang untuk rel indeks; rel itu sudah
+     dibuang. Sisa 1.4rem cuma untuk melewati baris atribusi Leaflet/Esri di
+     tepi bawah (13 px, wajib ada karena lisensi ubin peta). */
+  bottom: calc(clamp(10px, 1.6vh, 18px) + 1.4rem);
   color: var(--color-safelight);
   font-size: 0.5rem;
 }
@@ -1594,9 +1531,6 @@ a.ias-card:focus-visible {
   }
   .im-mk-label {
     font-size: 0.46rem;
-  }
-  .im-index-cell {
-    flex-basis: 82px;
   }
 }
 
@@ -1840,7 +1774,6 @@ a.ias-card:focus-visible {
   .im-name-in {
     animation: none;
   }
-  .im-index-progress-fill,
   .im-hint {
     transition: none;
   }

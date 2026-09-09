@@ -16,7 +16,7 @@
 	type="button"
 	onclick={() => access.setPanelOpen(true)}
 	aria-label={i18n.c.access.panelTitle}
-	class={`fixed bottom-6 right-6 z-50 grid h-11 w-11 place-items-center rounded-full border border-hair bg-bg/80 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-safelight hover:text-safelight ${
+	class={`fab-mengambang fixed bottom-6 right-6 z-50 grid h-11 w-11 place-items-center rounded-full border border-hair bg-bg/80 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-safelight hover:text-safelight ${
 		show ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"
 	}`}
 >

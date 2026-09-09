@@ -9,5 +9,10 @@ export default defineConfig({
 			overlay: false,
 			timeout: 60000
 		}
+	},
+	ssr: {
+		// gsap adalah CJS; tanpa ini, Node serverless (Vercel) gagal named-import
+		// "gsap/ScrollTrigger" saat SSR. Bundle gsap langsung ke output server.
+		noExternal: ["gsap"]
 	}
 });

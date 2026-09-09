@@ -1,5 +1,6 @@
 <script lang="ts">
 	import gsap from "gsap";
+	import { playShutter } from "$lib/shutter";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	// Stylesheet dasar Leaflet. Wajib: tanpa ini pane dan tile tetap
 	// `position: static`, jadi ubinnya menumpuk memanjang ke bawah alih-alih
@@ -250,7 +251,6 @@
 	let wrapEl = $state<HTMLDivElement>();
 	let mapEl = $state<HTMLDivElement>();
 	let stageEl = $state<HTMLDivElement>();
-	let indexCellsEl = $state<HTMLDivElement>();
 	let dvStage = $state<HTMLDivElement>();
 	let dvImgWrap = $state<HTMLDivElement>();
 	let dvStrip = $state<HTMLDivElement>();
@@ -503,14 +503,6 @@
 	});
 
 	$effect(() => {
-		const rail = indexCellsEl;
-		const cell = rail?.children[focus] as HTMLElement | undefined;
-		if (!rail || !cell) return;
-		const target = cell.offsetLeft - rail.clientWidth / 2 + cell.clientWidth / 2;
-		rail.scrollTo({ left: target, behavior: reduced ? "auto" : "smooth" });
-	});
-
-	$effect(() => {
 		const ctx = sectionEl;
 		if (!ctx) return;
 		const q = (sel: string) => ctx.querySelectorAll(sel);
@@ -557,7 +549,6 @@
 		tl.fromTo(q(".im-cluster"), { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 35 }, 41);
 		tl.fromTo(q(".im-slate"), { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 35 }, 44);
 		tl.fromTo(q(".im-hint"), { opacity: 0 }, { opacity: 1, duration: 35 }, 47);
-		tl.fromTo(q(".im-index"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 40, ease: "power3.out" }, 53);
 		tl.fromTo(q(".im-coord"), { opacity: 0 }, { opacity: 1, duration: 35 }, 65);
 		if (stage)
 			tl.fromTo(
@@ -612,6 +603,9 @@
 		map?.flyTo([h.lat, h.lng], zoom, { duration: FLY_DUR });
 	}
 	function openViewer(i: number) {
+		// Membuka bingkai = menekan tombol rana. Dipasang di sini, bukan di
+		// handler marker, supaya jalur lain menuju bukaan yang sama juga berbunyi.
+		playShutter();
 		viewing = i;
 		frame = 0;
 		viewingRef = i;
@@ -816,38 +810,16 @@
 
 			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">{t.explore}</p>
 
-			<div class="im-index im-reveal">
-				<div class="im-index-bar">
-					<span class="im-index-progress">
-						<span
-							class="im-index-progress-fill"
-							style="transform: scaleX({hotspots.length > 1 ? focus / (hotspots.length - 1) : 0});"
-						></span>
-					</span>
-					<div bind:this={indexCellsEl} class="im-index-cells">
-						{#each hotspots as h, i (h.name + "-" + i)}
-							<!-- Tanpa label: nama tempat sudah dibaca dari judul besar di
-								tengah, dan barisnya dulu bertabrakan dengan judul itu. Selnya
-								tetap jadi penanda posisi yang bisa diklik. -->
-							<button
-								type="button"
-								class="im-index-cell {i === focus ? "is-active" : ""}"
-								onclick={() => flyTo(i)}
-								aria-label={splitPlace(h.name).place}
-								title={splitPlace(h.name).place}
-								aria-current={i === focus ? "true" : undefined}
-							>
-								<span class="im-index-caret" aria-hidden="true">▼</span>
-							</button>
-						{/each}
-					</div>
-				</div>
-				<!-- Judul section disembunyikan secara visual: nama tempat yang sedang
-					disorot sudah tercetak di atas penandanya (`.im-terrain`), jadi versi
-					besar di bawah ini cuma mengulang. Elemennya tetap ada supaya section
-					ini masih punya heading di struktur dokumen. -->
-				<h2 class="sr-only">{t.title}</h2>
-			</div>
+			<!-- Rel indeks dibuang. Isinya cuma garis: sel-selnya tidak berlabel
+				(namanya sudah tercetak di tiap penanda peta), jadi yang tersisa di layar
+				hanya satu garis melintang dengan tik pembagi dan bilah kemajuan — dan
+				garis itulah yang mengganggu. Menghapus garisnya saja akan menyisakan
+				strip yang bisa diklik tapi tak terlihat, dan kontrol tak kasatmata lebih
+				buruk daripada tidak ada kontrol. Penandanya di peta sendiri sudah bisa
+				diklik untuk melompat ke tiap daerah.
+
+				Heading-nya tetap: section ini harus punya judul di struktur dokumen. -->
+			<h2 class="sr-only">{t.title}</h2>
 
 			<p class="im-coord im-mono im-reveal">
 				{focused ? fmtCoord(focused.lat, focused.lng) : ""}

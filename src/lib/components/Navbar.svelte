@@ -238,13 +238,6 @@
 				</button>
 				<div class="hidden sm:block"><ThemeToggle {line} {icon} /></div>
 				<a
-					href={store.user ? "/profile" : "/login"}
-					class={`arrow-link hidden text-[0.82rem] font-medium transition-colors duration-500 hover:text-safelight sm:inline-flex ${muted}`}
-				>
-					{store.user ? store.user.name.split(" ")[0] : i18n.c.nav.signin}
-					<span class="arr text-safelight">→</span>
-				</a>
-				<a
 					href="/checkout"
 					class={`relative grid h-9 w-9 place-items-center rounded-full border transition-colors duration-500 hover:text-safelight ${line} ${icon}`}
 					aria-label={`Cart, ${store.cartCount} items`}
@@ -258,6 +251,13 @@
 							{store.cartCount}
 						</span>
 					{/if}
+				</a>
+				<a
+					href={store.user ? "/profile" : "/login"}
+					class={`arrow-link hidden text-[0.82rem] font-medium transition-colors duration-500 hover:text-safelight sm:inline-flex ${muted}`}
+				>
+					{store.user ? store.user.name.split(" ")[0] : i18n.c.nav.signin}
+					<span class="arr text-safelight">→</span>
 				</a>
 
 				<!-- Mobile burger -->
