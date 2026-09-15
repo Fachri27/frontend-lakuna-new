@@ -46,6 +46,19 @@
 		gsap.ticker.add(tick);
 		gsap.ticker.lagSmoothing(0);
 
+		// Preloader dan dialog mengunci gulir lewat `overflow: hidden` di <html>
+		// atau <body>. Lenis tidak membacanya sendiri, jadi ikut berhenti di sini.
+		const syncLock = () => {
+			const locked =
+				document.documentElement.style.overflow === "hidden" || document.body.style.overflow === "hidden";
+			if (locked) l.stop();
+			else l.start();
+		};
+		const lockObserver = new MutationObserver(syncLock);
+		lockObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+		lockObserver.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+		syncLock();
+
 		// Refresh diikat ke event nyata (bukan timer buta) supaya tidak ada lompatan
 		// terlambat: rAF untuk flush awal, `load` setelah semua aset (gambar) selesai,
 		// `fonts.ready` setelah font swap.
@@ -56,6 +69,7 @@
 		if (document.fonts?.ready) document.fonts.ready.then(onFonts).catch(() => {});
 
 		return () => {
+			lockObserver.disconnect();
 			gsap.ticker.remove(tick);
 			cancelAnimationFrame(r);
 			window.removeEventListener("load", onLoad);

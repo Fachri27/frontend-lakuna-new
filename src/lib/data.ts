@@ -441,6 +441,19 @@ const GEOCODE: GeoEntry[] = [
   { lat: 1.05, lng: 109.4, aliases: ["pontianak", "kapuas", "sintang", "paloh"] },
   { lat: -1.4, lng: 121.9, aliases: ["palu", "lore lindu", "napu", "bada"] },
   { lat: -5.42, lng: 105.35, aliases: ["kiluan", "pahmungan"] },
+  // Jabodetabek & Jawa Barat
+  { lat: -6.4, lng: 106.82, aliases: ["depok"] },
+  { lat: -6.6, lng: 106.8, aliases: ["bogor"] },
+  { lat: -6.92, lng: 106.93, aliases: ["sukabumi", "pelabuhan ratu", "palabuhanratu", "ujung genteng"] },
+  { lat: -6.82, lng: 107.14, aliases: ["cianjur"] },
+  { lat: -7.05, lng: 107.75, aliases: ["majalaya"] },
+  { lat: -6.86, lng: 107.92, aliases: ["sumedang"] },
+  { lat: -7.21, lng: 107.91, aliases: ["garut", "papandayan"] },
+  { lat: -6.33, lng: 108.32, aliases: ["indramayu"] },
+  { lat: -6.71, lng: 108.56, aliases: ["cirebon"] },
+  // Kalimantan
+  { lat: -2.21, lng: 113.92, aliases: ["palangkaraya", "palangka raya"] },
+  { lat: 3.3, lng: 117.63, aliases: ["tarakan"] },
 ];
 
 function normalizeLoc(s: string): string {
@@ -457,12 +470,15 @@ function normalizeLoc(s: string): string {
 export function geocodeLocation(location: string): { lat: number; lng: number } | null {
   const norm = normalizeLoc(location);
   if (!norm) return null;
-  // Cocokkan alias sebagai substring (mis. "Danau Toba saat fajar" → "toba").
+  // Cocokkan alias sebagai kata/frasa utuh (mis. "Danau Toba saat fajar" → "toba").
+  // Harus berbatas kata: substring polos membuat "Sumedang" cocok dengan
+  // "medan" sehingga titiknya jatuh di Sumatra Utara.
+  const hay = ` ${norm} `;
   for (const g of GEOCODE) {
     for (const a of g.aliases) {
       const an = normalizeLoc(a);
       if (!an) continue;
-      if (norm === an || norm.includes(an)) return { lat: g.lat, lng: g.lng };
+      if (hay.includes(` ${an} `)) return { lat: g.lat, lng: g.lng };
     }
   }
   return null;
@@ -477,7 +493,11 @@ export function geocodeLocation(location: string): { lat: number; lng: number } 
  */
 export async function fetchMapHotspots(): Promise<MapHotspot[]> {
   // Ambil halaman besar sekali jalan — peta butuh sebanyak mungkin titik.
-  const { photos } = await fetchPhotos({ type: "FOTO", limit: 200 });
+  // Selama USE_DUMMY_MAP, titiknya dari dataset dummy (tanpa thumbUrl, jadi
+  // gambarnya placeholder lewat imgFor) — sama dengan peta di front-lakuna.
+  const photos = USE_DUMMY_MAP
+    ? DUMMY_API_PHOTOS.filter((p) => p.type === "FOTO").map(adaptPhoto)
+    : (await fetchPhotos({ type: "FOTO", limit: 200 })).photos;
 
   // Group key = location ternormalisasi (lowercase) supaya "Danau Toba" dan
   // "danau toba" menyatu jadi satu titik; nama tampil = casing asli pertama.
@@ -514,12 +534,18 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
 }
 
 /**
- * Sementara: seluruh gambar frontend dipaksa memakai placeholder, URL asli dari
- * API (thumbUrl/watermarkUrl/imageUrl) diabaikan. Set `false` bila aset asli
- * sudah siap dan mau dipakai lagi — tidak ada perubahan lain yang dibutuhkan
- * karena semua sumber gambar lewat `imgFor()`.
+ * `true`: peta Nusantara memakai dataset dummy (dummy.ts), terlepas dari
+ * USE_DUMMY_IMAGES. Set `false` untuk kembali mengambil titik dari /api/photos.
  */
-export const USE_DUMMY_IMAGES = true;
+export const USE_DUMMY_MAP = true;
+
+/**
+ * `false`: gambar memakai URL asli dari API (thumbUrl/watermarkUrl/imageUrl,
+ * disajikan MinIO); placeholder hanya dipakai bila URL asli kosong. Set `true`
+ * untuk memaksa seluruh gambar memakai placeholder — tidak ada perubahan lain
+ * yang dibutuhkan karena semua sumber gambar lewat `imgFor()`.
+ */
+export const USE_DUMMY_IMAGES = false;
 
 /** URL placeholder deterministik: seed yang sama selalu memberi gambar sama. */
 export function dummyImg(seed: string, w: number, h: number) {

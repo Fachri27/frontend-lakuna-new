@@ -11,14 +11,15 @@
 			kicker: "Pembayaran", title: "Selesaikan pesanan", total: "Total",
 			voucherLabel: "Kode voucher", voucherPlaceholder: "Mis. NUSANTARA25", voucherApply: "Terapkan",
 			voucherApplied: "Voucher diterapkan", voucherInvalid: "Voucher tidak valid",
-			pay: "Bayar dengan Xendit", processing: "Menyiapkan pembayaran…",
-			secureNote: "Pembayaran diproses aman oleh Xendit. Kamu akan diarahkan ke halaman Xendit untuk menyelesaikan transaksi.",
+			pay: "Bayar dengan Midtrans", processing: "Menyiapkan pembayaran…",
+			secureNote: "Pembayaran diproses aman oleh Midtrans. Kamu akan diarahkan ke halaman Midtrans untuk menyelesaikan transaksi.",
 			empty: "Tidak ada item untuk dibayar.", emptyCta: "Kembali ke koleksi",
 			needLogin: "Masuk untuk membayar", needLoginBody: "Pesanan hanya bisa diselesaikan setelah kamu masuk.",
 			goLogin: "Masuk",
 			errEmptyCart: "Keranjangmu kosong.", errNoItem: "Tidak ada item berbayar di keranjang.",
 			errGeneric: "Gagal membuat pesanan. Coba lagi sebentar.",
 			errAuth: "Sesi berakhir. Silakan masuk kembali.",
+			errBadRedirect: "Tautan pembayaran dari server tidak valid, pembayaran dibatalkan. Pesananmu tersimpan — cek di profil.",
 			summary: "Ringkasan", items: "item",
 			subtotal: "Subtotal",
 			eventDiscount: "Diskon event",
@@ -28,14 +29,15 @@
 			kicker: "Payment", title: "Complete your order", total: "Total",
 			voucherLabel: "Voucher code", voucherPlaceholder: "e.g. NUSANTARA25", voucherApply: "Apply",
 			voucherApplied: "Voucher applied", voucherInvalid: "Invalid voucher",
-			pay: "Pay with Xendit", processing: "Preparing payment…",
-			secureNote: "Payment is securely processed by Xendit. You'll be redirected to Xendit to finish the transaction.",
+			pay: "Pay with Midtrans", processing: "Preparing payment…",
+			secureNote: "Payment is securely processed by Midtrans. You'll be redirected to Midtrans to finish the transaction.",
 			empty: "Nothing to pay for.", emptyCta: "Back to the collection",
 			needLogin: "Sign in to pay", needLoginBody: "Orders can only be completed after you sign in.",
 			goLogin: "Sign in",
 			errEmptyCart: "Your cart is empty.", errNoItem: "No payable items in your cart.",
 			errGeneric: "Failed to create the order. Please try again shortly.",
 			errAuth: "Session expired. Please sign in again.",
+			errBadRedirect: "The payment link from the server looks invalid, payment was cancelled. Your order is saved — check it in your profile.",
 			summary: "Summary", items: "items",
 			subtotal: "Subtotal",
 			eventDiscount: "Event discount",
@@ -65,6 +67,55 @@
 	const needLogin = $derived(!store.loading && !store.user);
 	const grandTotal = $derived(Math.max(0, cartTotal - eventTotal));
 
+	/**
+	 * Allowlist tujuan redirect pembayaran. Aktual dari backend:
+	 * - Midtrans snap redirect_url (`https://app.midtrans.com` / `app.sandbox.midtrans.com`)
+	 * - host backend sendiri (VITE_API_URL) + localhost dev.
+	 * Tolak `javascript:`/skema non-https (kecuali http localhost).
+	 * (Order Xendit lama dilanjutkan dari ProfilePage, yang masih mengizinkan host Xendit.)
+	 */
+	const PAYMENT_HOSTS = [
+		"app.midtrans.com",
+		"app.sandbox.midtrans.com",
+	];
+
+	function paymentHostAllowed(host: string): boolean {
+		const h = host.toLowerCase();
+		if ((PAYMENT_HOSTS as string[]).includes(h)) return true;
+		if (h === "localhost" || h === "127.0.0.1") return true;
+		try {
+			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
+			if (h === base.hostname.toLowerCase()) return true;
+		} catch {
+			/* abaikan — allowlist statis di atas tetap berlaku */
+		}
+		return false;
+	}
+
+	function isSafePaymentUrl(raw: string | null | undefined): raw is string {
+		if (!raw) return false;
+		const v = raw.trim();
+		if (!v || v.length > 2048) return false;
+		const lower = v.toLowerCase();
+		if (
+			lower.startsWith("javascript:") ||
+			lower.startsWith("data:") ||
+			lower.startsWith("vbscript:") ||
+			lower.startsWith("file:")
+		) return false;
+		let u: URL;
+		try {
+			u = new URL(v);
+		} catch {
+			return false;
+		}
+		if (u.protocol !== "https:") {
+			const h = u.hostname.toLowerCase();
+			if (!(u.protocol === "http:" && (h === "localhost" || h === "127.0.0.1"))) return false;
+		}
+		return paymentHostAllowed(u.hostname);
+	}
+
 	async function pay(e: SubmitEvent) {
 		e.preventDefault();
 		if (status === "processing") return;
@@ -77,6 +128,12 @@
 			if (res.success && res.data.redirectUrl) {
 				// Backend membuat order dari cart server-side. Jangan clear cart di sini —
 				// backend menghapus item STANDAR otomatis saat status jadi PAID (lewat webhook/check).
+				// Validasi dulu: jangan ikuti URL ke host asing/skema berbahaya.
+				if (!isSafePaymentUrl(res.data.redirectUrl)) {
+					error = t.errBadRedirect;
+					status = "idle";
+					return;
+				}
 				window.location.href = res.data.redirectUrl;
 				return;
 			}

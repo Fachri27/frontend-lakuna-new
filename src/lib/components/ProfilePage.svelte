@@ -22,6 +22,7 @@
 			paid: "Selesai", pending: "Menunggu bayar", cancelled: "Dibatalkan", otherStatus: "Proses",
 			continuePay: "Lanjut bayar", recheck: "Cek status",
 			downloadFull: "Unduh penuh", downloadLicense: "Lisensi PDF", preparing: "Menyiapkan…",
+			badPayUrl: "Tautan bayar pesanan ini tidak valid, pembayaran dibatalkan.",
 		},
 		en: {
 			kicker: "Profile", needLogin: "Sign in to view your profile", needLoginBody: "Save favourites, view downloads, and manage your membership in one place.",
@@ -36,6 +37,7 @@
 			paid: "Completed", pending: "Awaiting payment", cancelled: "Cancelled", otherStatus: "Processing",
 			continuePay: "Continue payment", recheck: "Check status",
 			downloadFull: "Download full", downloadLicense: "License PDF", preparing: "Preparing…",
+			badPayUrl: "This order's payment link looks invalid, payment was cancelled.",
 		},
 	};
 
@@ -170,6 +172,57 @@
 			? new Date(d).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", { day: "2-digit", month: "short", year: "numeric" })
 			: "—";
 	}
+
+	/**
+	 * Validasi `continuePaymentUrl` sebelum dirender sebagai link.
+	 * Allowlist sama dengan PaymentPage: host Xendit (`checkout.xendit.co`),
+	 * Midtrans snap (`app.midtrans.com` / sandbox), host backend sendiri +
+	 * localhost dev. Tolak `javascript:`/skema non-https (kecuali http localhost).
+	 */
+	const PAYMENT_HOSTS = [
+		"checkout.xendit.co",
+		"invoice.xendit.co",
+		"app.midtrans.com",
+		"app.sandbox.midtrans.com",
+	];
+
+	function paymentHostAllowed(host: string): boolean {
+		const h = host.toLowerCase();
+		if ((PAYMENT_HOSTS as string[]).includes(h)) return true;
+		if (h.endsWith(".xendit.co")) return true;
+		if (h === "localhost" || h === "127.0.0.1") return true;
+		try {
+			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
+			if (h === base.hostname.toLowerCase()) return true;
+		} catch {
+			/* abaikan — allowlist statis di atas tetap berlaku */
+		}
+		return false;
+	}
+
+	function isSafePaymentUrl(raw: string | null | undefined): raw is string {
+		if (!raw) return false;
+		const v = raw.trim();
+		if (!v || v.length > 2048) return false;
+		const lower = v.toLowerCase();
+		if (
+			lower.startsWith("javascript:") ||
+			lower.startsWith("data:") ||
+			lower.startsWith("vbscript:") ||
+			lower.startsWith("file:")
+		) return false;
+		let u: URL;
+		try {
+			u = new URL(v);
+		} catch {
+			return false;
+		}
+		if (u.protocol !== "https:") {
+			const h = u.hostname.toLowerCase();
+			if (!(u.protocol === "http:" && (h === "localhost" || h === "127.0.0.1"))) return false;
+		}
+		return paymentHostAllowed(u.hostname);
+	}
 </script>
 
 {#snippet emptyState(title: string, cta: string, href = "/photos")}
@@ -301,9 +354,13 @@
 
 									{#if o.status === "PENDING" && o.continuePaymentUrl}
 										<div class="mt-4 flex flex-wrap gap-3">
-											<a href={o.continuePaymentUrl} class="rounded-full bg-safelight px-5 py-2.5 text-sm font-medium text-ivory transition-transform hover:scale-[1.02]">
-												{t.continuePay} →
-											</a>
+											{#if isSafePaymentUrl(o.continuePaymentUrl)}
+												<a href={o.continuePaymentUrl} rel="noopener" class="rounded-full bg-safelight px-5 py-2.5 text-sm font-medium text-ivory transition-transform hover:scale-[1.02]">
+													{t.continuePay} →
+												</a>
+											{:else}
+												<p role="alert" class="text-sm text-red-400">{t.badPayUrl}</p>
+											{/if}
 										</div>
 									{/if}
 								</div>

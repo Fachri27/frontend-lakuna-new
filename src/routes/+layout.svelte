@@ -25,6 +25,11 @@
 		i18n.hydrate();
 		access.hydrate();
 		void store.init();
+		// Daftarkan service worker minimal (static/sw.js) — syarat PWA
+		// installability. App yang di-install diberi hak autoplay bersuara.
+		if ("serviceWorker" in navigator) {
+			navigator.serviceWorker.register("/sw.js").catch(() => {});
+		}
 	});
 
 	// Mirror access settings → localStorage + data-attr <html> (CSS hooks).

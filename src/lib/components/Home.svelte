@@ -16,6 +16,7 @@
 	import IndonesiaMap from "./IndonesiaMap.svelte";
 	import ApiImage from "./ApiImage.svelte";
 	import Seam from "./Seam.svelte";
+	import RulerCarousel, { type RulerItem } from "./ui/RulerCarousel.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
 
@@ -23,6 +24,11 @@
 	const secCopy = {
 		id: {
 			latestKicker: "Baru", latestTitle: "Bingkai terbaru", latestCta: "Lihat semua",
+			rulerTitle: "Jelajahi per tema",
+			rulerOpen: "Lihat foto {label}",
+			rulerPrev: "Tema sebelumnya",
+			rulerNext: "Tema berikutnya",
+			rulerCount: "{i} dari {n}",
 			closingAuthed: {
 				kicker: "Akunmu",
 				title: "Darkroommu menunggu,",
@@ -32,6 +38,11 @@
 		},
 		en: {
 			latestKicker: "Fresh", latestTitle: "Latest frames", latestCta: "See all",
+			rulerTitle: "Browse by theme",
+			rulerOpen: "See {label} photos",
+			rulerPrev: "Previous theme",
+			rulerNext: "Next theme",
+			rulerCount: "{i} of {n}",
 			closingAuthed: {
 				kicker: "Your account",
 				title: "Your darkroom awaits,",
@@ -58,6 +69,13 @@
 
 	const visibleCats = $derived(showAllCats ? categories : categories.slice(0, 6));
 	const hiddenCats = $derived(Math.max(0, categories.length - 6));
+	const rulerItems = $derived<RulerItem[]>(
+		categories.map((cat) => ({
+			id: cat.id,
+			label: cat.name,
+			href: `/photos?cat=${encodeURIComponent(cat.name)}`,
+		})),
+	);
 
 	// Garis datum di hero membawa skala arsipnya sendiri. Dirender hanya kalau
 	// API-nya menjawab — "0 bingkai" lebih buruk daripada garis polos.
@@ -257,12 +275,38 @@
 				rule={false}
 				darkOnly
 			/>
+			<!-- Penggaris tema, tepat di bawah hero. Beralas --wash seperti ArchiveStrip
+				di bawahnya (satu baki), dan wajib berlatar: wadah ini menumpang di atas
+				hero yang sticky, jadi tanpa latar fotonya tembus ke belakang teks. -->
+			<!-- {#if rulerItems.length}
+				<section aria-labelledby="cat-ruler-title" class="relative bg-wash pt-[clamp(3.5rem,9vh,6rem)]">
+					<div class="mx-auto mb-[clamp(1.5rem,4vh,2.75rem)] max-w-[1500px] px-6 lg:px-10">
+						<h2
+							id="cat-ruler-title"
+							class="font-display text-[clamp(1.7rem,3.6vw,2.9rem)] font-light leading-[1.12] tracking-[-0.02em] text-fg"
+						>
+							{s.rulerTitle}
+						</h2>
+					</div>
+					<RulerCarousel
+						items={rulerItems}
+						label={s.rulerTitle}
+						openLabel={s.rulerOpen}
+						prevLabel={s.rulerPrev}
+						nextLabel={s.rulerNext}
+						counterLabel={s.rulerCount}
+					/>
+				</section>
+			{/if} -->
 			<ArchiveStrip />
 			<Seam from="wash" to="darkroom" />
 		</div>
 	</div>
 
 	<IndonesiaMap />
+	<!-- Peta berakhir di --darkroom, galeri beralas --bg: tanpa basuhan ini nadanya
+		putus mendadak dari pelat gelap ke kertas terang. -->
+	<Seam from="darkroom" to="bg" />
 
 	<GsapGallery photos={latest} />
 

@@ -41,6 +41,56 @@
 		return imgFor(`lf${p.id ?? i}`, 400, 300, p.thumbUrl);
 	}
 
+	/**
+	 * Validasi URL gambar sebelum masuk `style.cssText` (`background-image`).
+	 * Allowlist: `picsum.photos` (placeholder), thumbUrl backend/presigned
+	 * MinIO (localhost + host VITE_API_URL). Skema wajib `https:`
+	 * (kecuali `http:` localhost dev). Escape kutip/backslash, bungkus
+	 * `url("…")`; kembalikan `none` bila tidak valid sehingga tidak dirender.
+	 */
+	const IMG_HOSTS = ["picsum.photos", "server.arcgisonline.com"];
+
+	function imgHostAllowed(host: string): boolean {
+		const h = host.toLowerCase();
+		if ((IMG_HOSTS as string[]).includes(h)) return true;
+		if (h === "localhost" || h === "127.0.0.1") return true;
+		try {
+			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
+			if (h === base.hostname.toLowerCase()) return true;
+		} catch {
+			/* abaikan — allowlist statis di atas tetap berlaku */
+		}
+		return false;
+	}
+
+	function safeBg(raw: string | null | undefined): string {
+		if (!raw) return "none";
+		const v = raw.trim();
+		if (!v || v.length > 2048) return "none";
+		const lower = v.toLowerCase();
+		if (
+			lower.startsWith("javascript:") ||
+			lower.startsWith("data:") ||
+			lower.startsWith("vbscript:")
+		) return "none";
+		let u: URL;
+		try {
+			u = new URL(v);
+		} catch {
+			return "none";
+		}
+		if (u.protocol !== "https:") {
+			const h = u.hostname.toLowerCase();
+			if (!(u.protocol === "http:" && (h === "localhost" || h === "127.0.0.1"))) return "none";
+		}
+		if (!imgHostAllowed(u.hostname)) return "none";
+		// `u.href` sudah ter-encode oleh parser URL. Jangan encodeURI() lagi: `%3B` di
+		// query presigned MinIO jadi `%253B` → signature tidak cocok (400) → ORB block.
+		const esc = u.href.replace(/"/g, "%22").replace(/\\/g, "");
+		if (/[\r\n]/.test(esc)) return "none";
+		return `url("${esc}")`;
+	}
+
 	let { photos }: { photos: Photo[] } = $props();
 
 	let sectionEl: HTMLElement | undefined = $state();
@@ -93,7 +143,7 @@
 						top:${spec.t}%;
 						width:${spec.w}%;
 						aspect-ratio:3/2;
-						background-image:url(${thumbUrl(photos[wi] ?? {}, wi)});
+						background-image:${safeBg(thumbUrl(photos[wi] ?? {}, wi))};
 						background-size:cover;
 						background-position:center;
 						transform:rotate(${spec.r}deg);
@@ -128,7 +178,7 @@
 
 			wraps.forEach((wrap, wi) => {
 				if (!wrap) return;
-				const src = thumbUrl(photos[wi] ?? {}, wi);
+				const src = safeBg(thumbUrl(photos[wi] ?? {}, wi));
 				wrap.innerHTML = "";
 				wrap.style.cssText = `
 					position:absolute;
@@ -150,7 +200,7 @@
 						width:${displayW.toFixed(1)}px;
 						left:50%;
 						margin-left:${(-displayW / 2).toFixed(1)}px;
-						background-image:url(${src});
+						background-image:${src};
 						background-size:${imgW.toFixed(1)}px ${imgH.toFixed(1)}px;
 						background-position:${(-s * sliceW).toFixed(1)}px 0;
 						transform-origin:50% 50% ${(-cylR).toFixed(1)}px;

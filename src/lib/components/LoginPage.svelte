@@ -45,7 +45,25 @@
 	const lang = $derived(i18n.lang);
 	const t = $derived(copy[lang]);
 
-	const redirectTo = $derived(page.url.searchParams.get("redirect") || "/profile");
+	const FALLBACK_REDIRECT = "/profile";
+
+	/**
+	 * Sanitasi `redirect` dari query sebelum diteruskan ke `goto()`.
+	 * Hanya path relatif internal yang diawali SATU `/` (tolak `//`,
+	 * backslash, skema seperti `javascript:`, dan karakter kontrol/spasi
+	 * yang bisa menipu parser URL). Selain itu → fallback `/profile`.
+	 */
+	function sanitizeRedirect(raw: string | null): string {
+		if (!raw) return FALLBACK_REDIRECT;
+		const v = raw.trim();
+		if (v.length === 0 || v.length > 2048) return FALLBACK_REDIRECT;
+		if (!v.startsWith("/") || v.startsWith("//")) return FALLBACK_REDIRECT;
+		// eslint-disable-next-line no-control-regex
+		if (/[\s\x00-\x1f\x7f\\]/.test(v)) return FALLBACK_REDIRECT;
+		return v;
+	}
+
+	const redirectTo = $derived(sanitizeRedirect(page.url.searchParams.get("redirect")));
 
 	let mode = $state<"login" | "register">("login");
 	let email = $state("");

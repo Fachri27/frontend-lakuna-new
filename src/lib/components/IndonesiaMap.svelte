@@ -1,6 +1,6 @@
 <script lang="ts">
 	import gsap from "gsap";
-	import { playShutter } from "$lib/shutter";
+	import { playShutter, primeShutter } from "$lib/shutter";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	// Stylesheet dasar Leaflet. Wajib: tanpa ini pane dan tile tetap
 	// `position: static`, jadi ubinnya menumpuk memanjang ke bawah alih-alih
@@ -18,11 +18,11 @@
 		id: {
 			kicker: "Kartu Nusantara",
 			title: "Dari Sabang ke Merauke",
-			sub: "Busur kepulauan terpanjang di dunia",
+			sub: "Tiap titik adalah bingkai dari arsip Lakuna. Geser peta, lalu buka satu titik untuk melihat fotonya.",
 			overview: "Ringkasan",
-			points: "Titik bingkai",
-			live: "Langsung · Satelit",
-			explore: "Geser untuk menjelajah",
+			points: "titik",
+			frames: "bingkai",
+			explore: "Geser untuk menjelajah · klik titik untuk membuka",
 			zoomHint: "Klik untuk perbesar · Gerakkan tetikus untuk menggeser",
 			zoomOutHint: "Klik untuk perkecil · Gerakkan tetikus untuk menggeser",
 			fullscreen: "Layar penuh",
@@ -41,11 +41,11 @@
 		en: {
 			kicker: "Archipelago map",
 			title: "From Sabang to Merauke",
-			sub: "The world's longest archipelagic arc",
+			sub: "Every point is a frame from the Lakuna archive. Drag the map, then open a point to see its photos.",
 			overview: "Overview",
-			points: "Frame points",
-			live: "Live · Satellite",
-			explore: "Drag to explore",
+			points: "points",
+			frames: "frames",
+			explore: "Drag to explore · click a point to open",
 			zoomHint: "Tap to zoom in · Move mouse to pan",
 			zoomOutHint: "Tap to zoom out · Move mouse to pan",
 			fullscreen: "Fullscreen",
@@ -164,8 +164,10 @@
 		return out;
 	}
 
-	const OVERVIEW: [number, number] = [-2.5, 118];
-	const OVERVIEW_Z = 5;
+	// Bingkai Nusantara: Sabang–Merauke (barat–timur), Miangas–Rote (utara–selatan).
+	// Kamera ringkasan memaskan bingkai ini ke ukuran layar, bukan pusat + zoom
+	// tetap — dulu Sumatra terpotong di desktop dan di HP cuma Kalimantan yang tampak.
+	const NUSANTARA: [[number, number], [number, number]] = [[-11.2, 94.6], [6.4, 141.4]];
 	const FOCUS_Z = 7;
 	const FLY_DUR = 0.9;
 
@@ -178,10 +180,27 @@
 		return { place: name.slice(0, i).trim(), region: name.slice(i + 1).trim() };
 	}
 
-	const PLATE_W = 76;
-	const PLATE_H = 58;
+	/** Ukuran plate marker; lebih kecil di layar sempit supaya tidak menutupi pulau. */
+	function plateSize(): { w: number; h: number } {
+		return window.matchMedia("(max-width: 640px)").matches ? { w: 58, h: 44 } : { w: 76, h: 58 };
+	}
 
-	const PLATE_BRACKETS = `<svg class="im-mk-br" width="${PLATE_W}" height="${PLATE_H}" viewBox="0 0 100 76" fill="none" aria-hidden="true"><path d="M0.5 13V0.5H14M86 0.5H99.5V13M99.5 63V75.5H86M14 75.5H0.5V63" stroke="currentColor" stroke-width="1"/></svg>`;
+	/**
+	 * Padding fitBounds untuk kamera ringkasan: sisakan ruang di atas untuk blok
+	 * judul (kiri-atas) dan di bawah untuk petunjuk + atribusi ubin.
+	 */
+	function overviewFit(el: HTMLElement) {
+		const w = el.clientWidth;
+		const h = el.clientHeight;
+		const narrow = w < 640;
+		const side = Math.round(w * (narrow ? 0.05 : 0.04));
+		return {
+			paddingTopLeft: [side, Math.round(h * (narrow ? 0.3 : 0.26))] as [number, number],
+			paddingBottomRight: [side, Math.round(h * (narrow ? 0.12 : 0.1))] as [number, number],
+		};
+	}
+
+	const PLATE_BRACKETS = `<svg class="im-mk-br" width="100%" height="100%" viewBox="0 0 100 76" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M0.5 13V0.5H14M86 0.5H99.5V13M99.5 63V75.5H86M14 75.5H0.5V63" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
 
 	const GLYPH_PANO = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 7.5c6.7-2 13.3-2 20 0v9c-6.7 2-13.3 2-20 0z"/><path d="M2 15l5.5-4.5L12 14l3.5-3 6.5 5"/></svg>`;
 	const GLYPH_POINT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="12" cy="12" r="3.5"/></svg>`;
@@ -194,6 +213,93 @@
 			.replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;")
 			.replace(/'/g, "&#39;");
+	}
+
+	/**
+	 * Allowlist host gambar marker. Aktual: placeholder `picsum.photos`,
+	 * tile/fallback Esri (`server.arcgisonline.com`), dan thumbUrl backend
+	 * (presigned MinIO / API di localhost + VITE_API_URL). Skema wajib
+	 * `https:` (kecuali `http:` localhost dev). URL yang tidak lolos TIDAK
+	 * dirender — mencegah injeksi CSS/HTML lewat `thumbUrl` ke `L.divIcon`.
+	 */
+	const IMG_HOSTS = ["picsum.photos", "server.arcgisonline.com"];
+
+	function imgHostAllowed(host: string): boolean {
+		const h = host.toLowerCase();
+		if ((IMG_HOSTS as string[]).includes(h)) return true;
+		if (h === "localhost" || h === "127.0.0.1") return true;
+		try {
+			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
+			if (h === base.hostname.toLowerCase()) return true;
+		} catch {
+			/* abaikan — allowlist statis di atas tetap berlaku */
+		}
+		return false;
+	}
+
+	function isSafeImgUrl(raw: string | null | undefined): raw is string {
+		if (!raw) return false;
+		const v = raw.trim();
+		if (!v || v.length > 2048) return false;
+		const lower = v.toLowerCase();
+		if (
+			lower.startsWith("javascript:") ||
+			lower.startsWith("data:") ||
+			lower.startsWith("vbscript:")
+		) return false;
+		let u: URL;
+		try {
+			u = new URL(v);
+		} catch {
+			return false;
+		}
+		if (u.protocol !== "https:") {
+			const h = u.hostname.toLowerCase();
+			if (!(u.protocol === "http:" && (h === "localhost" || h === "127.0.0.1"))) return false;
+		}
+		return imgHostAllowed(u.hostname);
+	}
+
+	/**
+	 * URL aman untuk template `background-image:url('…')`.
+	 * Divalidasi dulu, lalu dinormalisasi lewat parser URL + escape kutip; "" bila
+	 * tidak valid (pemanggil mengosongkan style sehingga tidak ada gambar yang dirender).
+	 * Jangan encodeURI(): URL presigned MinIO sudah ter-encode, `%3B` jadi `%253B`
+	 * → signature tidak cocok (400) → gambar diblokir ORB.
+	 */
+	function safeMarkerBg(raw: string | null | undefined): string {
+		if (!isSafeImgUrl(raw)) return "";
+		return new URL(raw.trim()).href.replace(/'/g, "%27").replace(/"/g, "%22");
+	}
+
+	/**
+	 * URL plate pertama yang benar-benar bisa dimuat untuk satu titik; "" bila
+	 * tidak ada. File yang hilang di storage (404) tidak lagi jadi plate kosong —
+	 * foto berikutnya di titik yang sama dipakai.
+	 */
+	function resolvePlateUrl(h: Hotspot): Promise<string> {
+		const candidates = h.photos
+			.map((p) => safeMarkerBg(imgFor(p.seed, 200, 160, p.thumbUrl)))
+			.filter(Boolean);
+		return new Promise((resolve) => {
+			const tryAt = (k: number) => {
+				if (k >= candidates.length) return resolve("");
+				const img = new Image();
+				let settled = false;
+				const next = (ok: boolean) => {
+					if (settled) return;
+					settled = true;
+					clearTimeout(timer);
+					if (ok) resolve(candidates[k]);
+					else tryAt(k + 1);
+				};
+				const timer = setTimeout(() => next(false), 4000);
+				img.onload = () => next(img.naturalWidth > 0);
+				img.onerror = () => next(false);
+				img.src = candidates[k];
+			};
+			tryAt(0);
+		});
 	}
 
 	const TILE_URL = (z: number, x: number, y: number) =>
@@ -271,6 +377,8 @@
 	let frameRef = 0;
 	let map: import("leaflet").Map | null = null;
 	let markers: import("leaflet").Marker[] = [];
+	let clusterMarkers: import("leaflet").Marker[] = [];
+	let reclusterRef: (() => void) | null = null;
 	let preloads: HTMLImageElement[] = [];
 	let shotOffset = shotOffsets([]);
 	let panX: ((v: number) => void) | null = null;
@@ -278,6 +386,8 @@
 
 	$effect(() => {
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) reduced = true;
+		// Bunyi rana dimuat lebih dulu supaya klik pertama langsung berbunyi.
+		primeShutter();
 	});
 
 	$effect(() => {
@@ -302,13 +412,13 @@
 		if (!hotspots.length) return;
 		let disposed = false;
 		let m: import("leaflet").Map | null = null;
+		let ro: ResizeObserver | null = null;
 		ready = false;
 		(async () => {
 			const L = await import("leaflet");
-			if (disposed || !mapEl) return;
-			const mm = L.map(mapEl, {
-				center: OVERVIEW,
-				zoom: OVERVIEW_Z,
+			const el = mapEl;
+			if (disposed || !el) return;
+			const mm = L.map(el, {
 				zoomControl: false,
 				attributionControl: true,
 				scrollWheelZoom: false,
@@ -318,7 +428,8 @@
 				inertiaDeceleration: 2400,
 				touchZoom: true,
 				keyboard: true,
-				minZoom: 5,
+				// Cukup rendah supaya HP tegak tetap bisa memuat Sabang → Merauke utuh.
+				minZoom: 3,
 				maxZoom: 16,
 				zoomSnap: 0,
 				zoomDelta: 0.25,
@@ -327,6 +438,7 @@
 				worldCopyJump: false,
 			});
 			m = mm;
+			mm.fitBounds(NUSANTARA, overviewFit(el));
 
 			L.tileLayer(
 				"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -337,37 +449,36 @@
 				},
 			).addTo(mm);
 
-			preloads = preloadTiles([[-11, 90], [8, 144]], OVERVIEW_Z);
+			preloads = preloadTiles([[-11, 90], [8, 144]], Math.max(3, Math.floor(mm.getZoom())));
+
+			const plateUrls = await Promise.all(hotspots.map(resolvePlateUrl));
+			if (disposed) return;
+
+			const plate = plateSize();
+			const plateIcon = (url: string, glyph: string, label: string, extraClass = "") =>
+				L.divIcon({
+					className: "im-mk-wrap",
+					html: `<span class="im-mk im-mk-plate ${extraClass}">
+						<span class="im-mk-plate-inner">
+							<span class="im-mk-plate-img ${url ? "" : "is-empty"}" style="${url ? `background-image:url('${url}')` : ""}"></span>
+							<span class="im-mk-plate-glyph">${glyph}</span>
+							${PLATE_BRACKETS}
+						</span>
+						${label}
+					</span>`,
+					iconSize: [plate.w, plate.h],
+					iconAnchor: [plate.w / 2, plate.h / 2],
+				});
 
 			hotspots.forEach((h, i) => {
-				const first = h.photos[0];
 				const count = h.photos.length;
-				// Semua marker kini plate foto — bingkai pertama tiap titik,
-				// tergeletak di atas bidang satelit. Info jenis isi yang dulu
-				// dibawa BENTUK marker (plate/disc/box) tetap terbaca dari
-				// glyph di tengah plate: tumpukan = galeri, panorama = lebar,
-				// bingkai = titik tunggal.
+				// Plate = bingkai pertama yang termuat. Jenis isi dibaca dari glyph:
+				// tumpukan = galeri, panorama = beberapa bingkai, bingkai = titik tunggal.
 				const glyph = count >= 4 ? GLYPH_STACK : count >= 2 ? GLYPH_PANO : GLYPH_POINT;
 				const num = String(i + 1).padStart(2, "0");
 				const label = `<span class="im-mk-label"><span class="im-mk-name">${escapeHtml(splitPlace(h.name).place)}</span><span class="im-mk-num">${num}</span></span>`;
-
-				const html = `<span class="im-mk im-mk-plate" data-i="${i}">
-					<span class="im-mk-plate-inner">
-						<span class="im-mk-plate-img" style="background-image:url('${imgFor(first.seed, 200, 160, first.thumbUrl)}')"></span>
-						<span class="im-mk-plate-glyph">${glyph}</span>
-						${PLATE_BRACKETS}
-					</span>
-					${label}
-				</span>`;
-				const size: [number, number] = [PLATE_W, PLATE_H];
-
 				const mk = L.marker([h.lat, h.lng], {
-					icon: L.divIcon({
-						className: "im-mk-wrap",
-						html,
-						iconSize: size,
-						iconAnchor: [size[0] / 2, size[1] / 2],
-					}),
+					icon: plateIcon(plateUrls[i], glyph, label),
 					title: h.name,
 					riseOnHover: true,
 					keyboard: false,
@@ -375,6 +486,92 @@
 				mk.on("click", () => openViewer(i));
 				markers[i] = mk;
 			});
+
+			// Titik yang bertumpuk di layar (mis. sepuluh kota Jawa Barat pada zoom
+			// ringkasan) digabung jadi satu plate bertanda jumlah. Klik → kamera
+			// mendekat ke anggotanya sampai mereka terurai sendiri.
+			let lastSig = "";
+			const recluster = () => {
+				if (disposed) return;
+				const z = mm.getZoom();
+				const pts = hotspots.map((h) => mm.project([h.lat, h.lng], z));
+				const bw = plate.w + 28;
+				const bh = plate.h + 18;
+				const centre = (g: number[]) => ({
+					x: g.reduce((sum, k) => sum + pts[k].x, 0) / g.length,
+					y: g.reduce((sum, k) => sum + pts[k].y, 0) / g.length,
+				});
+				const groups = hotspots.map((_, k) => [k]);
+				for (let merged = true; merged; ) {
+					merged = false;
+					outer: for (let a = 0; a < groups.length; a++) {
+						for (let b = a + 1; b < groups.length; b++) {
+							const ca = centre(groups[a]);
+							const cb = centre(groups[b]);
+							if (Math.abs(ca.x - cb.x) < bw && Math.abs(ca.y - cb.y) < bh) {
+								groups[a] = [...groups[a], ...groups[b]];
+								groups.splice(b, 1);
+								merged = true;
+								break outer;
+							}
+						}
+					}
+				}
+
+				// Pusat kelompok dalam lat/lng tidak bergantung zoom, jadi elemen
+				// cukup dibangun ulang bila keanggotaan (atau bahasa) berubah.
+				const sig =
+					groups.map((g) => [...g].sort((a, b) => a - b).join("+")).sort().join("|") + `@${t.frames}`;
+				if (sig === lastSig) return;
+				lastSig = sig;
+
+				clusterMarkers.forEach((c) => c.remove());
+				clusterMarkers = [];
+				for (const g of groups) {
+					if (g.length === 1) {
+						if (!mm.hasLayer(markers[g[0]])) markers[g[0]].addTo(mm);
+						continue;
+					}
+					g.forEach((k) => markers[k].remove());
+					const c = centre(g);
+					const lead = g.find((k) => plateUrls[k]) ?? g[0];
+					const frames = g.reduce((sum, k) => sum + hotspots[k].photos.length, 0);
+					const regions = new Set(g.map((k) => splitPlace(hotspots[k].name).region).filter(Boolean));
+					const name = regions.size === 1 ? [...regions][0] : `${g.length} ${t.points}`;
+					const label = `<span class="im-mk-label"><span class="im-mk-name">${escapeHtml(name)}</span><span class="im-mk-num">${frames} ${escapeHtml(t.frames)}</span></span>`;
+					const cm = L.marker(mm.unproject(L.point(c.x, c.y), z), {
+						icon: plateIcon(plateUrls[lead], `<span class="im-mk-count">${g.length}</span>`, label, "im-mk-cluster"),
+						title: g.map((k) => splitPlace(hotspots[k].name).place).join(", "),
+						riseOnHover: true,
+						keyboard: false,
+					}).addTo(mm);
+					cm.on("click", () => {
+						const bounds = L.latLngBounds(g.map((k) => [hotspots[k].lat, hotspots[k].lng] as [number, number]));
+						// Anggota berkoordinat sama tidak akan pernah terurai oleh zoom —
+						// langsung buka titik pertamanya.
+						if (bounds.getNorthEast().equals(bounds.getSouthWest())) openViewer(g[0]);
+						else {
+							// Area aman sama dengan kamera ringkasan (blok judul di kiri-atas,
+							// petunjuk di bawah) + ruang untuk plate dan labelnya.
+							const fit = overviewFit(el);
+							mm.flyToBounds(bounds, {
+								paddingTopLeft: [fit.paddingTopLeft[0] + plate.w, fit.paddingTopLeft[1] + plate.h],
+								paddingBottomRight: [fit.paddingBottomRight[0] + plate.w * 2.5, fit.paddingBottomRight[1] + plate.h],
+								maxZoom: 11,
+								duration: FLY_DUR,
+							});
+						}
+					});
+					clusterMarkers.push(cm);
+				}
+				applyFocusClasses();
+			};
+			mm.on("zoomend", recluster);
+			reclusterRef = () => {
+				lastSig = "";
+				recluster();
+			};
+			recluster();
 
 			const syncFocus = () => {
 				const c = mm.getCenter();
@@ -389,53 +586,28 @@
 						best = i;
 					}
 				}
-			if (best !== focusRef) {
-				focusRef = best;
-				focus = best;
-			}
+				if (best !== focusRef) {
+					focusRef = best;
+					focus = best;
+				}
 			};
 			mm.on("move", syncFocus);
 			mm.on("zoom", syncFocus);
 			mm.on("dragstart", () => (dragged = true));
 			syncFocus();
 
-			// Urai tumpukan plate pada zoom jauh (mis. klaster Jawa): marker
-			// yang bertumpuk digeser di ruang piksel — jangkar geografisnya
-			// tetap, yang bergeser hanya bingkai di dalamnya. Begitu zoom
-			// mendekat dan ruang sudah lega, semua geseran dibersihkan.
-			const declutter = () => {
-				const far = mm.getZoom() <= 6;
-				const pts = markers.map((mk) => mm.latLngToContainerPoint(mk.getLatLng()));
-				const placed: [number, number][] = [];
-				const BW = PLATE_W + 20;
-				const BH = PLATE_H + 12;
-				const tries: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, -1], [1, -1], [-1, -1]];
-				markers.forEach((mk, i) => {
-					const inner = mk.getElement()?.querySelector(".im-mk") as HTMLElement | null;
-					if (!inner) return;
-					if (!far) {
-						inner.style.transform = "";
-						return;
-					}
-					let dx = 0;
-					let dy = 0;
-					for (const [sx, sy] of tries) {
-						const cx = pts[i].x + sx * BW;
-						const cy = pts[i].y + sy * BH;
-						if (!placed.some(([px, py]) => Math.abs(px - cx) < BW && Math.abs(py - cy) < BH)) {
-							dx = sx * BW;
-							dy = sy * BH;
-							break;
-						}
-					}
-					placed.push([pts[i].x + dx, pts[i].y + dy]);
-					inner.style.transform = dx || dy ? `translate(${Math.round(dx)}px, ${Math.round(dy)}px)` : "";
-				});
-			};
-			mm.on("zoomend", declutter);
-			setTimeout(() => {
-				if (!disposed) declutter();
-			}, 300);
+			// Rotasi HP / jendela diubah ukurannya: selama pengunjung belum menggeser
+			// sendiri, kamera ikut dipaskan ulang ke bingkai Nusantara.
+			let lastW = el.clientWidth;
+			let lastH = el.clientHeight;
+			ro = new ResizeObserver(() => {
+				if (disposed || (el.clientWidth === lastW && el.clientHeight === lastH)) return;
+				lastW = el.clientWidth;
+				lastH = el.clientHeight;
+				mm.invalidateSize();
+				if (!dragged) mm.fitBounds(NUSANTARA, overviewFit(el));
+			});
+			ro.observe(el);
 
 			map = mm;
 			ready = true;
@@ -447,9 +619,12 @@
 
 		return () => {
 			disposed = true;
+			ro?.disconnect();
+			reclusterRef = null;
 			if (m) m.remove();
 			map = null;
 			markers = [];
+			clusterMarkers = [];
 			preloads = [];
 		};
 	});
@@ -493,13 +668,22 @@
 		};
 	});
 
+	function applyFocusClasses() {
+		markers.forEach((mk, i) => {
+			mk.getElement()?.querySelector(".im-mk")?.classList.toggle("is-focus", i === focusRef);
+		});
+	}
+
 	$effect(() => {
 		void focus;
 		void ready;
-		markers.forEach((m, i) => {
-			const mk = m.getElement()?.querySelector(".im-mk");
-			if (mk) mk.classList.toggle("is-focus", i === focus);
-		});
+		applyFocusClasses();
+	});
+
+	// Label plate gabungan ("3 titik · 5 bingkai") ikut bahasa aktif.
+	$effect(() => {
+		void lang;
+		reclusterRef?.();
 	});
 
 	$effect(() => {
@@ -541,7 +725,7 @@
 		if (stage)
 			tl.fromTo(
 				stage,
-				{ scale: 1.35, filter: "blur(4px)" },
+				{ scale: 1.15, filter: "blur(3px)" },
 				{ scale: 1, filter: "blur(0px)", duration: 100, ease: "power3.out" },
 				0,
 			);
@@ -637,7 +821,7 @@
 		flyTo(v);
 	}
 	function resetOverview() {
-		map?.flyTo(OVERVIEW, OVERVIEW_Z, { duration: 1.1 });
+		if (map && mapEl) map.flyToBounds(NUSANTARA, { ...overviewFit(mapEl), duration: 1.1 });
 	}
 	function toggleFullscreen() {
 		const el = wrapEl as
@@ -735,6 +919,10 @@
 		panY?.(-ny * room * 2);
 	}
 
+	const stats = $derived({
+		points: hotspots.length,
+		frames: hotspots.reduce((sum, h) => sum + h.photos.length, 0),
+	});
 	const focused = $derived(hotspots[focus] ?? null);
 	const hot = $derived(viewing != null ? hotspots[viewing] : null);
 	const shot = $derived(hot ? hot.photos[Math.min(frame, hot.photos.length - 1)] : null);
@@ -802,24 +990,15 @@
 			</div>
 
 			<div class="im-slate im-reveal">
-				<p class="im-mono im-slate-kicker">{t.kicker}</p>
-				<p class="im-mono im-slate-sub">
-					<span class="im-live-dot"></span> {t.live}
-				</p>
+				<p class="im-mono im-slate-kicker"><span class="im-live-dot"></span>{t.kicker}</p>
+				<h2 class="im-title">{t.title}</h2>
+				<p class="im-lede">{t.sub}</p>
+				{#if stats.points}
+					<p class="im-mono im-slate-stats">{stats.points} {t.points} · {stats.frames} {t.frames}</p>
+				{/if}
 			</div>
 
 			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">{t.explore}</p>
-
-			<!-- Rel indeks dibuang. Isinya cuma garis: sel-selnya tidak berlabel
-				(namanya sudah tercetak di tiap penanda peta), jadi yang tersisa di layar
-				hanya satu garis melintang dengan tik pembagi dan bilah kemajuan — dan
-				garis itulah yang mengganggu. Menghapus garisnya saja akan menyisakan
-				strip yang bisa diklik tapi tak terlihat, dan kontrol tak kasatmata lebih
-				buruk daripada tidak ada kontrol. Penandanya di peta sendiri sudah bisa
-				diklik untuk melompat ke tiap daerah.
-
-				Heading-nya tetap: section ini harus punya judul di struktur dokumen. -->
-			<h2 class="sr-only">{t.title}</h2>
 
 			<p class="im-coord im-mono im-reveal">
 				{focused ? fmtCoord(focused.lat, focused.lng) : ""}
