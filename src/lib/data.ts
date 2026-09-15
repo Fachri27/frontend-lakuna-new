@@ -162,6 +162,10 @@ export async function fetchPhotos(opts?: {
   page?: number;
   limit?: number;
 }): Promise<{ photos: Photo[]; total: number; totalPages: number }> {
+  // Mode dummy khusus Vercel (VITE_USE_DUMMY_IMAGES=true): langsung pakai
+  // dataset lokal tanpa fetch API supaya cepat dan tidak error localhost.
+  if (USE_DUMMY_IMAGES) return dummyPhotoPage(opts);
+
   const params = new URLSearchParams();
   if (opts?.cat) params.set("categoryId", opts.cat);
   if (opts?.search) params.set("search", opts.search);
@@ -244,6 +248,11 @@ function dummyRelated(id: string, limit: number): Photo[] {
 }
 
 export async function fetchPhotoById(id: string): Promise<Photo | null> {
+  // Mode dummy: cek dataset lokal dulu, hemat 1x fetch yang pasti gagal di Vercel.
+  if (USE_DUMMY_IMAGES) {
+    const d = dummyPhotoById(id);
+    if (d) return d;
+  }
   try {
     const res = await apiGet<ApiResponse<ApiPhoto>>(`/api/photos/${id}`);
     if (!res.success || !res.data) return dummyPhotoById(id);
@@ -254,6 +263,10 @@ export async function fetchPhotoById(id: string): Promise<Photo | null> {
 }
 
 export async function fetchRelatedPhotos(id: string, limit = 4): Promise<Photo[]> {
+  if (USE_DUMMY_IMAGES) {
+    const d = dummyRelated(id, limit);
+    if (d.length > 0) return d;
+  }
   try {
     const res = await apiGet<ApiResponse<ApiPhoto[]>>(`/api/photos/${id}/related?limit=${limit}`);
     if (USE_DUMMY_IMAGES && res.data.length === 0) return dummyRelated(id, limit);
@@ -275,6 +288,7 @@ export async function fetchPlans(): Promise<Plan[]> {
 export type ApiCatItem = { id: string; name: string; description: string | null; imageUrl: string | null };
 
 export async function fetchCategories(): Promise<ApiCatItem[]> {
+  if (USE_DUMMY_IMAGES) return DUMMY_CATEGORIES;
   try {
     const res = await apiGet<ApiResponse<ApiCategory[]>>("/api/categories?limit=50");
     if (USE_DUMMY_IMAGES && res.data.length === 0) return DUMMY_CATEGORIES;
@@ -536,16 +550,20 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
 /**
  * `true`: peta Nusantara memakai dataset dummy (dummy.ts), terlepas dari
  * USE_DUMMY_IMAGES. Set `false` untuk kembali mengambil titik dari /api/photos.
+ * Bisa dioverride via env `VITE_USE_DUMMY_MAP=false` (default tetap true).
  */
-export const USE_DUMMY_MAP = true;
+export const USE_DUMMY_MAP = import.meta.env.VITE_USE_DUMMY_MAP
+  ? import.meta.env.VITE_USE_DUMMY_MAP !== "false"
+  : true;
 
 /**
  * `false`: gambar memakai URL asli dari API (thumbUrl/watermarkUrl/imageUrl,
  * disajikan MinIO); placeholder hanya dipakai bila URL asli kosong. Set `true`
  * untuk memaksa seluruh gambar memakai placeholder — tidak ada perubahan lain
  * yang dibutuhkan karena semua sumber gambar lewat `imgFor()`.
+ * Bisa dioverride via env `VITE_USE_DUMMY_IMAGES=true` (untuk Vercel).
  */
-export const USE_DUMMY_IMAGES = false;
+export const USE_DUMMY_IMAGES = import.meta.env.VITE_USE_DUMMY_IMAGES === "true";
 
 /** URL placeholder deterministik: seed yang sama selalu memberi gambar sama. */
 export function dummyImg(seed: string, w: number, h: number) {
