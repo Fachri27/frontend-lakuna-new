@@ -93,6 +93,8 @@
 			role="dialog"
 			aria-modal="true"
 			aria-label="Masuk"
+			data-no-hover-sound
+			data-no-click-sound
 			class="relative grid w-full max-w-3xl overflow-hidden rounded-md bg-surface shadow-[0_50px_120px_-40px_rgba(0,0,0,0.6)] md:grid-cols-2"
 			onclick={(e) => e.stopPropagation()}
 		>
