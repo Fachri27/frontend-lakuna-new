@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
-	import { i18n, type Lang } from "$lib/i18n.svelte";
-	import { store } from "$lib/store.svelte";
-	import { fmtIDR, fetchPlans, fetchActiveEvents, eventAmount, bestEvent, type Plan } from "$lib/data";
+import { i18n, type Lang } from "$lib/i18n.svelte";
+import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, bestEvent, type Plan, type HomepageSection } from "$lib/data";
 	import type { ApiEvent } from "$lib/data";
 	import { apiGet, apiPost, ApiError } from "$lib/api";
+	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse } from "$lib/types";
 	import Reveal from "./Reveal.svelte";
+	import LogoCloud from "./LogoCloud.svelte";
 
 	const copy = {
 		id: {
@@ -17,9 +18,12 @@
 			quotaLabel: "Kuota download", payMonthly: "Bayar bulanan", payUpfront: "Bayar di muka (hemat)",
 			features: ["Akses semua aset HD", "Lisensi premium", "Satu akun pengguna", "Customer service 24 jam"],
 			buyNow: "Beli Sekarang", subscribeNow: "Berlangganan", processing: "Memproses...",
+			buyFail: "Gagal memulai pembayaran. Coba lagi sebentar.",
+			nowActive: "Berhasil — paketmu sudah aktif, cek di profil.",
+			badLink: "Tautan pembayaran tidak valid, pembayaran dibatalkan.",
 			voucherPlaceholder: "Kode voucher", apply: "Pakai", remove: "hapus",
 			voucherNeedLogin: "Silakan login untuk memeriksa voucher.",
-			taxNote: "Harga sudah termasuk pajak.", trustedBy: "Dipercaya oleh", pleaseLogin: "Silakan login terlebih dahulu.",
+			taxNote: "Harga sudah termasuk pajak.", trustedBy: "Dipercaya tim di", pleaseLogin: "Silakan login terlebih dahulu.",
 			eventKicker: "Event berlaku", eventAfter: "Setelah event",
 			discountNote: "Diskon terbesar antara event & voucher yang otomatis dipakai.",
 			rateSheet: "Rate Sheet", save: "Hemat", perYear: "/yr", chooseQuota: "Pilih kuota",
@@ -33,9 +37,12 @@
 			quotaLabel: "Download quota", payMonthly: "Pay monthly", payUpfront: "Pay upfront (save)",
 			features: ["Access all HD assets", "Premium license", "Single user account", "24 hours customer service"],
 			buyNow: "Buy Now", subscribeNow: "Subscribe", processing: "Processing...",
+			buyFail: "Failed to start payment. Please try again shortly.",
+			nowActive: "Success — your plan is now active, check your profile.",
+			badLink: "Invalid payment link, payment was cancelled.",
 			voucherPlaceholder: "Voucher code", apply: "Apply", remove: "remove",
 			voucherNeedLogin: "Please sign in to check a voucher.",
-			taxNote: "Prices include tax.", trustedBy: "Trusted by", pleaseLogin: "Please sign in first.",
+			taxNote: "Prices include tax.", trustedBy: "Trusted by teams at", pleaseLogin: "Please sign in first.",
 			eventKicker: "Active event", eventAfter: "After event",
 			discountNote: "The larger of the event & voucher discount is applied automatically.",
 			rateSheet: "Rate Sheet", save: "Save", perYear: "/yr", chooseQuota: "Choose quota",
@@ -43,7 +50,21 @@
 		},
 	};
 
-	const trustedClients = ["TheJakartaPost", "Bisnis.com", "TEMPO", "Kompas", "Detik"];
+	// Dinding logo sama dengan landing: kurasi CMS (section `percaya`) menang
+	// bila diisi; kosong = wordmark dummy di LogoCloud.
+	let trustSec = $state<HomepageSection | null>(null);
+	$effect(() => {
+		fetchHomepage()
+			.then((hp) => {
+				trustSec = hp["percaya"] ?? null;
+			})
+			.catch(() => {});
+	});
+	const trustLogos = $derived(
+		trustSec?.photos?.length
+			? trustSec.photos.map((p) => ({ name: p.title, src: p.thumbUrl ?? "" })).filter((l) => l.src)
+			: null,
+	);
 
 	/** Respon /api/vouchers/validate. */
 	type VoucherValidate = {
@@ -163,21 +184,98 @@
 		}
 	}
 
+	/** Redirect pembayaran hanya boleh ke Snap Midtrans (allowlist ala PaymentPage). */
+	function isSnapRedirect(raw: string | null | undefined): raw is string {
+		if (!raw) return false;
+		let u: URL;
+		try {
+			u = new URL(raw.trim());
+		} catch {
+			return false;
+		}
+		if (u.protocol !== "https:") return false;
+		const h = u.hostname.toLowerCase();
+		return h === "app.midtrans.com" || h === "app.sandbox.midtrans.com";
+	}
+
 	function handleBuyStandar() {
-		store.addToCart({ id: "standar-single", kind: "photo", title: t.standar, price: stdFinalPrice, meta: "standar" });
-		goto("/checkout");
+		// Paket Standar TIDAK lewat cart (/api/order membaca cart server-side
+		// yang tak mengenal item semu). Jalur resminya: POST /api/subscription/standar.
+		if (isBuying) return;
+		isBuying = true;
+		message = "";
+		apiPost<ApiResponse<{ snapToken: string | null; redirectUrl?: string; orderId: string; payOrderId?: string }>>(
+			"/api/subscription/standar",
+			{ voucherCode: stdAppliedVoucher?.code || undefined },
+		).then((res) => {
+			// Halaman bayar milik Lakuna (Core API), bukan halaman Snap.
+			if (res.data?.redirectUrl && res.data.payOrderId) {
+				void goto(`/payment/pay/${encodeURIComponent(res.data.payOrderId)}`);
+				return;
+			}
+			if (res.data?.redirectUrl) {
+				if (!isSnapRedirect(res.data.redirectUrl)) {
+					message = t.badLink;
+					return;
+				}
+				window.location.href = res.data.redirectUrl;
+				return;
+			}
+			// Gratis (diskon 100%): order langsung PAID tanpa Midtrans.
+			message = t.nowActive;
+		}).catch((err) => {
+			if (err instanceof ApiError && err.status === 401) {
+				authModal.open("/pricing");
+				message = t.pleaseLogin;
+			} else {
+				message = err instanceof ApiError && err.message ? err.message : t.buyFail;
+			}
+		}).finally(() => {
+			isBuying = false;
+		});
 	}
 
 	function handleSubscribe() {
-		if (!selectedPlan) return;
-		store.addToCart({
-			id: `plan-${selectedPlan.id}-${billing}`,
-			kind: "plan",
-			title: `${selectedPlan.name[lang]} (${billing === "annual" ? t.annual : t.monthly})`,
-			price: subFinalPrice,
-			meta: selectedPlan.id,
+		// Langganan TIDAK lewat cart: item plan hanya ada di store lokal,
+		// backend tak mengenalnya → /api/order selalu balas EMPTY_CART.
+		// Jalur resminya: POST /api/subscription (planId + billing + payOption).
+		if (!selectedPlan || isBuying) return;
+		isBuying = true;
+		message = "";
+		apiPost<ApiResponse<{ snapToken: string | null; redirectUrl?: string; orderId?: string; payOrderId?: string }>>(
+			"/api/subscription",
+			{
+				planId: selectedPlan.id,
+				billing,
+				payOption: billing === "annual" ? "upfront" : "monthly",
+				voucherCode: isUpfront && subAppliedVoucher ? subAppliedVoucher.code : undefined,
+			},
+		).then((res) => {
+			// Halaman bayar milik Lakuna (Core API), bukan halaman Snap.
+			if (res.data?.redirectUrl && res.data.payOrderId) {
+				void goto(`/payment/pay/${encodeURIComponent(res.data.payOrderId)}`);
+				return;
+			}
+			if (res.data?.redirectUrl) {
+				if (!isSnapRedirect(res.data.redirectUrl)) {
+					message = t.badLink;
+					return;
+				}
+				window.location.href = res.data.redirectUrl;
+				return;
+			}
+			// Gratis (diskon 100%): subscription langsung ACTIVE tanpa Midtrans.
+			message = t.nowActive;
+		}).catch((err) => {
+			if (err instanceof ApiError && err.status === 401) {
+				authModal.open("/pricing");
+				message = t.pleaseLogin;
+			} else {
+				message = err instanceof ApiError && err.message ? err.message : t.buyFail;
+			}
+		}).finally(() => {
+			isBuying = false;
 		});
-		goto("/checkout");
 	}
 
 	// Hemat tahunan vs bulanan (jika keduanya ada).
@@ -188,13 +286,13 @@
 	);
 </script>
 
-<div class="relative min-h-screen overflow-hidden bg-bg text-fg mt-20">
+<div class="relative min-h-screen overflow-hidden bg-bg text-fg">
 	<!-- safelight ambient + grain -->
 	<div aria-hidden class="pointer-events-none absolute -top-40 right-[-10%] h-[60vw] w-[60vw] max-w-[820px] max-h-[820px] rounded-full safelight-glow opacity-[0.07]"></div>
 	<div aria-hidden class="grain pointer-events-none absolute inset-0 opacity-[0.04] mix-blend-soft-light"></div>
 
 	<!-- ── Header ── -->
-	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pt-[clamp(4.5rem,11vh,8rem)] pb-10">
+	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-10 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
 		<div class="mx-auto max-w-[1400px]">
 			<Reveal>
 				<div data-reveal class="flex items-baseline justify-between gap-6 border-b border-hair pb-5">
@@ -269,7 +367,7 @@
 									<p class="mt-2 text-[0.72rem] text-red-500">
 										{stdVoucherError}
 										{" "}
-										<a href={`/login?redirect=${encodeURIComponent("/pricing")}`} class="underline text-safelight">Login</a>
+										<button type="button" onclick={() => authModal.open("/pricing")} class="underline text-safelight">Login</button>
 									</p>
 								{:else}
 									<p class="mt-2 text-[0.72rem] text-red-500">{stdVoucherError}</p>
@@ -278,7 +376,7 @@
 						</div>
 
 						<button type="button" onclick={handleBuyStandar} disabled={isBuying}
-							class="group/btn flex w-full items-center justify-between rounded-full border border-fg/30 px-7 py-4 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-fg transition-colors hover:border-safelight hover:text-safelight disabled:opacity-50">
+							class="press group/btn flex w-full items-center justify-between rounded-full border border-fg/30 px-7 py-4 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-fg transition-colors hover:border-safelight hover:text-safelight active:border-safelight active:text-safelight disabled:opacity-50">
 							<span>{isBuying ? t.processing : t.buyNow}</span>
 							{#if !isBuying}<span class="arr text-safelight transition-transform group-hover/btn:translate-x-1">→</span>{/if}
 						</button>
@@ -398,7 +496,7 @@
 										<p class="mt-2 text-[0.72rem] text-red-500">
 											{subVoucherError}
 											{" "}
-											<a href={`/login?redirect=${encodeURIComponent("/pricing")}`} class="underline text-safelight">Login</a>
+											<button type="button" onclick={() => authModal.open("/pricing")} class="underline text-safelight">Login</button>
 										</p>
 									{:else}
 										<p class="mt-2 text-[0.72rem] text-red-500">{subVoucherError}</p>
@@ -408,13 +506,13 @@
 						{/if}
 
 						<button type="button" onclick={handleSubscribe} disabled={isBuying}
-							class="group/btn flex w-full items-center justify-between rounded-full bg-safelight px-7 py-4 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-ivory shadow-[0_18px_50px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.015] disabled:opacity-60">
+							class="press group/btn flex w-full items-center justify-between rounded-full bg-safelight px-7 py-4 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-ivory shadow-[0_18px_50px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.015] disabled:opacity-60">
 							<span>{isBuying ? t.processing : t.subscribeNow}</span>
 							{#if !isBuying}<span class="arr transition-transform group-hover/btn:translate-x-1">→</span>{/if}
 						</button>
 
 						{#if message}
-							<p class={`mt-4 text-[0.82rem] ${message.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{message}</p>
+							<p class={`mt-4 text-[0.82rem] ${/berhasil|success/i.test(message) ? "text-green-600" : "text-red-500"}`}>{message}</p>
 						{/if}
 					</div>
 				</article>
@@ -425,14 +523,11 @@
 	</section>
 
 	<!-- ── Trusted Clients ── -->
-	<section class="relative px-[clamp(1.25rem,4vw,4rem)] border-t border-hair py-16">
+	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-24 pt-8">
 		<div class="mx-auto max-w-[1400px]">
-			<p class="text-center kicker text-fg-muted mb-10">{t.trustedBy}</p>
-			<div class="flex flex-wrap justify-center items-center gap-x-14 gap-y-6">
-				{#each trustedClients as client (client)}
-					<span class="font-display text-[1.4rem] font-light text-fg/20 transition-colors duration-300 hover:text-fg/70 cursor-default">{client}</span>
-				{/each}
-			</div>
+			<Reveal class="mt-16 lg:mt-24">
+				<LogoCloud eyebrow={trustSec?.kicker || t.trustedBy} items={trustLogos} />
+			</Reveal>
 		</div>
 	</section>
 </div>

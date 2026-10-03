@@ -1,6 +1,18 @@
 /// <reference types="vite/client" />
 
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+/**
+ * Basis API dinamis: dibuka dari localhost → langsung ke API lokal (tidak
+ * tergantung tunnel yang bisa mati); dibuka dari link publik → ke tunnel.
+ */
+function resolveBase(): string {
+	if (typeof window !== "undefined") {
+		const h = window.location.hostname;
+		if (h === "localhost" || h === "127.0.0.1") return "http://localhost:3100";
+	}
+	return import.meta.env.VITE_API_URL || "http://localhost:3000";
+}
+
+const BASE = resolveBase();
 
 export class ApiError extends Error {
 	status: number;

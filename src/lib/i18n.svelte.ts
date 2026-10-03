@@ -5,7 +5,8 @@ import { dict, type Copy, type Lang } from "./i18n-dict";
  * Satu singleton; `hydrate()` dipanggil sekali dari root layout di sisi client.
  */
 class I18n {
-	lang = $state<Lang>("id");
+	// Bawaan: Inggris. Pilihan yang pernah disimpan (lakuna-lang) tetap dihormati.
+	lang = $state<Lang>("en");
 
 	/** Kamus terjemahan bahasa aktif. */
 	get c(): Copy {

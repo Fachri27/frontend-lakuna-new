@@ -1,37 +1,46 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
 	import ApiImage from "./ApiImage.svelte";
 	import gsap from "gsap";
 	import "glightbox/dist/css/glightbox.min.css";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { catLabel, fmtIDR, imgFor, USE_DUMMY_IMAGES, fetchPhotoById, fetchRelatedPhotos, fetchActiveEvents, eventAmount, bestEvent, type Photo, type ApiEvent } from "$lib/data";
+	import { catLabel, fmtIDR, imgFor, USE_DUMMY_IMAGES, fetchPhotoById, fetchRelatedPhotos, fetchVideos, fetchContributorWorks, fetchActiveEvents, eventAmount, bestEvent, type Photo, type Video, type ApiEvent } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
+	import { subscribeModal } from "$lib/subscribeModal.svelte";
+	import { authModal } from "$lib/authModal.svelte";
+	import { page } from "$app/state";
 	import PhotoCard from "./PhotoCard.svelte";
+	import VideoCard from "./VideoCard.svelte";
 
 	let { photoId }: { photoId: string } = $props();
 
 	const copy = {
 		id: {
 			back: "Kembali", by: "oleh", cat: "Kategori", tags: "Kata kunci",
-			zoom: "Perbesar",
-			dims: "Dimensi", license: "Lisensi", personal: "Personal", commercial: "Komersial",
-			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Pakai komersial & cetak",
+			dims: "Dimensi", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
+			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Kuota unduhan bulanan",
 			addToCart: "Tambah ke keranjang", added: "Ditambahkan", buyNow: "Beli sekarang",
 			save: "Simpan", saved: "Tersimpan", download: "Unduh pratinjau",
 			slip: "Lembar lisensi", usage: "Jenis pakai", fee: "Biaya lisensi",
 			youGet: "Yang kamu terima", noWatermark: "tanpa tanda air",
-			related: "Bingkai terkait", byArtist: "Dari perajangga yang sama"
+			related: "Bingkai terkait", byArtist: "Dari perajangga yang sama",
+			relPhotos: "Foto terkait", relVideos: "Video terkait",
+			contrib: "Galeri kontributor", contribSub: "Karya lain dari",
+			seeAll: "Lihat semua"
 		},
 		en: {
 			back: "Back", by: "by", cat: "Category", tags: "Keywords",
-			zoom: "Enlarge",
-			dims: "Dimensions", license: "License", personal: "Personal", commercial: "Commercial",
-			personalDesc: "Personal & social media use", commercialDesc: "Commercial & print use",
+			dims: "Dimensions", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
+			personalDesc: "Personal & social media use", commercialDesc: "Monthly download quota",
 			addToCart: "Add to cart", added: "Added", buyNow: "Buy now",
 			save: "Save", saved: "Saved", download: "Download preview",
 			slip: "Licence slip", usage: "Usage", fee: "Licence fee",
 			youGet: "What you get", noWatermark: "no watermark",
-			related: "Related frames", byArtist: "From the same image-maker"
+			related: "Related frames", byArtist: "From the same image-maker",
+			relPhotos: "Related photos", relVideos: "Related videos",
+			contrib: "Contributor gallery", contribSub: "More works from",
+			seeAll: "See all"
 		}
 	};
 
@@ -42,6 +51,8 @@
 	let added = $state(false);
 	let photo = $state<Photo | null>(null);
 	let related = $state<Photo[]>([]);
+	let relVideos = $state<Video[]>([]);
+	let contrib = $state<Photo[]>([]);
 	let events = $state<ApiEvent[]>([]);
 	let downloading = $state(false);
 
@@ -55,8 +66,22 @@
 	let lightbox = $state<any>(null);
 
 	$effect(() => {
-		fetchPhotoById(photoId).then((p) => (photo = p));
+		fetchPhotoById(photoId).then((p) => {
+			photo = p;
+			if (p) {
+				// Galeri kontributor butuh nama persis — diambil setelah foto ada.
+				fetchContributorWorks(p.author, p.id, 8)
+					.then((c) => (contrib = c))
+					.catch(() => {});
+			}
+		});
 		fetchRelatedPhotos(photoId).then((r) => (related = r)).catch(() => {});
+		// Video terkait: klip terbaru kecuali yang sedang dibuka.
+		fetchVideos(7)
+			.then((r) => {
+				relVideos = r.videos.filter((v) => v.id !== photoId).slice(0, 4);
+			})
+			.catch(() => {});
 		// Event diskon aktif khusus foto ini (targetType PHOTO).
 		fetchActiveEvents({ photoId }).then((e) => (events = e)).catch(() => (events = []));
 	});
@@ -70,7 +95,7 @@
 		let lb: any = null;
 		void import("glightbox").then(({ default: GLightbox }) => {
 			if (cancelled) return;
-			const src = imgFor(photo!.seed, 1600, 2000, photo!.thumbUrl || photo!.watermarkUrl);
+			const src = imgFor(photo!.seed, 1600, 2000, photo!.watermarkUrl || photo!.thumbUrl);
 			lb = GLightbox({
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				elements: [{ href: src, type: "image" }] as any,
@@ -148,11 +173,39 @@
 			kind: "photo",
 			title: `${photo.title[lang]} — ${license === "personal" ? t.personal : t.commercial}`,
 			price: finalPrice,
-			meta: photo.id
+			meta: photo.id,
+			thumbUrl: photo.thumbUrl
 		});
 		added = true;
 		setTimeout(() => (added = false), 1800);
 	}
+
+	// Aksi utama = beli langsung: masuk keranjang lalu ke checkout.
+	function handleBuyNow() {
+		handleAdd();
+		goto("/checkout");
+	}
+
+	// Premium = langganan berkuota, bukan harga satuan ×2: tombol utama membuka
+	// popup harga langganan (bukan checkout), dan angka yang tampil adalah paket
+	// termurah per bulan.
+	const isPremium = $derived(license === "commercial");
+	const premiumFrom = $derived(subscribeModal.fromMonthly);
+	const premiumRowLabel = $derived(premiumFrom ? `${fmtIDR(premiumFrom)}${t.perMonth}` : "…");
+	const premiumLabel = $derived(premiumFrom ? `${t.fromPrice} ${fmtIDR(premiumFrom)}${t.perMonth}` : "…");
+	function handlePrimary() {
+		if (isPremium) {
+			// Belum masuk: arahkan ke login dulu, kembali ke foto ini sesudahnya.
+			if (!store.user) {
+				authModal.open(page.url.pathname + page.url.search);
+				return;
+			}
+			subscribeModal.open();
+		} else handleBuyNow();
+	}
+	$effect(() => {
+		void subscribeModal.load();
+	});
 
 	// Unduh pratinjau bertanda air (versi ber-resolusi rendah). File penuh tanpa
 	// tanda air hanya tersedia setelah pembelian (lihat modul download backend).
@@ -190,7 +243,7 @@
 	</div>
 {/snippet}
 
-{#snippet licenseRow(active: boolean, onpick: () => void, title: string, desc: string, optPrice: number, discount = 0)}
+{#snippet licenseRow(active: boolean, onpick: () => void, title: string, desc: string, optPrice: number, discount = 0, priceLabel = "")}
 	{@const finalP = Math.max(0, optPrice - discount)}
 	<button
 		type="button"
@@ -215,7 +268,9 @@
 			</span>
 		</span>
 		<span class="shrink-0 pt-px text-right font-mono text-[0.82rem] tabular-nums">
-			{#if discount > 0}
+			{#if priceLabel}
+				<span class={active ? "text-fg" : "text-fg-muted"}>{priceLabel}</span>
+			{:else if discount > 0}
 				<span class="block text-[0.72rem] text-fg-muted line-through opacity-50">{fmtIDR(optPrice)}</span>
 				<span class={active ? "text-fg" : "text-fg-muted"}>{fmtIDR(finalP)}</span>
 			{:else}
@@ -226,9 +281,9 @@
 {/snippet}
 
 {#if !photo}
-	<div class="min-h-screen pt-20 sm:pt-28"></div>
+	<div class="min-h-screen pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] sm:pt-28"></div>
 {:else}
-	<div bind:this={rootEl} class="min-h-screen pt-20 sm:pt-28">
+	<div bind:this={rootEl} class="min-h-screen pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] sm:pt-28">
 		<!-- Top strip -->
 		<!-- Nomor bingkai sempat muncul tiga kali di satu layar: di sini, di kaki
 			pelat, dan di kepala lembar lisensi. Yang di sini murni pengulangan —
@@ -258,43 +313,26 @@
 				>
 					<div class="pointer-events-none absolute -inset-10 bg-[radial-gradient(circle_at_50%_40%,color-mix(in_srgb,var(--safelight)_18%,transparent),transparent_60%)] blur-2xl"></div>
 					<div
-						class="relative aspect-[var(--plate-ar)] max-h-[76svh] w-full overflow-hidden sm:aspect-[3/2] sm:max-h-none"
+						class="relative mx-auto aspect-[var(--plate-ar)] max-h-[78svh] w-full max-w-full overflow-hidden bg-black/40"
 						style={`--plate-ar: ${photo.w} / ${photo.h}`}
 					>
 						<ApiImage
-							src={imgFor(photo.seed, 1600, 2000, photo.thumbUrl || photo.watermarkUrl)}
+							src={imgFor(photo.seed, 1600, 2000, photo.watermarkUrl || photo.thumbUrl)}
 							alt={photo.title[lang]}
 							fill
 							eager
-							class="object-cover transition-transform duration-[1400ms] ease-out group-hover:scale-[1.02]"
+							class="object-contain transition-transform duration-[1400ms] ease-out group-hover:scale-[1.02]"
 						/>
 						<div class="grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-soft-light"></div>
 						<div class="pointer-events-none absolute inset-0 opacity-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.45)] transition-opacity duration-500 [.dark_&]:opacity-100"></div>
 					</div>
-					{#each ["tl", "tr", "bl", "br"] as c (c)}
-						<span
-							class={`pointer-events-none absolute h-6 w-6 border-ivory/70 ${
-								c === "tl" ? "left-3 top-3 border-l border-t"
-								: c === "tr" ? "right-3 top-3 border-r border-t"
-								: c === "bl" ? "bottom-3 left-3 border-b border-l"
-								: "bottom-3 right-3 border-b border-r"
-							}`}
-						></span>
-					{/each}
 				</figure>
 
-				<!-- Strip bukti: nomor bingkai + dimensi + perbesar -->
+				<!-- Strip bukti: nomor bingkai + dimensi -->
 				<div class="mt-3 flex items-center justify-between gap-4">
 					<p class="kicker text-fg-muted">
 						No. {frameNo}<span class="hidden sm:inline"> — {photo.w} × {photo.h} px</span>
 					</p>
-					<button
-						type="button"
-						onclick={() => lightbox?.open()}
-						class="kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
-					>
-						{t.zoom} ⤢
-					</button>
 				</div>
 
 				<!-- Keterangan cetakan: judul dan perajangga menempel pada foto,
@@ -305,7 +343,7 @@
 						{photo.title[lang]}
 					</h1>
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <span class="text-safelight">{photo.author}</span>
+						{t.by} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 					</p>
 				</div>
 			</div>
@@ -323,7 +361,7 @@
 						<span class="font-mono text-[0.7rem] tracking-[0.14em] text-fg-muted">{frameNo}</span>
 					</div>
 
-					{#if activeEvent && eventAmt > 0}
+					{#if !isPremium && activeEvent && eventAmt > 0}
 						<div class="flex items-baseline justify-between gap-4 border-b border-hair bg-safelight/[0.07] px-5 py-3">
 							<span class="kicker text-safelight">{activeEvent.name}</span>
 							<span class="font-mono text-[0.8rem] tabular-nums text-safelight">−{fmtIDR(eventAmt)}</span>
@@ -335,7 +373,7 @@
 					</div>
 					<div role="radiogroup" aria-label={t.usage} class="mt-1 divide-y divide-hair border-b border-hair">
 						{@render licenseRow(license === "personal", () => (license = "personal"), t.personal, t.personalDesc, photo.price, activeEvent ? eventAmount(activeEvent, photo.price) : 0)}
-						{@render licenseRow(license === "commercial", () => (license = "commercial"), t.commercial, t.commercialDesc, photo.price * 2, activeEvent ? eventAmount(activeEvent, photo.price * 2) : 0)}
+						{@render licenseRow(license === "commercial", () => (license = "commercial"), t.commercial, t.commercialDesc, photo.price * 2, 0, premiumRowLabel)}
 					</div>
 
 					<!-- Satu-satunya angka berukuran penuh di panel ini, dan ia milik
@@ -344,9 +382,13 @@
 					<div class="border-b border-hair px-5 py-5">
 						<span class="kicker text-fg-muted">{t.fee}</span>
 						<p class="mt-2 font-display text-[2.1rem] font-light leading-none tracking-[-0.02em] text-fg">
-							{fmtIDR(finalPrice)}
+							{#if isPremium}
+								<span class="mr-2 font-body text-base text-fg-muted">{t.fromPrice}</span>{premiumFrom ? fmtIDR(premiumFrom) : "…"}<span class="ml-1 font-body text-base text-fg-muted">{t.perMonth}</span>
+							{:else}
+								{fmtIDR(finalPrice)}
+							{/if}
 						</p>
-						{#if eventAmt > 0}
+						{#if !isPremium && eventAmt > 0}
 							<p class="mt-2 font-mono text-[0.72rem] tabular-nums text-fg-muted line-through opacity-60">{fmtIDR(price)}</p>
 						{/if}
 					</div>
@@ -358,17 +400,29 @@
 						<button
 							bind:this={ctaEl}
 							type="button"
-							onclick={handleAdd}
+							onclick={handlePrimary}
 							class="w-full rounded-full bg-safelight py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
 						>
-							{added ? `✓ ${t.added}` : t.addToCart}
+							{isPremium ? t.subscribe : t.buyNow}
 						</button>
 						<div class="mt-3.5 flex items-center justify-between text-sm">
-							<a href="/checkout" class="text-fg-muted transition-colors hover:text-safelight">{t.buyNow}</a>
+							{#if !isPremium}
+							<button
+								type="button"
+								onclick={handleAdd}
+								class="inline-flex items-center gap-2 text-fg-muted transition-colors hover:text-safelight"
+							>
+								<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+									<path d="M3 3h2l2.4 12.5a2 2 0 0 0 2 1.5h7.2a2 2 0 0 0 2-1.5L21 7H6" />
+									<circle cx="9" cy="20" r="1.3" /><circle cx="18" cy="20" r="1.3" />
+								</svg>
+								{added ? `✓ ${t.added}` : t.addToCart}
+							</button>
+							{/if}
 							<button
 								type="button"
 								onclick={() => store.toggleFavorite(photo!.id)}
-								class="text-fg-muted transition-colors hover:text-safelight"
+								class="ml-auto text-fg-muted transition-colors hover:text-safelight"
 							>
 								{fav ? `♥ ${t.saved}` : `♡ ${t.save}`}
 							</button>
@@ -382,14 +436,14 @@
 						<p class="mt-2 font-mono text-[0.76rem] tabular-nums text-fg">
 							{photo.w} × {photo.h} px · JPEG · {t.noWatermark}
 						</p>
-						<button
+						<!-- <button
 							type="button"
 							onclick={handleDownloadPreview}
 							disabled={downloading || (!USE_DUMMY_IMAGES && !photo?.watermarkUrl && !photo?.thumbUrl)}
 							class="mt-3 text-sm text-fg-muted transition-colors hover:text-safelight disabled:opacity-50"
 						>
 							{downloading ? "…" : t.download}
-						</button>
+						</button> -->
 					</div>
 				</div>
 			</aside>
@@ -398,7 +452,10 @@
 				lisensi: yang dicari orang di layar sempit adalah harga dan tombol,
 				bukan paragraf. Di lg ia kembali ke kolom kiri, baris kedua. -->
 			<div class="max-w-2xl lg:col-start-1 lg:row-start-2 lg:-mt-4">
-				<p class="text-[1.02rem] leading-relaxed text-fg-muted">{photo.desc[lang]}</p>
+				<!-- Tanpa deskripsi, API mengisi desc = judul; jangan ulang judulnya. -->
+				{#if photo.desc[lang] && photo.desc[lang] !== photo.title[lang]}
+					<p class="text-[1.02rem] leading-relaxed text-fg-muted">{photo.desc[lang]}</p>
+				{/if}
 
 				<!-- Data cetakan. Di mobile jadi baris-baris bergaris rambut —
 					bahasa yang sama dengan lembar lisensi — bukan grid dua kolom
@@ -411,9 +468,9 @@
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
 							{#if photo.keywords.length}
 								{#each photo.keywords as kw (kw)}
-									<span class="kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted">
+									<a href={`/photos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
-									</span>
+									</a>
 								{/each}
 							{:else}
 								<span class="text-sm text-fg/40">—</span>
@@ -424,20 +481,73 @@
 			</div>
 		</div>
 
-		<!-- ───────── Related ───────── -->
-		<section class="mx-auto max-w-[1500px] px-6 pb-28 lg:px-10">
-			<Reveal class="mb-8">
-				<p data-reveal class="kicker text-safelight">{t.related}</p>
-				<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{photo.author}</h2>
-			</Reveal>
-			<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
-				{#each related as p (p.id)}
-					<div data-reveal>
-						<PhotoCard photo={p} />
+		<!-- ───────── Foto terkait ───────── -->
+		{#if related.length > 0}
+			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
+				<Reveal class="mb-8 flex items-end justify-between gap-6">
+					<div>
+						<p data-reveal class="kicker text-safelight">{t.related}</p>
+						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relPhotos}</h2>
 					</div>
-				{/each}
-			</Reveal>
-		</section>
+					<a data-reveal href="/photos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+						{t.seeAll}
+					</a>
+				</Reveal>
+				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{#each related as p (p.id)}
+						<div data-reveal>
+							<PhotoCard photo={p} landscape />
+						</div>
+					{/each}
+				</Reveal>
+			</section>
+		{/if}
+
+		<!-- ───────── Video terkait ───────── -->
+		{#if relVideos.length > 0}
+			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
+				<Reveal class="mb-8 flex items-end justify-between gap-6">
+					<div>
+						<p data-reveal class="kicker text-safelight">{t.related}</p>
+						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relVideos}</h2>
+					</div>
+					<a data-reveal href="/videos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+						{t.seeAll}
+					</a>
+				</Reveal>
+				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{#each relVideos as v (v.id)}
+						<div data-reveal>
+							<VideoCard video={v} />
+						</div>
+					{/each}
+				</Reveal>
+			</section>
+		{/if}
+
+		<!-- ───────── Galeri kontributor ───────── -->
+		{#if contrib.length > 0 && photo}
+			<section class="mx-auto max-w-[1500px] px-6 pb-28 lg:px-10">
+				<Reveal class="mb-8 flex items-end justify-between gap-6">
+					<div>
+						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
+						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
+							{t.contribSub} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+						</h2>
+					</div>
+					<a data-reveal href={`/photos?q=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+						{t.seeAll}
+					</a>
+				</Reveal>
+				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{#each contrib as p (p.id)}
+						<div data-reveal>
+							<PhotoCard photo={p} landscape />
+						</div>
+					{/each}
+				</Reveal>
+			</section>
+		{/if}
 
 		<!-- ───────── Rel lisensi (mobile) ─────────
 			Di layar sempit, harga dan tombolnya berada satu setengah layar di
@@ -455,17 +565,16 @@
 			<div class="flex items-center gap-4 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
 				<div class="min-w-0">
 					<p class="kicker truncate text-fg-muted">{license === "personal" ? t.personal : t.commercial}</p>
-					<p class="mt-1 font-mono text-[0.95rem] tabular-nums text-fg">{fmtIDR(finalPrice)}</p>
+					<p class="mt-1 font-mono text-[0.95rem] tabular-nums text-fg">{isPremium ? premiumLabel : fmtIDR(finalPrice)}</p>
 				</div>
 				<button
 					type="button"
-					onclick={handleAdd}
+					onclick={handlePrimary}
 					class="ml-auto shrink-0 rounded-full bg-safelight px-6 py-3 text-sm font-medium text-ivory transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
 				>
-					{added ? `✓ ${t.added}` : t.addToCart}
+					{isPremium ? t.subscribe : t.buyNow}
 				</button>
 			</div>
 		</div>
 	</div>
 {/if}
-

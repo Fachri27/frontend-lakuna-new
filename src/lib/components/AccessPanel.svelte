@@ -346,7 +346,7 @@
 			type="button"
 			onclick={() => access.setPanelOpen(false)}
 			aria-label={t.closeLabel}
-			class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-hair text-fg/70 transition-colors hover:text-safelight"
+			class="tap-expand grid h-9 w-9 shrink-0 place-items-center rounded-full border border-hair text-fg/70 transition-colors hover:text-safelight active:border-safelight active:text-safelight"
 		>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
 				<path d="M6 6l12 12M18 6L6 18" />

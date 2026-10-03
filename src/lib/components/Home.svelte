@@ -4,7 +4,12 @@
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { fetchPhotos, fetchCategories, fetchHomepage, imgFor, type Photo, type ApiCatItem, type HomepageSection } from "$lib/data";
+	import { fetchPhotos, fetchPhotoOriginal, fetchVideos, fetchHomepage, refreshHomepage, fetchPlans, adaptPhoto, adaptVideo, imgFor, USE_DUMMY_IMAGES, fmtIDR, loadHomeSnapshot, saveHomeSnapshot, stripPicsumPhotos, homepageHasPicsum, mergeMediaById, mergeHomepage, type Photo, type Video, type Plan, type HomepageSection } from "$lib/data";
+	import { apiGet } from "$lib/api";
+	import { calmRefresh } from "$lib/scrollCalm";
+	import { getLenis } from "$lib/lenis";
+	import { soundOn } from "$lib/sound.svelte";
+	import type { ApiResponse } from "$lib/types";
 	import Reveal from "./Reveal.svelte";
 	import Parallax from "./Parallax.svelte";
 	import ParallaxImage from "./ParallaxImage.svelte";
@@ -12,11 +17,17 @@
 	import RevealText from "./RevealText.svelte";
 	import ArchiveStrip from "./ArchiveStrip.svelte";
 	import Magnetic from "./Magnetic.svelte";
+	import FeaturedShowcase from "./FeaturedShowcase.svelte";
 	import Preloader from "./Preloader.svelte";
-	import IndonesiaMap from "./IndonesiaMap.svelte";
+	import MapDescent from "./MapDescent.svelte";
 	import ApiImage from "./ApiImage.svelte";
+	import { rippleOnce } from "$lib/heroRipple";
+	import { access } from "$lib/access.svelte";
+	import { mailto } from "$lib/contact";
+	import { scrambleHover } from "$lib/scramble";
+	import LogoCloud from "./LogoCloud.svelte";
 	import Seam from "./Seam.svelte";
-	import RulerCarousel, { type RulerItem } from "./ui/RulerCarousel.svelte";
+	import { authModal } from "$lib/authModal.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
 
@@ -29,6 +40,63 @@
 			rulerPrev: "Tema sebelumnya",
 			rulerNext: "Tema berikutnya",
 			rulerCount: "{i} dari {n}",
+		standar: "Standard",
+		standarDesc: "Beli satuan foto atau video. Tanpa komitmen.",
+		standarStrip: "Contoh bingkai dari arsip",
+		standarDescVideo: "Beli satuan foto atau video. Tanpa komitmen.",
+		typeLabel: "Jenis aset",
+		planLabel: "Paket",
+		typeFoto: "Foto",
+		typeVideo: "Video",
+		perClip: "/klip",
+		subscribe: "Premium",
+		subscribeDesc: "Kuota per bulan untuk seluruh aset.\n24 jam support system.",
+			subscribeCta: "Pilih paket",
+			custom: "Custom",
+			customDesc: "Volume besar, lisensi tim, atau kebutuhan lain.\nCeritakan, kami kirim penawarannya.",
+			customPrice: "Custom",
+			customCta: "Hubungi kami",
+			customSubject: "Permintaan harga custom",
+			subscribeTag: "Paling hemat",
+			quotaUnit: "unduhan / bulan",
+			compareTitle: "The benefits",
+			compareRes: "This is the sample of the asset you will get in Standard or Premium subscription",
+			comparePreview: "Pratinjau",
+			compareClean: "Unduhan",
+			compareSlider: "Geser untuk membandingkan pratinjau dan unduhan",
+		standarWhen: "Ambil satu bingkai untuk satu kebutuhan. Bayar sekali, tanpa langganan berjalan.",
+		subscribeWhen: "Kuota unduhan tiap bulan. Lebih murah per bingkai kalau kamu memakai arsip secara rutin.",
+		standarBenefits: [
+			"Access all HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+		],
+		subscribeBenefits: [
+			"All access to HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+			"30 downloads / month",
+		],
+		standarBenefitsVideo: [
+			"Access all HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+		],
+		subscribeBenefitsVideo: [
+			"All access to HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+			"30 downloads / month",
+		],
+		trustEyebrow: "Dipercaya tim di",
+		archiveLine: "{n} foto and {m} video siap diunduh.",
+			from: "mulai",
+			perItem: "/bingkai",
+			perMonth: "/bulan",
 			closingAuthed: {
 				kicker: "Akunmu",
 				title: "Darkroommu menunggu,",
@@ -43,6 +111,63 @@
 			rulerPrev: "Previous theme",
 			rulerNext: "Next theme",
 			rulerCount: "{i} of {n}",
+		standar: "Standard",
+		standarDesc: "Pay per photo or videos. No commitment.",
+		standarStrip: "Sample frames from the archive",
+		standarDescVideo: "Pay per photo or videos. No commitment.",
+		typeLabel: "Asset type",
+		planLabel: "Plan",
+		typeFoto: "Photos",
+		typeVideo: "Video",
+		perClip: "/clip",
+		subscribe: "Premium",
+		subscribeDesc: "Monthly quota for the archives.\n24 hours customer service.",
+			subscribeCta: "Choose a plan",
+			custom: "Custom",
+			customDesc: "Large volume, team licence, or other needs.\nTell us and we will send a quote.",
+			customPrice: "Custom",
+			customCta: "Contact us",
+			customSubject: "Custom pricing request",
+			subscribeTag: "Best value",
+			quotaUnit: "downloads / month",
+			compareTitle: "The benefits",
+			compareRes: "This is the sample of the asset you will get in Standard or Premium subscription",
+			comparePreview: "Preview",
+			compareClean: "Download",
+			compareSlider: "Drag to compare the preview and the download",
+		standarWhen: "Take one frame for one job. Pay once, no running subscription.",
+		subscribeWhen: "A download quota every month. Cheaper per frame if you use the archive regularly.",
+		standarBenefits: [
+			"Access all HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+		],
+		subscribeBenefits: [
+			"All access to HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+			"30 downloads / month",
+		],
+		standarBenefitsVideo: [
+			"Access all HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+		],
+		subscribeBenefitsVideo: [
+			"All access to HD assets",
+			"Premium license",
+			"Single user account",
+			"24 hours customer service",
+			"30 downloads / month",
+		],
+		trustEyebrow: "Trusted by teams at",
+		archiveLine: "{n} photos and {m} videos ready to download",
+			from: "from",
+			perItem: "/frame",
+			perMonth: "/month",
 			closingAuthed: {
 				kicker: "Your account",
 				title: "Your darkroom awaits,",
@@ -60,56 +185,709 @@
 
 	let heroSection = $state<HTMLElement>();
 	let q = $state("");
+	// State mulai KOSONG seperti SSR (tanpa snapshot): render hidrasi pertama
+	// harus sama persis dengan HTML server supaya tak ada mismatch
+	// `hydration_attribute_changed` (Svelte mempertahankan nilai server yang
+	// salah — picsum — dan menempelkannya). Snapshot diterapkan sekali di
+	// $effect mount di bawah (sudah lewat hidrasi, aman), lalu fetch segar
+	// menimpa begitu tiba.
 	let horizontal = $state<Photo[]>([]);
 	let latest = $state<Photo[]>([]);
 	let archiveTotal = $state(0);
-	let categories = $state<ApiCatItem[]>([]);
-	let showAllCats = $state(false);
+	let videos = $state<Video[]>([]);
+	let videoTotal = $state(0);
 	let hp = $state<Record<string, HomepageSection>>({});
-
-	const visibleCats = $derived(showAllCats ? categories : categories.slice(0, 6));
-	const hiddenCats = $derived(Math.max(0, categories.length - 6));
-	const rulerItems = $derived<RulerItem[]>(
-		categories.map((cat) => ({
-			id: cat.id,
-			label: cat.name,
-			href: `/photos?cat=${encodeURIComponent(cat.name)}`,
-		})),
+	// Teaser daftar harga: harga asli dari API agar seirama halaman /pricing.
+	let plans = $state<Plan[]>([]);
+	let standarPrice = $state(500000);
+	// Harga satuan berbeda antara foto dan klip, jadi baris Standar punya
+	// pilihan jenis aset. Angkanya harga termurah yang benar-benar ada di
+	// arsip (API mengurutkan; klien tak perlu menarik seluruh katalog).
+	let standarType = $state<"FOTO" | "VIDEO">("FOTO");
+	// Pilihan paket pada blok benefits: hanya daftar paket terpilih yang tampil.
+	let benefitPlan = $state<"STANDARD" | "PREMIUM">("STANDARD");
+	let fotoFrom = $state<number | null>(null);
+	let videoFrom = $state<number | null>(null);
+	const standarShown = $derived(
+		standarType === "VIDEO" ? videoFrom : (fotoFrom ?? standarPrice),
+	);
+	const subscribeFrom = $derived(
+		plans.length > 0 ? Math.min(...plans.map((p) => p.priceMonthly)) : null,
 	);
 
-	// Garis datum di hero membawa skala arsipnya sendiri. Dirender hanya kalau
-	// API-nya menjawab — "0 bingkai" lebih buruk daripada garis polos.
-	const archiveCount = $derived(
-		archiveTotal > 0
-			? c.hero.count.replace("{n}", new Intl.NumberFormat(lang === "id" ? "id-ID" : "en-US").format(archiveTotal))
-			: "",
+	// Kurasi CMS (section `klip`): hanya video terpilih yang tampil di contact
+	// sheet, sesuai urutan pilih. Kosong = video terbaru otomatis.
+	const klipVids = $derived(
+		hp["klip"]?.photos?.length ? hp["klip"].photos.map(adaptVideo) : null,
 	);
+	const shownVids = $derived(klipVids ?? videos);
+	const shownTotal = $derived(klipVids ? klipVids.length : videoTotal);
+
+	// ── Strip drone: teks kiri + rel kanan digeser GULIR vertikal ──
+	// Tanpa baki hitam. Section di-pin satu layar; gulir vertikal
+	// menggeser rel portrait (scrub 1:1, eased). Tengah viewport berwarna,
+	// sisi grayscale + redup. Mobile / reduce-motion: tanpa pin, rel jadi
+	// geser manual biasa.
+	let railEl = $state<HTMLDivElement | null>(null);
+	let railGliding = false;
+	function reduceMotion() {
+		return (
+			typeof window !== "undefined" &&
+			(window.matchMedia("(prefers-reduced-motion: reduce)").matches || access.settings.reduceMotion)
+		);
+	}
+	let dronePinEl = $state<HTMLElement | null>(null);
+	let dragViewEl = $state<HTMLDivElement | null>(null);
+	let reelLgEl = $state<HTMLDivElement | null>(null);
+	let droneH = $state(0);
+	/** Cukup kartu supaya strip terasa penuh; daftar pendek diulang sekali. */
+	const droneItems = $derived.by(() => {
+		const v = shownVids;
+		if (!v.length) return [] as typeof v;
+		if (v.length >= 6) return v;
+		const out: typeof v = [];
+		while (out.length < 6) out.push(...v);
+		return out.slice(0, 6);
+	});
+	let dragActive = $state(0);
+	// Dua fase dalam satu pin (ala rujukan): (1) bidang rel melebar ke kiri
+	// sampai memenuhi layar sambil mendorong teks keluar, (2) rel digeser
+	// horizontal. Sebelum pin, bidang masuk sedikit tertinggal dari teks.
+	$effect(() => {
+		const pin = dronePinEl;
+		const view = dragViewEl;
+		const track = reelLgEl;
+		void droneItems.length;
+		if (!pin || !view || !track) return;
+		const split = pin.querySelector<HTMLElement>(".drone-split");
+		const copy = pin.querySelector<HTMLElement>(".drone-copy");
+		const clear = () => {
+			track.style.transform = "";
+			view.style.marginInline = "";
+			view.style.clipPath = "";
+			view.style.transform = "";
+			track.querySelectorAll<HTMLElement>(".dg-card > img, .dg-card > video").forEach((el) => (el.style.objectPosition = ""));
+			if (copy) {
+				copy.style.transform = "";
+				copy.style.opacity = "";
+			}
+		};
+		if (!split || !copy || reduceMotion() || window.innerWidth < 900) {
+			droneH = 0;
+			clear();
+			return;
+		}
+		// Lenis sudah menghaluskan gulir; di sini cukup kurva ringan. Fase geser
+		// LINEAR supaya kecepatan rel = kecepatan gulir (tanpa melambat di ujung).
+		const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+		const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+		let expandLen = 1;
+		let panLen = 1;
+		let padL = 0; // jarak tepi kiri bidang ke tepi kiri layar
+		let padR = 0;
+		let copyOut = 0; // jarak geser teks sampai lepas dari layar
+		let fullW = 0;
+		let ready = false;
+		let centers: number[] = [];
+		let plxEls: HTMLElement[][] = [];
+		let activeIdx = -1;
+		const maxShift = () => Math.max(0, track.scrollWidth - fullW);
+		const measure = () => {
+			// Bidang dibuat selebar layar SEKALI; melebar = membuka clip-path, jadi
+			// tidak ada layout ulang per frame (margin/width) saat gulir.
+			view.style.marginInline = "";
+			const sr = split.getBoundingClientRect();
+			const vr = view.getBoundingClientRect();
+			// Layout belum siap (mis. section belum tergambar saat refresh /
+			// kembali dari halaman lain): jangan simpan ukuran nol yang merusak
+			// tampilan; kembalikan ke keadaan bersih dan tunggu refresh berikutnya.
+			if (sr.width < 10 || vr.width < 10 || !track.querySelector(".dg-card")) {
+				ready = false;
+				clear();
+				return;
+			}
+			ready = true;
+			padL = Math.max(0, vr.left - sr.left);
+			padR = Math.max(0, sr.right - vr.right);
+			fullW = vr.width + padL + padR;
+			view.style.marginInline = `${-padL}px ${-padR}px`;
+			// offsetLeft/offsetWidth, BUKAN getBoundingClientRect: yang terakhir ikut
+			// menghitung translate teks saat ini, jadi tiap refresh di tengah gulir
+			// mengukur jarak keluar yang makin kecil (teks tidak lagi lepas dari layar).
+			copyOut = copy.offsetLeft + copy.offsetWidth + 24;
+			const cardEls = Array.from(track.querySelectorAll<HTMLElement>(".dg-card"));
+			centers = cardEls.map((el) => el.offsetLeft + el.offsetWidth / 2);
+			// Parallax isi kartu lewat object-position: foto tetap memenuhi kartu
+			// (tanpa transform, jadi tepi kartu TIDAK mungkin terbuka); yang
+			// bergeser hanya jendela crop-nya. Sumber yang lebih lebar dari kartu
+			// (16:9) punya ruang geser; yang portrait diam saja.
+			plxEls = cardEls.map((el) => Array.from(el.querySelectorAll<HTMLElement>(":scope > img, :scope > video")));
+			expandLen = Math.round(window.innerHeight * 0.9);
+			panLen = Math.round(maxShift() + window.innerHeight * 0.6);
+			droneH = window.innerHeight + expandLen + panLen;
+		};
+		const apply = (scrolled: number) => {
+			if (!ready) return;
+			const e = ease(clamp01(scrolled / expandLen));
+			const pan = clamp01((scrolled - expandLen) / panLen);
+			const shift = pan * maxShift();
+			const gapL = (1 - e) * padL;
+			const gapR = (1 - e) * padR;
+			view.style.clipPath = `inset(0 ${gapR.toFixed(1)}px 0 ${gapL.toFixed(1)}px)`;
+			copy.style.transform = `translate3d(${(-e * copyOut).toFixed(1)}px, 0, 0)`;
+			copy.style.opacity = String(1 - clamp01(e * 1.25));
+			const tx = gapL - shift;
+			track.style.transform = `translate3d(${tx.toFixed(1)}px, 0, 0)`;
+			// Parallax: isi kartu bergerak LEBIH LAMBAT dari kartunya. Kartu di kiri
+			// tengah → isi tergeser ke kanan (dan sebaliknya), 0 di tengah.
+			const viewMid = (gapL + (fullW - gapR)) / 2;
+			const half = Math.max(1, (fullW - gapL - gapR) / 2);
+			for (let i = 0; i < plxEls.length; i++) {
+				const raw = (viewMid - (centers[i] + tx)) / half;
+				if (Math.abs(raw) > 1.6) continue; // jauh di luar layar
+				const rel = Math.max(-1, Math.min(1, raw));
+				const pos = `${(50 - rel * 40).toFixed(1)}% 50%`;
+				for (const el of plxEls[i]) el.style.objectPosition = pos;
+			}
+			// Kartu aktif: "penanda" bergerak dari kartu pertama ke terakhir sesuai
+			// progres geser, jadi kartu paling ujung pun sempat menyala di akhir.
+			if (centers.length) {
+				const mid = centers[0] + pan * (centers[centers.length - 1] - centers[0]);
+				let best = 0;
+				let bestD = Infinity;
+				for (let i = 0; i < centers.length; i++) {
+					const d = Math.abs(centers[i] - mid);
+					if (d < bestD) {
+						bestD = d;
+						best = i;
+					}
+				}
+				if (best !== activeIdx) {
+					activeIdx = best;
+					dragActive = best;
+					const list = track.querySelectorAll<HTMLElement>(".dg-card");
+					list.forEach((el, i) => el.toggleAttribute("data-active", i === best));
+				}
+			}
+		};
+		measure();
+		apply(0);
+		// Rel mentok (progres 1) lalu gulir sekali lagi ke bawah = langsung
+		// menempel ke globe, tanpa melintasi celah Seam pelan-pelan.
+		let globeSnapped = false;
+		const st = ScrollTrigger.create({
+			trigger: pin,
+			start: "top top",
+			end: () => `+=${Math.max(1, expandLen + panLen)}`,
+			invalidateOnRefresh: true,
+			onUpdate: (self) => {
+				apply(self.progress * (expandLen + panLen));
+				if (self.progress < 0.9) globeSnapped = false;
+				else if (self.progress >= 0.995 && self.direction === 1 && !globeSnapped) {
+					globeSnapped = true;
+					const globe = document.querySelector("[data-globe]");
+					if (globe) {
+						const lenis = getLenis();
+						if (lenis) lenis.scrollTo(globe as HTMLElement, { duration: 1.1 });
+						else globe.scrollIntoView({ behavior: "smooth", block: "start" });
+					}
+					setTimeout(() => (globeSnapped = false), 2000);
+				}
+			},
+			onRefresh: (self) => {
+				measure();
+				apply(self.progress * (expandLen + panLen));
+			},
+		});
+		// Masuk: bidang naik dari bawah, tertinggal dari teks.
+		const enter = ScrollTrigger.create({
+			trigger: pin,
+			start: "top bottom",
+			end: "top top",
+			onUpdate: (self) => {
+				view.style.transform = `translate3d(0, ${((1 - self.progress) * window.innerHeight * 0.05).toFixed(1)}px, 0)`;
+			},
+			onLeave: () => {
+				view.style.transform = "";
+			},
+		});
+		// Keadaan awal bidang sesuai posisi gulir saat ini (refresh di tengah
+		// halaman / kembali dari halaman lain), tanpa menunggu gulir pertama.
+		enter.vars.onUpdate?.call(enter, enter);
+		const ro = new ResizeObserver(() => {
+			measure();
+			apply(st.progress * (expandLen + panLen));
+			calmRefresh();
+		});
+		ro.observe(track);
+		ro.observe(split);
+		ro.observe(copy);
+		// Tombol kembali / bfcache: halaman dipulihkan apa adanya, ukur ulang.
+		const onShow = (ev: PageTransitionEvent) => {
+			if (!ev.persisted) return;
+			measure();
+			calmRefresh(0);
+		};
+		window.addEventListener("pageshow", onShow);
+		// Font web yang telat datang mengubah pembungkusan teks & lebar kolom.
+		void document.fonts?.ready.then(() => {
+			measure();
+			apply(st.progress * (expandLen + panLen));
+		}).catch(() => {});
+		return () => {
+			window.removeEventListener("pageshow", onShow);
+			ro.disconnect();
+			st.kill();
+			enter.kill();
+			clear();
+		};
+	});
+
+
+
 
 	const hero = $derived(hp["hero"]);
 	const mulai = $derived(hp["mulai"]);
-	const heroImg = $derived(imgFor("nusantara-hero", 2400, 1600, hero?.imageUrl));
+	// Section landing yang bisa dioverride CMS — kosong = fallback kamus/i18n.
+	const anjungan = $derived(hp["anjungan_1"]);
+	const arsipSec = $derived(hp["arsip"]);
+	const videoSec = $derived(hp["video"]);
+	const hargaSec = $derived(hp["harga"]);
+	const trustSec = $derived(hp["percaya"]);
+	// Logo pelanggan dari CMS: tiap foto terpilih (thumb 800px, bersih) jadi
+	// satu logo. Kosong = wordmark dummy di LogoCloud.
+	const trustLogos = $derived(
+		trustSec?.photos?.length
+			? trustSec.photos.map((p) => ({ name: p.title, src: p.thumbUrl ?? "" })).filter((l) => l.src)
+			: null,
+	);
+	// Kurasi foto CMS (journeys → strip arsip, orbit → galeri 3D). Kosong =
+	// perilaku lama (foto terbaru dari API).
+	const journeyPhotos = $derived(
+		hp["journeys"]?.photos?.length ? hp["journeys"].photos.map(adaptPhoto) : null,
+	);
+	const orbitPhotos = $derived(
+		hp["orbit"]?.photos?.length ? hp["orbit"].photos.map(adaptPhoto) : null,
+	);
+	// Ketahanan hero: URL CMS adalah presigned yang kedaluwarsa 1 jam dan mati
+	// saat tunnel storage restart — dua-duanya pernah bikin hero "berubah-ubah"
+	// antara gambar asli, default, dan rusak. Saat URL CMS gagal: buang cache
+	// + fetch ulang sekali (dapat URL segar); masih gagal → default picsum.
+	// heroDead juga membuka kunci preloader supaya tak menggantung.
+	const HERO_FALLBACK = USE_DUMMY_IMAGES ? imgFor("nusantara-hero", 2400, 1600) : null;
+	let heroRetried = $state(false);
+	let heroDead = $state(false);
+	// Hero bisa berupa klip video (CMS → mediaType "video"): autoplay bisu +
+	// loop sebagai latar. Fallback ke tebakan ekstensi untuk snapshot lama.
+	const heroMediaVideo = $derived(
+		(hero?.mediaType ??
+			(hero?.imageKey && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(hero.imageKey) ? "video" : "image")) === "video",
+	);
+	const heroVideoUrl = $derived(hero?.imageUrl ?? null);
+	// Hero TIDAK PERNAH memakai foto dummy (picsum) kecuali mode dummy Vercel
+	// (VITE_USE_DUMMY_IMAGES). Data belum tiba / gagal / hanya picsum = latar
+	// gelap polos, bukan foto palsu yang lalu berganti. Hero berupa video
+	// tidak punya gambar diam (URL-nya mp4, bukan untuk <img>).
+	const heroImg = $derived(
+		USE_DUMMY_IMAGES
+			? imgFor("nusantara-hero", 2400, 1600, hero?.imageUrl)
+			: hero?.imageUrl && !hero.imageUrl.includes("picsum.photos") && !heroMediaVideo
+				? hero.imageUrl
+				: null,
+	);
+	const motionOk = $derived(
+		!access.settings.reduceMotion &&
+			(typeof window === "undefined" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches),
+	);
+	const heroIsVideo = $derived(!!heroVideoUrl && heroMediaVideo && motionOk && !heroDead);
+	let heroVideoOk = $state(false);
+	// ── Suara video hero ────────────────────────────────────────────────
+	let heroVideoEl = $state<HTMLVideoElement | null>(null);
+	/** Yang terdengar sekarang (video.muted). */
+	let heroMuted = $state(true);
+	/** Pilihan pengguna: "off" = sengaja dimatikan lewat tombol (diingat). */
+	const SOUND_KEY = "lakuna-hero-sound";
+	function soundPref(): "on" | "off" {
+		try {
+			return localStorage.getItem(SOUND_KEY) === "off" ? "off" : "on";
+		} catch {
+			return "on";
+		}
+	}
+	let heroInView = true;
+	const HERO_VOL = 0.8;
+	function fadeHeroVolume(to: number, dur = 0.6) {
+		const v = heroVideoEl;
+		if (!v) return;
+		gsap.to(v, { volume: to, duration: dur, ease: "power1.out", overwrite: true });
+	}
+	/** Coba nyalakan suara; kembalikan false bila browser menolak. */
+	async function unmuteHero(): Promise<boolean> {
+		const v = heroVideoEl;
+		if (!v || soundPref() === "off" || !soundOn()) return false;
+		v.volume = 0;
+		v.muted = false;
+		try {
+			await v.play();
+		} catch {
+			v.muted = true;
+			void v.play().catch(() => {});
+			return false;
+		}
+		heroMuted = false;
+		fadeHeroVolume(heroInView ? HERO_VOL : 0, 1.2);
+		return true;
+	}
+	function toggleHeroSound() {
+		const v = heroVideoEl;
+		if (!v) return;
+		if (heroMuted) {
+			// Menyalakan suara video = preferensi hero sendiri; tidak
+			// menyentuh saklar suara UI navbar (keduanya independen).
+			try { localStorage.setItem(SOUND_KEY, "on"); } catch { /* abaikan */ }
+			void unmuteHero();
+		} else {
+			try { localStorage.setItem(SOUND_KEY, "off"); } catch { /* abaikan */ }
+			v.muted = true;
+			heroMuted = true;
+		}
+	}
+	// Lensa membuka → coba bersuara; ditolak → tunggu interaksi pertama.
+	$effect(() => {
+		const v = heroVideoEl;
+		if (!v || !heroVideoOk) return;
+		let done = false;
+		const onGesture = () => {
+			if (done) return;
+			void unmuteHero().then((ok) => {
+				if (ok) {
+					done = true;
+					cleanup();
+				}
+			});
+		};
+		const events = ["pointerdown", "keydown", "touchstart"] as const;
+		const cleanup = () => events.forEach((e) => window.removeEventListener(e, onGesture, true));
+		events.forEach((e) => window.addEventListener(e, onGesture, { capture: true, passive: true }));
+		const onLens = () => void unmuteHero().then((ok) => { if (ok) { done = true; cleanup(); } });
+		window.addEventListener("lakuna:lens-open", onLens);
+		// Preloader sudah lewat (kunjungan ulang) → coba sekarang.
+		void unmuteHero().then((ok) => { if (ok) { done = true; cleanup(); } });
+		return () => {
+			cleanup();
+			window.removeEventListener("lakuna:lens-open", onLens);
+		};
+	});
+	// Saklar suara situs (navbar) dimatikan → video hero ikut bisu.
+	$effect(() => {
+		const onSound = (e: Event) => {
+			const muted = (e as CustomEvent<{ muted: boolean }>).detail?.muted;
+			const v = heroVideoEl;
+			if (!v) return;
+			if (muted) {
+				v.muted = true;
+				heroMuted = true;
+			} else if (soundPref() !== "off") {
+				void unmuteHero();
+			}
+		};
+		window.addEventListener("lakuna:sound", onSound);
+		return () => window.removeEventListener("lakuna:sound", onSound);
+	});
+	// Hero keluar layar → suara memudar; kembali → naik lagi.
+	$effect(() => {
+		const sec = heroSection;
+		if (!sec) return;
+		const io = new IntersectionObserver(
+			([e]) => {
+				heroInView = !!e?.isIntersecting && (e?.intersectionRatio ?? 0) > 0.25;
+				if (!heroMuted) fadeHeroVolume(heroInView ? HERO_VOL : 0, 0.8);
+			},
+			{ threshold: [0, 0.25, 0.5] },
+		);
+		io.observe(sec);
+		return () => io.disconnect();
+	});
+
+	// URL video baru (ganti CMS) = mulai lagi dari belum-siap.
+	$effect(() => {
+		void heroVideoUrl;
+		heroVideoOk = false;
+	});
+	const heroSrc = $derived(heroDead ? HERO_FALLBACK : heroImg);
+	async function onHeroError() {
+		if (heroDead || heroSrc === HERO_FALLBACK) {
+			heroDead = true;
+			return;
+		}
+		if (!heroRetried) {
+			heroRetried = true;
+			try {
+				const fresh = await refreshHomepage();
+				if (Object.keys(fresh).length && !homepageHasPicsum(fresh)) {
+					hp = mergeHomepage(hp, fresh);
+					saveHomeSnapshot({ hp });
+				}
+				return;
+			} catch {
+				/* jatuh ke default di bawah */
+			}
+		}
+		heroDead = true;
+	}
 	const mulaiImg = $derived(imgFor("closing-fjord", 2400, 1400, mulai?.imageUrl));
+	// Etalase penutup: foto yang ditandai unggulan dulu, lalu terbaru; unik per id.
+	const featuredPhotos = $derived.by(() => {
+		const seen = new Set<string>();
+		const pool = [...horizontal, ...latest].filter((p) => {
+			if (seen.has(p.id) || p.assetType === "VIDEO") return false;
+			seen.add(p.id);
+			return true;
+		});
+		return [...pool.filter((p) => p.featured), ...pool.filter((p) => !p.featured)].slice(0, 4);
+	});
+	// Latar papan tarif: foto dari section `harga`, jatuh ke `manifesto`,
+	// terakhir ke dummy bila API kosong.
+	// Harga custom: email dari konfigurasi kontak bersama ($lib/contact). Selama
+	// belum diisi, tombol menuju halaman Customer service.
+	const customHref = $derived(mailto(s.customSubject));
+	const rateImg = $derived(imgFor("rate-sheet", 2400, 1400, hargaSec?.imageUrl || hp["manifesto"]?.imageUrl));
+	// Tangga kuota langganan — angka asli dari API, tiga tingkat teratas.
+	const quotaLadder = $derived([...new Set(plans.map((p) => p.quota))].sort((a, b) => a - b).slice(0, 3));
+	// Tiga bingkai contoh: yang dibayar per bingkai memang isi arsip ini.
+	const rateFrames = $derived(
+		standarType === "VIDEO"
+			? shownVids.slice(0, 3).map((v) => ({ id: v.id, thumbUrl: v.thumbUrl }))
+			: latest.filter((p) => p.assetType !== "VIDEO").slice(0, 3).map((p) => ({ id: p.id, thumbUrl: p.thumbUrl })),
+	);
+	// Bingkai contoh untuk perbandingan pratinjau vs unduhan: butuh pratinjau
+	// ber-watermark DAN resolusi asli. File asli tak ikut di daftar publik —
+	// diminta terpisah lewat fetchPhotoOriginal (lihat compareOrig).
+	const compareShot = $derived(
+		latest.find(
+			(p) =>
+				p.assetType === "FOTO" &&
+				!!p.watermarkUrl &&
+				// Lebar/tinggi asli; kalau API tak mengirimnya, adaptPhoto memakai
+				// nilai cadangan 1600×1200 — jangan ditampilkan sebagai resolusi.
+				p.w > 1600 &&
+				p.h > 0,
+		) ?? null,
+	);
+	let comparePos = $state(52);
+	// URL file asli untuk sisi "unduhan"; null = tak tersedia → section disembunyikan.
+	let compareOrig = $state<Record<string, string | null>>({});
+	$effect(() => {
+		const id = compareShot?.id;
+		if (!id || id in compareOrig) return;
+		void fetchPhotoOriginal(id).then((url) => {
+			compareOrig[id] = url;
+		});
+	});
+	const compareOrigUrl = $derived(compareShot ? (compareOrig[compareShot.id] ?? null) : null);
+
+	// Lensa preloader membuka ke foto hero, jadi ia menunggu gambar hero yang
+	// FINAL: data homepage sudah dijawab (berhasil atau gagal) DAN src yang sedang
+	// dipasang sudah selesai dimuat (atau gagal — jangan menahan selamanya).
+	//
+	// Kesiapan diturunkan dari src yang terakhir dimuat, bukan flag yang di-reset
+	// lewat $effect. Efek anak berjalan sebelum efek induk: ApiImage melaporkan
+	// gambar dari cache yang sudah complete, lalu reset di sini menimpanya — dan
+	// karena event load tidak datang lagi, lensa tertahan sampai batas tunggu.
+	let hpSettled = $state(false);
+	let heroLoadedSrc = $state("");
+	const heroReady = $derived(
+		hpSettled && (heroLoadedSrc === heroSrc || heroVideoOk || heroDead || (!heroSrc && !heroIsVideo)),
+	);
+
+	// Lensa preloader membuka → foto hero "tercetak" ala 21hrs on the Moon
+	// (sama dengan bukaan foto di peta): lingkaran bertepi lembut melebar dari
+	// tengah, foto masuk terbakar terang lalu eksposurnya mengendap. Dulu:
+	// riak air (heroRipple, masih tersedia lewat __ripple di dev).
+	$effect(() => {
+		const onOpen = () => {
+			const section = heroSection;
+			if (!section) return;
+			if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+			const layer = section.querySelector<HTMLElement>(".hero-img-anim");
+			// Gambar DI DALAM .hero-img-scrub: scrub parallax sudah memakai
+			// `scale` wrapper itu — dua tween di satu elemen saling berebut.
+			const img = section.querySelector<HTMLElement>(".hero-img-scrub img") ?? section.querySelector<HTMLElement>(".hero-img-scrub > *");
+			if (!layer || !img) return;
+			// Blitz kamera menerangi adegan: lensa membuka ke hero yang masih
+			// gelap, lalu flash menyala (putih hangat, serangan ±60 ms) dan
+			// menyiram foto/video — cahayanya mereda, eksposur kembali normal.
+			// Judul hero baru masuk setelah lensa menukik.
+			const flash = section.querySelector<HTMLElement>(".hero-flash");
+			// Eksposur dianimasikan lewat objek bantu lalu ditulis ke style tiap
+			// frame — tween `filter` langsung pada elemen video tertahan di nilai
+			// awalnya (adegan tetap gelap padahal blitz sudah menyala).
+			const ex = { b: 0.18, s: 0.5 };
+			const paint = () => {
+				img.style.filter = `brightness(${ex.b.toFixed(3)}) saturate(${ex.s.toFixed(3)})`;
+			};
+			paint();
+			gsap.set(img, { scale: 1.14 });
+			if (flash) gsap.set(flash, { opacity: 0 });
+			gsap.fromTo(
+				section.querySelectorAll(".hero-anim"),
+				{ opacity: 0, y: 22 },
+				{ opacity: 1, y: 0, duration: 1.1, ease: "power3.out", stagger: 0.1, delay: 1.5, overwrite: true },
+			);
+			// Kilatan layar penuh DI ATAS segalanya (termasuk lensa preloader):
+			// blitz sungguhan menyiram seluruh bingkai sepersekian detik.
+			const burst = document.createElement("div");
+			burst.setAttribute("aria-hidden", "true");
+			burst.style.cssText =
+				"position:fixed;inset:0;z-index:10001;pointer-events:none;opacity:0;" +
+				"background:radial-gradient(ellipse at 50% 45%,#fff 0%,#fffaf2 45%,#ffeedd 100%)";
+			document.body.appendChild(burst);
+			const FLASH_AT = 0.42;
+			gsap.timeline({
+				onComplete: () => {
+					img.style.filter = "";
+					gsap.set(img, { clearProps: "scale,transform" });
+					burst.remove();
+				},
+			})
+				// Serangan ±30 ms, ditahan sekejap, lalu mereda (xenon).
+				.to(burst, { opacity: 1, duration: 0.03, ease: "none" }, FLASH_AT)
+				.to(burst, { opacity: 0, duration: 0.55, ease: "expo.out" }, FLASH_AT + 0.1)
+				.to(flash ?? [], { opacity: 1, duration: 0.03, ease: "none" }, FLASH_AT)
+				.to(ex, { b: 4.2, s: 0.2, duration: 0.03, ease: "none", onUpdate: paint }, FLASH_AT)
+				// Mereda seperti blitz xenon: cepat di awal, ekor panjang.
+				.to(flash ?? [], { opacity: 0, duration: 1.3, ease: "expo.out" }, FLASH_AT + 0.12)
+				.to(ex, { b: 1.2, s: 0.85, duration: 1.2, ease: "expo.out", onUpdate: paint }, FLASH_AT + 0.12)
+				.to(ex, { b: 1, s: 1, duration: 1.4, ease: "power2.out", onUpdate: paint }, 1.6)
+				.to(img, { scale: 1, duration: 3.4, ease: "power3.out" }, 0);
+		};
+		window.addEventListener("lakuna:lens-open", onOpen);
+		if (import.meta.env.DEV) {
+			(window as unknown as { __ripple?: (t: number) => void }).__ripple = (t: number) => {
+				if (heroSection) rippleOnce(heroSection, { freezeAt: t });
+			};
+		}
+		return () => window.removeEventListener("lakuna:lens-open", onOpen);
+	});
+
+	// Gambar di bawah peta (strip tarif + perbandingan pratinjau/unduhan) dulu
+	// lazy: baru diminta saat hampir terlihat, tepat ketika jaringan sedang
+	// penuh ubin peta dan tekstur globe — jadi selalu telat muncul. Sekarang
+	// dipanaskan lebih awal: begitu hero tampil (tak berebut dengan hero dan
+	// lensa preloader), atau paling lambat 4 dtk sebagai pengaman.
+	let warmBelow = $state(false);
+	$effect(() => {
+		if (warmBelow) return;
+		const id = window.setTimeout(() => (warmBelow = true), heroReady ? 400 : 4000);
+		return () => window.clearTimeout(id);
+	});
+	// File asli sisi "unduhan" bisa berukuran MB; selagi dimuat, sisi itu
+	// gelap (thumbnail publik kini ber-watermark, jadi tak bisa jadi pengisi).
+	let cmpOrigLoaded = $state("");
 
 	$effect(() => {
 		let alive = true;
-		fetchPhotos({ limit: 6 }).then((r) => { if (alive) horizontal = r.photos; }).catch(() => {});
-		fetchPhotos({ limit: 12 })
-			.then((r) => {
-				if (!alive) return;
-				latest = r.photos;
-				archiveTotal = r.total;
-			})
-			.catch(() => {});
-		fetchCategories().then((r) => { if (alive) categories = r; }).catch(() => {});
-		fetchHomepage().then((r) => { if (alive) hp = r; }).catch(() => {});
+		// Terapkan snapshot DULU (sinkron, sebelum fetch segar tiba): cat
+		// instan tanpa merusak hidrasi — lihat komentar di deklarasi state.
+		const snap = loadHomeSnapshot();
+		if (snap) {
+			if (snap.horizontal.length) horizontal = snap.horizontal;
+			if (snap.latest.length) { latest = snap.latest; archiveTotal = snap.archiveTotal; }
+			if (snap.videos.length) { videos = snap.videos; videoTotal = snap.videoTotal; }
+			if (Object.keys(snap.hp).length) { hp = snap.hp; hpSettled = true; }
+			if (snap.plans.length) plans = snap.plans;
+		}
+		// Setelah SEMUA data async rampung (atau gagal), ukur ulang
+		// ScrollTrigger: section yang baru mount (grid video, strip arsip,
+		// foto orbit, baris tarif) menggeser pin di bawahnya (peta, orbit).
+		// Refresh kebetulan (rAF/600ms) sering kalah dari latensi tunnel →
+		// section bertumpuk/blank saat refresh atau datang dari halaman lain.
+		const settleRefresh = () => {
+			if (!alive) return;
+			// Lewat calmRefresh: tunda sampai gulir tenang supaya ukur ulang
+			// tidak menendang posisi pin di tengah guliran pertama.
+			calmRefresh();
+			window.setTimeout(() => {
+				if (alive) calmRefresh();
+			}, 800);
+		};
+		const jobs = [
+			fetchPhotos({ limit: 6 }).then((r) => { const rows = mergeMediaById(horizontal, stripPicsumPhotos(r.photos)); if (alive && rows.length) { horizontal = rows; saveHomeSnapshot({ horizontal: rows }); } }).catch(() => {}),
+			fetchPhotos({ limit: 12 })
+				.then((r) => {
+					const rows = mergeMediaById(latest, stripPicsumPhotos(r.photos));
+					if (!alive || !rows.length) return;
+					latest = rows;
+					archiveTotal = r.total;
+					saveHomeSnapshot({ latest: rows, archiveTotal: r.total });
+				})
+				.catch(() => {}),
+			fetchVideos(12)
+				.then((r) => {
+					const vids = mergeMediaById(videos, stripPicsumPhotos(r.videos));
+					if (!alive || !vids.length) return;
+					videos = vids;
+					videoTotal = r.total;
+					saveHomeSnapshot({ videos: vids, videoTotal: r.total });
+				})
+				.catch(() => {}),
+			(async () => {
+				// Hero ditentukan data ini. Jawaban kosong / berisi picsum (API lambat,
+				// presign storage gagal) dicoba lagi beberapa kali, bukan dibiarkan
+				// jadi hero kosong atau dummy. Preloader tidak menunggu retry: ia
+				// dibuka setelah percobaan PERTAMA (berhasil atau tidak); sisanya
+				// jalan di latar dan hero muncul begitu datanya valid.
+				for (let attempt = 0; attempt < 4 && alive; attempt++) {
+					try {
+						const r = attempt === 0 ? await fetchHomepage() : await refreshHomepage();
+						if (Object.keys(r).length && !homepageHasPicsum(r)) {
+							if (!alive) return;
+							const merged = mergeHomepage(hp, r);
+							hp = merged;
+							saveHomeSnapshot({ hp: merged });
+							return;
+						}
+					} catch {
+						/* coba lagi */
+					} finally {
+						if (alive && attempt === 0) hpSettled = true;
+					}
+					await new Promise((res) => window.setTimeout(res, 1500 * (attempt + 1)));
+				}
+			})().finally(() => { if (alive) hpSettled = true; }),
+			fetchPlans().then((p) => { if (alive && p.length) { plans = p; saveHomeSnapshot({ plans: p }); } }).catch(() => {}),
+			fetchPhotos({ type: "FOTO", sort: "price_asc", limit: 1 })
+				.then((r) => { if (alive && r.photos[0]) fotoFrom = r.photos[0].price; })
+				.catch(() => {}),
+			fetchPhotos({ type: "VIDEO", sort: "price_asc", limit: 1 })
+				.then((r) => { if (alive && r.photos[0]) videoFrom = r.photos[0].price; })
+				.catch(() => {}),
+			apiGet<ApiResponse<{ key: string; value: string }>>("/api/settings/standar_plan_price")
+				.then((res) => { if (alive && res.data?.value) standarPrice = Number(res.data.value); })
+				.catch(() => {}),
+		];
+		void Promise.allSettled(jobs).then(settleRefresh);
 		return () => { alive = false; };
 	});
 
+	// Font display (Postoni/Fraunces) datang belakangan dan mengubah tinggi
+	// judul — ukur ulang sekali saat siap (sopan: tunda bila sedang digulir).
 	$effect(() => {
-		const r = requestAnimationFrame(() => ScrollTrigger.refresh());
-		const t = window.setTimeout(() => ScrollTrigger.refresh(), 600);
+		let cancelled = false;
+		try {
+			void document.fonts?.ready.then(() => {
+				if (!cancelled) calmRefresh();
+			});
+		} catch {
+			/* fonts API tak tersedia — abaikan */
+		}
+		return () => { cancelled = true; };
+	});
+
+	$effect(() => {
+		calmRefresh();
+		const t = window.setTimeout(() => calmRefresh(), 600);
 		return () => {
-			cancelAnimationFrame(r);
 			window.clearTimeout(t);
 		};
 	});
@@ -122,13 +900,18 @@
 			if (reduce) {
 				gsap.set(".hero-anim", { opacity: 1, y: 0 });
 				gsap.set(".hero-img-anim", { scale: 1, yPercent: 0 });
+				gsap.set(".hero-img-scrub", { scale: 1, yPercent: 0 });
 				return;
 			}
 			const isMobile = window.innerWidth < 640;
 			const tl = gsap.timeline({ delay: 0.2 });
 			tl.to(".hero-img-anim", { scale: 1, duration: 2.2, ease: "power2.out" }, 0)
 				.to(".hero-anim", { opacity: 1, y: 0, duration: 1.15, ease: "power3.out", stagger: 0.12 }, 0.15);
-			gsap.to(".hero-img-anim", {
+			// Scrub parallax di wrapper DALAM (.hero-img-scrub), bukan di
+			// .hero-img-anim: entrance di atas juga menulis `scale` elemen luar
+			// selama 2,2 detik — dua tween berebut satu properti = kedutan
+			// pada guliran pertama. Elemen berbeda = tidak pernah berkelahi.
+			gsap.to(".hero-img-scrub", {
 				yPercent: isMobile ? 4 : 8,
 				scale: isMobile ? 1.06 : 1.12,
 				ease: "none",
@@ -140,11 +923,6 @@
 				ease: "none",
 				scrollTrigger: { trigger: section, start: "top top", end: "bottom top", scrub: 0.6 },
 			});
-			gsap.to(".hero-scroll", {
-				opacity: 0,
-				ease: "none",
-				scrollTrigger: { trigger: section, start: "top top", end: "20% top", scrub: 0.3 },
-			});
 		});
 		return () => ctx.revert();
 	});
@@ -154,114 +932,304 @@
 		const v = q.trim();
 		goto(v ? `/photos?q=${encodeURIComponent(v)}` : "/photos");
 	}
+
+	// Hover-preview video drone: mainkan mp4 asli (originalUrl API) saat
+	// kartu di-hover/fokus, jeda + reset saat keluar. Poster = ParallaxImage
+	// di bawahnya, jadi tanpa previewUrl kelakuannya tetap seperti semula.
+	/** Rel sedang meluncur (panah): kartu lewat di bawah kursor yang diam
+	    jangan memicu preview — decoder video menyala di tengah geseran = patah. */
+	/** Gulir vertikal halaman sedang berjalan: decoder video yang menyala
+		atau mulai di tengah geseran = geser patah. Selama true: preview
+		dijeda + yang baru ditolak; dimatikan 160 ms setelah gulir berhenti. */
+	let pageScrolling = $state(false);
+	let scrollSettleT = 0;
+	function pauseSheetVideos() {
+		document.querySelectorAll<HTMLVideoElement>("video[data-preview]").forEach((v) => {
+			// Kartu aktif di strip drone memang autoplay: jangan dijeda gulir.
+			if (v.closest("[data-active]")) return;
+			if (!v.paused) v.pause();
+			v.closest("a")?.removeAttribute("data-playing");
+		});
+	}
+	$effect(() => {
+		const onScroll = () => {
+			if (!pageScrolling) {
+				pageScrolling = true;
+				pauseSheetVideos();
+			}
+			window.clearTimeout(scrollSettleT);
+			scrollSettleT = window.setTimeout(() => {
+				pageScrolling = false;
+			}, 160);
+		};
+		window.addEventListener("scroll", onScroll, { passive: true });
+		return () => {
+			window.removeEventListener("scroll", onScroll);
+			window.clearTimeout(scrollSettleT);
+		};
+	});
+	// Entransi ubin rel: muncul berjenjang sekali saat rel terlihat.
+	// Penanda `is-in` dipasang di WADAH rel, bukan per ubin — saat data video
+	// segar tiba ubin dibuat ulang tanpa kelas itu → seluruh rel tetap
+	// opacity 0 (kotak abu kosong).
+	// Pengaman: paksa tampil setelah 2,5 dtk bila observer tak menyala.
+	$effect(() => {
+		const el = railEl;
+		if (!el) return;
+		const show = () => el.classList.add("is-in");
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			show();
+			return;
+		}
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((en) => en.isIntersecting)) {
+					show();
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.12 },
+		);
+		io.observe(el);
+		const fallback = window.setTimeout(show, 2500);
+		return () => {
+			io.disconnect();
+			window.clearTimeout(fallback);
+		};
+	});
+	function playPreview(e: Event) {
+		if (railGliding || pageScrolling) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const card = e.currentTarget as HTMLElement | null;
+		const vid = card?.querySelector<HTMLVideoElement>("video[data-preview]");
+		if (!vid) return;
+		if (!vid.src) return;
+		document.querySelectorAll<HTMLVideoElement>("video[data-preview]").forEach((o) => {
+			if (o !== vid && !o.paused && !o.closest("[data-active]")) o.pause();
+		});
+		// Video baru dimunculkan saat BENAR-BENAR diputar. Dulu langsung saat
+		// hover (plus poster = thumbnail): selagi klip dimuat, yang tampil
+		// poster lengkap dengan pita "lakunastock · ID" di bawahnya.
+		vid.addEventListener("playing", () => {
+			if (!vid.paused) card?.setAttribute("data-playing", "");
+		}, { once: true });
+		void vid.play().catch(() => {});
+	}
+
+	function stopPreview(e: Event) {
+		const card = e.currentTarget as HTMLElement | null;
+		// Kartu aktif terus berputar (autoplay), meski kursor keluar.
+		if (card?.hasAttribute("data-active") && window.innerWidth >= 900) return;
+		const vid = card?.querySelector<HTMLVideoElement>("video[data-preview]");
+		if (!vid) return;
+		vid.pause();
+		card?.removeAttribute("data-playing");
+		try {
+			vid.currentTime = 0;
+		} catch {
+			/* abaikan — video belum termuat */
+		}
+	}
+
+	// Strip drone (desktop): klip yang sedang menyala warna langsung diputar
+	// sendiri; yang lain berhenti. Tetangganya dimuat lebih awal supaya saat
+	// jadi aktif tak menunggu unduh. Video preview 640 px jauh lebih tajam
+	// daripada thumbnail 400 px yang diperbesar.
+	$effect(() => {
+		const a = dragActive;
+		void droneItems.length;
+		const track = reelLgEl;
+		if (!track || reduceMotion() || window.innerWidth < 900) return;
+		track.querySelectorAll<HTMLElement>(".dg-card").forEach((card, i) => {
+			const vid = card.querySelector<HTMLVideoElement>("video[data-preview]");
+			if (!vid) return;
+			if (i === a) {
+				if (!vid.src) return;
+				vid.preload = "auto";
+				const mark = () => {
+					if (!vid.paused && card.hasAttribute("data-active")) card.setAttribute("data-playing", "");
+				};
+				if (vid.paused) vid.addEventListener("playing", mark, { once: true });
+				else mark();
+				void vid.play().catch(() => {});
+			} else {
+				if (Math.abs(i - a) === 1) vid.preload = "auto";
+				if (!vid.paused) vid.pause();
+				card.removeAttribute("data-playing");
+			}
+		});
+	});
+
+	// Mobile (layar sentuh sempit): tidak ada hover, jadi klip contact sheet
+	// autoplay sendiri saat masuk viewport dan berhenti saat keluar. Diukur
+	// per-kartu via IntersectionObserver supaya yang tidak terlihat tidak
+	// ikut memutar — hemat baterai & kuota. Desktop tidak tersentuh.
+	// Satu klip saja yang berbunyi... (muted) dalam satu waktu: kartu kolom
+	// tunggal sering dua-duanya >35% terlihat, dan dua decoder sekaligus
+	// yang bikin scroll terasa berat di HP.
+	let mobileVid: HTMLVideoElement | null = null;
+	$effect(() => {
+		void shownVids;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!window.matchMedia("(pointer: coarse) and (max-width: 639px)").matches) return;
+		const vids = [...document.querySelectorAll<HTMLVideoElement>("video[data-preview]")];
+		if (!vids.length) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				for (const en of entries) {
+					const vid = en.target as HTMLVideoElement;
+					const card = vid.closest("a");
+					if (en.isIntersecting) {
+						if (!vid.src) continue;
+						if (mobileVid && mobileVid !== vid && !mobileVid.paused) {
+							mobileVid.pause();
+							mobileVid.closest("a")?.removeAttribute("data-playing");
+						}
+						mobileVid = vid;
+						card?.setAttribute("data-playing", "");
+						void vid.play().catch(() => {});
+					} else if (!vid.paused) {
+						// Jeda saja tanpa reset: masuk lagi = lanjut, bukan
+						// unduh ulang dari awal (hemat kuota; test menunjukkan
+						// puluhan abort saat reset+putar berulang).
+						vid.pause();
+						card?.removeAttribute("data-playing");
+					}
+				}
+			},
+			{ threshold: 0.35 },
+		);
+		vids.forEach((v) => io.observe(v));
+		return () => {
+			io.disconnect();
+			mobileVid = null;
+		};
+	});
 </script>
 
 <div>
-	<Preloader />
+	<Preloader heroReady={heroReady} />
 	<div class="hero-cover relative">
 		<section
 			bind:this={heroSection}
-			class="on-darkroom sticky top-0 z-0 h-[100svh] min-h-[580px] w-full overflow-hidden"
+			class="group/hero on-darkroom sticky top-0 z-0 h-[100svh] min-h-[580px] w-full overflow-hidden"
 		>
-			<div class="hero-img-anim absolute inset-x-0 top-0 h-full will-change-transform sm:-top-[12%] sm:h-[124%]">
+			<div class="hero-img-anim absolute inset-0 will-change-transform transition-[filter,opacity] duration-700 ease-out group-has-[form[role=search]:focus-within]/hero:blur-[22px] group-has-[form[role=search]:focus-within]/hero:brightness-[0.55] group-has-[form[role=search]:focus-within]/hero:opacity-60">
+				<!-- Lapisan scrub parallax (dalam) — terpisah dari entrance scale
+					di lapisan luar supaya tidak berebut properti. Kelebihan
+					tinggi untuk headroom parallax ditaruh DI SINI (dalam),
+					bukan di luar: entrance scale di lapisan luar yang seukuran
+					bingkai persis jadi terbaca penuh di empat sisi, bukan
+					hanya kiri-kanan. -->
+				<div class="hero-img-scrub absolute inset-x-0 -top-[6%] h-[112%] will-change-transform sm:-top-[12%] sm:h-[124%]">
 				<!-- alt kosong: ini foto latar yang bisa diganti lewat CMS jadi apa
 					saja, sementara pesannya sudah dipikul judul di sebelahnya.
 					Deskripsi yang di-hardcode ("Pemandangan Nusantara") akan salah
 					begitu gambarnya diganti — dan deskripsi yang salah lebih buruk
-					daripada tidak ada. -->
-				<ApiImage src={heroImg} alt="" fill eager class="object-cover object-center" />
+					daripada tidak ada. Bila CMS memasang klip video + gerakan
+					diizinkan, latarnya video autoplay bisu (menyeluruh, bukan
+					kotak video): bungkus parallax/entrance tetap sama. -->
+				{#if heroIsVideo && heroVideoUrl}
+					{#key heroVideoUrl}
+						<video
+							bind:this={heroVideoEl}
+							src={heroVideoUrl}
+							autoplay
+							muted
+							loop
+							playsinline
+							preload="auto"
+							poster={HERO_FALLBACK ?? undefined}
+							aria-hidden="true"
+							tabindex="-1"
+							class="h-full w-full object-cover object-center"
+							oncanplaythrough={() => (heroVideoOk = true)}
+							onloadeddata={() => {
+								// Lensa membuka hanya bila video sudah bisa diputar lancar
+								// (tanpa poster, buffering = hero hitam). Pengaman: 2,5 dtk.
+								window.setTimeout(() => (heroVideoOk = true), 2500);
+							}}
+							onerror={onHeroError}
+						></video>
+					{/key}
+				{:else if heroSrc}
+					<ApiImage src={heroSrc} alt="" fill eager class="object-cover object-center" onload={() => (heroLoadedSrc = heroSrc)} onerror={onHeroError} />
+				{/if}
+				</div>
 			</div>
 
 			<!-- Scrim hero. Nilainya di app.css (.hero-scrim) karena mobile dan
 				desktop butuh bentuk yang berbeda, dan media query tidak bisa ditulis
 				di atribut style. -->
+			<!-- Blitz kamera saat lensa preloader membuka (lihat onOpen). -->
+			<div aria-hidden="true" class="hero-flash pointer-events-none absolute inset-0"></div>
 			<div aria-hidden="true" class="hero-scrim pointer-events-none absolute inset-0"></div>
 			<div class="grain absolute inset-0 opacity-[0.18] mix-blend-soft-light"></div>
 
-			<!-- Padding bawahnya harus menyisakan ruang untuk .hero-scroll yang
-				diposisikan absolut di tepi bawah; dengan pb-20 dasar rel dan puncak
-				penanda gulir bertumpuk 4px. -->
-			<div class="hero-content relative z-10 mx-auto flex h-full max-w-[1500px] flex-col justify-end px-5 pb-14 sm:px-6 sm:pb-28 lg:px-10 lg:pb-32">
-				<p class="hero-anim kicker absolute left-5 top-[5.25rem] text-safelight sm:static sm:left-auto sm:top-auto">{hero?.kicker || c.hero.kicker}</p>
-				<h1 class="mt-0 font-display text-[clamp(2.35rem,8vw,8rem)] font-light leading-[0.92] tracking-[-0.03em] text-ivory sm:mt-6">
+			<!-- Konten hero diakhir di atas tepi bawah (penanda gulir sudah dilepas). -->
+			<div class="hero-content relative z-10 mx-auto flex h-full max-w-[1500px] flex-col justify-end px-5 pb-[15vh] sm:px-6 sm:pb-[17vh] lg:px-10">
+				<h1 class="hero-focus-dim hero-title mt-3 text-[clamp(2.1rem,6.4vw,6.25rem)] text-ivory sm:mt-6">
 					{#if hero?.title}
 						<span class="hero-anim block">{hero.title}</span>
 					{:else}
-						<span class="hero-anim inline-block sm:block">{c.hero.titleA}</span>
-						<span class="hero-anim serif-em inline-block text-safelight sm:block">{c.hero.titleEm}</span>
-						<span class="hero-anim inline-block sm:block">{c.hero.titleB}</span>
+						<span class="hero-anim block">{c.hero.titleA}</span>
+						<span class="hero-anim block">{c.hero.titleEm} <span class="serif-em text-safelight">{c.hero.titleB}</span></span>
 					{/if}
 				</h1>
-				<p class="hero-anim mt-4 max-w-[52ch] text-[0.92rem] leading-relaxed text-ivory/75 sm:mt-8 sm:text-[1.02rem]">
+				<p class="hero-anim hero-focus-dim mt-4 max-w-[52ch] text-[0.92rem] leading-relaxed text-ivory/75 sm:mt-8 sm:text-[1.02rem]">
 					{hero?.body || c.hero.sub}
 				</p>
 
-				<!-- Rel bawah: satu garis datum selebar kontainer memikul pencarian
-					(aksi utama sebuah arsip) di kiri dan jelajah sebagai pendamping di
-					kanan, pada satu garis alas. Garisnya membawa jumlah bingkai, jadi
-					ia struktur, bukan hiasan. -->
-				<div class="hero-anim mt-7 sm:mt-14">
-					<div class="flex items-center gap-4">
-						{#if archiveCount}
-							<span class="kicker shrink-0 text-ivory/55">{archiveCount}</span>
+				<!-- Rel bawah: hanya pencarian, tanpa garis datum maupun CTA
+					pendamping — hero murni tesis + satu aksi. -->
+				<div class="hero-anim mt-7 flex items-center gap-3 sm:mt-14 sm:gap-5 sm:justify-between">
+					<form role="search" onsubmit={onHeroSearch} class="min-w-0 flex-1 sm:max-w-[34rem] sm:flex-none sm:w-[34rem]">
+						<div class="group flex items-center gap-3 border-b border-ivory/22 pb-3.5 transition-colors sm:pb-3 duration-500 focus-within:border-safelight">
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="shrink-0 text-ivory/45 transition-colors duration-500 group-focus-within:text-safelight"
+								aria-hidden="true"
+							>
+								<circle cx="11" cy="11" r="7" />
+								<path d="m20 20-3.5-3.5" />
+							</svg>
+							<input
+								type="search"
+								bind:value={q}
+								placeholder={c.nav.searchPlaceholder}
+								aria-label={c.hero.searchLabel}
+								class="flex-1 bg-transparent text-[0.95rem] text-ivory outline-none placeholder:text-ivory/40 sm:text-[1.05rem]"
+							/>
+						</div>
+					</form>
+						{#if heroIsVideo}
+							<button
+								type="button"
+								class="hero-sound"
+								aria-pressed={!heroMuted}
+								aria-label={heroMuted ? (lang === "id" ? "Nyalakan suara video" : "Turn video sound on") : (lang === "id" ? "Matikan suara video" : "Mute video")}
+								onclick={toggleHeroSound}
+							>
+								<span class="hs-bars" class:is-on={!heroMuted} aria-hidden="true">
+									<i></i><i></i><i></i><i></i><i></i>
+								</span>
+								<span class="hs-label">
+									<span class="hs-k">{lang === "id" ? "Suara" : "Sound"}</span>
+									<span class="hs-v">{heroMuted ? (lang === "id" ? "Mati" : "Off") : (lang === "id" ? "Nyala" : "On")}</span>
+								</span>
+							</button>
 						{/if}
-						<span class="h-px flex-1 bg-ivory/20"></span>
-					</div>
-
-					<div class="mt-4 flex flex-col gap-5 sm:mt-6 sm:flex-row sm:items-end sm:justify-between sm:gap-12">
-						<form role="search" onsubmit={onHeroSearch} class="w-full sm:max-w-[34rem]">
-							<div class="group flex items-center gap-3 border-b border-ivory/22 pb-3.5 transition-colors sm:pb-3 duration-500 focus-within:border-safelight">
-								<svg
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.6"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="shrink-0 text-ivory/45 transition-colors duration-500 group-focus-within:text-safelight"
-									aria-hidden="true"
-								>
-									<circle cx="11" cy="11" r="7" />
-									<path d="m20 20-3.5-3.5" />
-								</svg>
-								<input
-									type="search"
-									bind:value={q}
-									placeholder={c.nav.searchPlaceholder}
-									aria-label={c.hero.searchLabel}
-									class="flex-1 bg-transparent text-[0.95rem] text-ivory outline-none placeholder:text-ivory/40 sm:text-[1.05rem]"
-								/>
-								<button
-									type="submit"
-									class="kicker shrink-0 text-ivory/55 max-sm:-my-2 max-sm:px-1 max-sm:py-2 transition-colors duration-500 hover:text-safelight focus-visible:text-safelight focus-visible:outline-none"
-								>
-									<span class="arr">→</span>
-								</button>
-							</div>
-						</form>
-
-						<span class="inline-flex shrink-0 sm:pb-1">
-							<Magnetic strength={0.45}>
-								<a href="/photos" class="arrow-link group items-center gap-3 text-ivory">
-									<span class="grid h-11 w-11 place-items-center rounded-full border border-ivory/40 transition-colors duration-500 group-hover:border-safelight group-hover:bg-safelight sm:h-12 sm:w-12">
-										<span class="arr text-ivory">→</span>
-									</span>
-									<span class="kicker text-ivory/80">{hero?.cta || c.hero.cta}</span>
-								</a>
-							</Magnetic>
-						</span>
-					</div>
 				</div>
 			</div>
 
-			<div class="hero-scroll absolute bottom-5 left-1/2 z-10 hidden -translate-x-1/2 sm:bottom-7 sm:block">
-				<span class="hero-anim kicker flex flex-col items-center gap-2 text-ivory/55">
-					{c.hero.scroll}
-					<span class="block h-8 w-px animate-pulse bg-ivory/40"></span>
-				</span>
-			</div>
+
 		</section>
 
 		<div class="relative z-10">
@@ -298,226 +1266,986 @@
 					/>
 				</section>
 			{/if} -->
-			<ArchiveStrip />
-			<Seam from="wash" to="darkroom" />
+			<ArchiveStrip curated={journeyPhotos} kicker={arsipSec?.kicker} title={arsipSec?.title} />
+			<!-- Strip beralas --wash, contact sheet beralas --bg: basuhan
+				pendek di antaranya, tanpa penanda. -->
+			<Seam from="wash" to="bg" height="clamp(88px, 13vh, 150px)" rule={false} />
 		</div>
 	</div>
 
-	<IndonesiaMap />
-	<!-- Peta berakhir di --darkroom, galeri beralas --bg: tanpa basuhan ini nadanya
-		putus mendadak dari pelat gelap ke kertas terang. -->
-	<Seam from="darkroom" to="bg" />
+	<section
+		bind:this={dronePinEl}
+		class="drone-section relative z-10"
+		class:is-scrolling={pageScrolling}
+		style={droneH ? `height: ${droneH}px` : undefined}
+	>
+		<!-- Split seperti tadi: teks kiri, strip kanan digeser GULIR. -->
+		<div class="drone-split">
+			<div class="drone-copy">
+				<Reveal>
+					<p data-reveal class="kicker text-safelight">{videoSec?.kicker || c.cats.kicker}</p>
+					<h2 data-reveal use:scrambleHover class="mt-3 whitespace-pre-line font-display text-[clamp(2rem,3.6vw,3.4rem)] font-light leading-[1.04] tracking-[-0.025em] text-fg">{videoSec?.title || c.cats.title}</h2>
+				</Reveal>
+			</div>
 
-	<GsapGallery photos={latest} />
-
-	<div class="relative z-10 bg-bg sm:-mt-[42vh]">
-		<!-- Galeri di atasnya sekarang bernada --bg juga, jadi tidak ada lagi
-			perpindahan nada di sini; basuhannya rata dan yang tersisa cuma penanda
-			batas section. Sebelumnya "darkroom" → "bg", yang di mode terang
-			memunculkan pita arang di tengah halaman kertas. -->
-		<Seam from="bg" to="bg" />
-
-	<section class="relative z-10 mx-auto max-w-[1500px] px-6 pb-28 pt-12 lg:px-10 lg:pb-40">
-		<Parallax fromPercent={4} toPercent={-4} scrub={1}>
-			<Reveal class="mb-10 max-w-2xl">
-				<p data-reveal class="kicker text-safelight">{c.cats.kicker}</p>
-				<RevealText
-					as="h2"
-					text={c.cats.title}
-					class="mt-5 font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light tracking-[-0.02em] text-fg"
-				/>
-				<p data-reveal class="mt-5 text-fg-muted">{c.cats.sub}</p>
-			</Reveal>
-		</Parallax>
-
-		<Reveal class="mb-px flex items-center justify-between border-t border-hair pt-3">
-			<span data-reveal class="kicker text-fg-muted">Contact sheet</span>
-			<span data-reveal class="kicker text-fg-muted">
-				{String(visibleCats.length).padStart(2, "0")} / {String(categories.length).padStart(2, "0")} frames
-			</span>
-		</Reveal>
-
-		<Parallax fromPercent={2} toPercent={-2} scrub={1}>
-			<Reveal stagger={0.05} class="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-hair bg-hair sm:grid-cols-3">
-				{#each visibleCats as cat, i (cat.id)}
-					<a
-						href={`/photos?cat=${encodeURIComponent(cat.name)}`}
-						data-reveal
-						class="on-darkroom group relative flex aspect-[3/4] flex-col justify-between overflow-hidden bg-plate p-4 sm:aspect-[5/4] sm:p-5"
-					>
-						<ParallaxImage
-							src={imgFor(`cat-${cat.id}`, 800, 640, cat.imageUrl)}
-							alt={cat.name}
-							sizes="(max-width: 640px) 50vw, 33vw"
-							class="absolute inset-0"
-							amount={16}
-							imgClassName="opacity-90 saturate-[0.88] transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-hover:saturate-100"
-						/>
-						<div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--safelight)_18%,transparent),transparent_55%)] opacity-50 transition-opacity duration-700 group-hover:opacity-100"></div>
-						<div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-ocean-deep/90 via-ocean-deep/35 to-ocean-deep/10 transition-opacity duration-700 group-hover:opacity-80"></div>
-						<div class="grain pointer-events-none absolute inset-0 opacity-[0.14] mix-blend-soft-light"></div>
-
-						<div class="pointer-events-none absolute inset-0 border border-ivory/12 transition-colors duration-500 group-hover:border-safelight/55"></div>
-						{#each ["tl", "tr", "bl", "br"] as cn (cn)}
-							<span
-								class="pointer-events-none absolute h-4 w-4 border-ivory/45 transition-colors duration-500 group-hover:border-safelight {cn === "tl" ? "left-2 top-2 border-l border-t"
-									: cn === "tr" ? "right-2 top-2 border-r border-t"
-									: cn === "bl" ? "bottom-2 left-2 border-b border-l"
-									: "bottom-2 right-2 border-b border-r"}"></span>
-						{/each}
-
-						<div class="relative z-10 flex items-center justify-between">
-							<span class="kicker text-ivory/60">Frame</span>
-							<span class="kicker text-safelight">{String(i + 1).padStart(2, "0")}</span>
-						</div>
-
-						<div class="relative z-10">
-							<h3 class="font-display text-xl font-light leading-tight tracking-[-0.01em] text-ivory sm:text-2xl">
-								{cat.name}
-							</h3>
-							{#if cat.description}
-								<p class="mt-1 line-clamp-2 text-xs text-ivory/55">{cat.description}</p>
-							{/if}
-							<span class="arrow-link mt-3 inline-flex text-[0.7rem] text-ivory/65 transition-colors duration-500 group-hover:text-safelight">
-								{c.cats.explore}
-								<span class="arr text-safelight">→</span>
-							</span>
-							<span class="mt-2 block h-px w-0 bg-safelight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:w-full"></span>
-						</div>
-					</a>
-				{/each}
-			</Reveal>
-		</Parallax>
-
-		{#if hiddenCats > 0}
-			<Reveal class="mt-px flex items-center justify-between border-t border-hair pt-4">
-				<span data-reveal class="kicker text-fg-muted">
-					{showAllCats ? c.cats.sheetEnd : c.cats.sheetRest.replace("{n}", String(hiddenCats))}
-				</span>
-				<button
-					data-reveal
-					type="button"
-					onclick={() => (showAllCats = !showAllCats)}
-					aria-expanded={showAllCats}
-					class="group inline-flex items-center gap-2.5 text-sm font-medium text-fg transition-colors duration-500 hover:text-safelight"
-				>
-					{showAllCats
-						? c.cats.seeLess
-						: c.cats.seeMore.replace("{n}", String(hiddenCats))}
-					<span
-						class="inline-block text-safelight transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] {showAllCats ? "group-hover:-translate-y-0.5" : "group-hover:translate-y-0.5"}"
-					>
-						{showAllCats ? "↑" : "↓"}
-					</span>
-				</button>
-			</Reveal>
+		{#if droneItems.length > 0}
+			<div bind:this={dragViewEl} class="dg-view" role="region" aria-label="Contact sheet">
+				<div bind:this={reelLgEl} class="dg-track">
+					{#each droneItems as v, i (v.id)}
+								<a
+								href={`/videos/${v.id}`}
+								class="dg-card group"
+								data-active={i === dragActive ? "" : undefined}
+								onmouseenter={playPreview}
+								onmouseleave={stopPreview}
+								onfocus={playPreview}
+								onblur={stopPreview}
+							>
+								<img
+									src={imgFor(v.seed, 600, 800, v.thumbUrl)}
+									alt={v.title[lang]}
+									loading="eager"
+									decoding="async"
+									draggable="false"
+								/>
+								{#if v.previewUrl}
+									<video
+										data-preview
+										src={v.previewUrl}
+										muted
+										loop
+										playsinline
+										preload="metadata"
+										aria-hidden="true"
+										tabindex="-1"
+										class="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-0 transition-opacity duration-500 group-data-[playing]:opacity-100"
+									></video>
+								{/if}
+								<span class="dg-cap">
+									<span class="dg-title">{v.title[lang]}</span>
+								</span>
+							</a>
+					{/each}
+				</div>
+			</div>
 		{/if}
+		</div>
 	</section>
 
-	<section class="relative mx-auto max-w-[1500px] overflow-hidden px-6 pb-28 lg:px-10 lg:pb-40">
-		<div class="pointer-events-none absolute inset-x-0 top-1/2 -z-0 -translate-y-1/2 select-none text-center">
-			<Parallax fromPercent={-12} toPercent={12} class="block">
-				<span class="font-display text-[28vw] font-light leading-none tracking-[-0.04em] text-fg/[0.07]">
-					NUSANTARA
-				</span>
-			</Parallax>
-		</div>
+	<!-- Contact sheet beralas --bg, peta di bawahnya --darkroom. -->
+	<!-- Tema gelap: peta beralas --bg juga, jadi sambungan ini transparan
+		(lihat .md-seam-in di MapDescent). Tema terang: basuhan panjang dari
+		kertas ke gelap supaya tidak terbaca sebagai pita. -->
+	<Seam from="bg" to="darkroom" height="clamp(120px, 18vh, 220px)" rule={false} class="md-seam-in" />
 
-		<Parallax fromPercent={3} toPercent={-3} scrub={1}>
-			<Reveal class="relative z-10 mx-auto max-w-2xl rounded-md border border-hair bg-surface/70 px-8 py-20 text-center backdrop-blur-xl lg:px-16">
-				<div class="grain absolute inset-0 opacity-10"></div>
-				<div class="relative">
-					<p data-reveal class="kicker text-safelight">{c.pricing.kicker}</p>
+	<div data-globe>
+		<MapDescent
+		eyebrow={anjungan?.kicker}
+		title={anjungan?.title}
+		sub={anjungan?.body}
+	/>
+	</div>
+	<!-- Tanpa Seam di sini: vignette peta sendiri sudah memudar ke --bg
+		(app.css .im-vignette), dan jarak tambahan hanya menunda orbit galeri —
+		layar kosong di antara peta dan foto yang mulai terbang. -->
+
+	<div class="relative z-10 bg-bg">
+
+	<GsapGallery photos={orbitPhotos ?? latest} />
+
+	<!-- pt: foto galeri tenggelam di tepi atas section ini; tanpa jarak, label
+		Membership menempel tepat di garis potongnya. -->
+	<!-- bg-bg + relative: section ini menumpang ekor pin galeri (margin
+		negatif di GsapGallery), jadi harus menutupi sisa orbit di belakangnya. -->
+	<div class="relative bg-bg">
+	<section class="relative mx-auto max-w-[1500px] px-6 pb-28 pt-[clamp(2rem,5vh,4rem)] lg:px-10 lg:pb-40">
+		<!-- Teaser daftar harga sebagai papan tarif lab cetak: dua baris pada satu
+			lembar, harga disejajarkan di satu kolom supaya bisa dibandingkan
+			sekilas. Opsi unggulan ditandai sekali saja (garis safelight di kiri),
+			bukan lewat kartu bercahaya. Tiap baris menuju tujuannya sendiri. -->
+		<!-- start 97%: section ini naik menumpang ekor galeri orbit; dengan
+			ambang bawaan (88%) judulnya masih kosong selama ±1/10 layar. -->
+		<Reveal start="top 97%" class="relative z-10 grid gap-x-10 gap-y-6 lg:grid-cols-12 lg:items-end">
+			<div class="lg:col-span-7">
+				<p data-reveal class="kicker text-safelight">{hargaSec?.kicker || c.pricing.kicker}</p>
+				<div use:scrambleHover>
 					<RevealText
 						as="h2"
-						text={c.pricing.title}
-						class="mx-auto mt-6 max-w-2xl font-display text-[clamp(2rem,4.4vw,3.6rem)] font-light leading-[1.05] tracking-[-0.02em] text-fg"
+						text={hargaSec?.title || c.pricing.title}
+						class="mt-6 font-display text-[clamp(2.2rem,5vw,4.2rem)] font-light leading-[1.02] tracking-[-0.02em] text-fg"
 					/>
-					<p data-reveal class="mx-auto mt-6 max-w-xl text-fg-muted">{c.pricing.body}</p>
-					<span data-reveal class="relative mt-10 inline-flex">
-						<Magnetic strength={0.4}>
-							<a
-								href="/pricing"
-								class="arrow-link inline-flex items-center gap-3 rounded-full bg-safelight px-7 py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform duration-500 hover:scale-[1.03]"
-							>
-								{c.pricing.cta}
-								<span class="arr">→</span>
-							</a>
-						</Magnetic>
+				</div>
+			</div>
+		</Reveal>
+
+		<div class="rate-sheet relative z-10 mt-14" data-no-hover-sound data-no-click-sound>
+			<ParallaxImage
+				src={rateImg}
+				alt=""
+				sizes="100vw"
+				class="pointer-events-none absolute inset-0"
+				amount={16}
+				imgClassName="rate-img"
+			/>
+			<div aria-hidden="true" class="rate-scrim"></div>
+			<Reveal stagger={0.08} class="relative z-10">
+			<div data-reveal class="rate-row group">
+				<div class="rate-name">
+					<h3 class="font-display text-[1.6rem] leading-tight text-fg">{s.standar}</h3>
+					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">
+						{standarType === "VIDEO" ? s.standarDescVideo : s.standarDesc}
+					</p>
+					<!-- Foto dan klip dihargai berbeda, jadi jenisnya dipilih di sini
+						— bukan disembunyikan di balik satu angka rata-rata. -->
+					<div class="rate-toggle" role="group" aria-label={s.typeLabel}>
+						<button
+							type="button"
+							aria-pressed={standarType === "FOTO"}
+							onclick={() => (standarType = "FOTO")}
+							class="rate-toggle-btn"
+						>
+							{s.typeFoto}
+						</button>
+						<button
+							type="button"
+							aria-pressed={standarType === "VIDEO"}
+							onclick={() => (standarType = "VIDEO")}
+							class="rate-toggle-btn"
+						>
+							{s.typeVideo}
+						</button>
+					</div>
+				</div>
+				{#if rateFrames.length}
+					<span class="rate-strip" aria-label={s.standarStrip}>
+						{#each rateFrames as f (f.id)}
+							<span class="rate-frame"><ApiImage src={f.thumbUrl ?? ""} alt="" fill eager={warmBelow} class="object-cover" /></span>
+						{/each}
 					</span>
+				{:else}
+					<span aria-hidden="true" class="rate-lead"></span>
+				{/if}
+				<p class="rate-price">
+					{#if standarShown != null}
+						<span class="rate-from">{s.from}</span><span class="rate-num">{fmtIDR(standarShown)}</span><span class="rate-unit">{standarType === "VIDEO" ? s.perClip : s.perItem}</span>
+					{:else}
+						<span class="rate-num text-fg-muted">…</span>
+					{/if}
+				</p>
+				<a
+					class="rate-cta"
+					href="/pricing"
+				>
+					{s.subscribeCta}
+				</a>
+			</div>
+
+			<a data-reveal href="/pricing" class="rate-row rate-row--pick group">
+				<div class="rate-name">
+					<h3 class="font-display text-[1.6rem] leading-tight text-fg">
+						{s.subscribe}
+						<span class="rate-tag">{s.subscribeTag}</span>
+					</h3>
+					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">{s.subscribeDesc}</p>
+				</div>
+				{#if quotaLadder.length}
+					<span class="rate-ladder">
+						{#each quotaLadder as q (q)}
+							<span class="rate-chip">{q}</span>
+						{/each}
+						<span class="rate-chip-unit">{s.quotaUnit}</span>
+					</span>
+				{:else}
+					<span aria-hidden="true" class="rate-lead"></span>
+				{/if}
+				<p class="rate-price">
+					{#if subscribeFrom != null}
+						<span class="rate-from">{s.from}</span><span class="rate-num">{fmtIDR(subscribeFrom)}</span><span class="rate-unit">{s.perMonth}</span>
+					{:else}
+						<span class="rate-num text-fg-muted">…</span>
+					{/if}
+				</p>
+				<span class="rate-cta">{s.subscribeCta}</span>
+			</a>
+
+			<!-- Harga custom: tak ada angka tetap, jadi barisnya menjawab
+				"hubungi kami", bukan "pilih paket". -->
+			<a data-reveal href={customHref} class="rate-row group">
+				<div class="rate-name">
+					<h3 class="font-display text-[1.6rem] leading-tight text-fg">{s.custom}</h3>
+					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">{s.customDesc}</p>
+				</div>
+				<span aria-hidden="true" class="rate-lead"></span>
+				<p class="rate-price"><span class="rate-num">{s.customPrice}</span></p>
+				<span class="rate-cta">{s.customCta}</span>
+			</a>
+			</Reveal>
+		</div>
+
+		{#if compareShot && compareOrigUrl}
+			<!-- Perbandingan pratinjau vs unduhan: pertanyaan pertama pembeli stok
+				adalah "watermark-nya hilang tidak?", jadi dijawab dengan file
+				sungguhan, bukan kalimat. Digeser sendiri oleh pembaca — gerak yang
+				menjawab aksi, bukan animasi yang jalan sendiri. -->
+			<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:gap-12">
+				<figure data-reveal class="cmp @container lg:col-span-7">
+					<div class="cmp-stage">
+						<img class="cmp-img" src={compareShot.watermarkUrl} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
+						<div class="cmp-clean" style={`clip-path: inset(0 0 0 ${comparePos}%)`}>
+							<img
+								class="cmp-img cmp-orig"
+								class:is-ready={cmpOrigLoaded === compareOrigUrl}
+								src={compareOrigUrl}
+								alt=""
+								loading={warmBelow ? "eager" : "lazy"}
+								fetchpriority="low"
+								decoding="async"
+								onload={() => (cmpOrigLoaded = compareOrigUrl ?? "")}
+							/>
+						</div>
+						<span class="cmp-line" style={`left: ${comparePos}%`} aria-hidden="true"></span>
+						<span class="cmp-tag cmp-tag-left" style={`opacity: ${(comparePos / 100).toFixed(2)}`}>{s.comparePreview}</span>
+						<span class="cmp-tag cmp-tag-right" style={`opacity: ${(1 - comparePos / 100).toFixed(2)}`}>{s.compareClean}</span>
+						<input
+							class="cmp-range"
+							type="range"
+							min="0"
+							max="100"
+							bind:value={comparePos}
+							aria-label={s.compareSlider}
+						/>
+					</div>
+					<figcaption class="mt-3 max-w-[60ch] overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80">{s.compareRes}</figcaption>
+				</figure>
+
+				<div data-reveal class="flex flex-col lg:col-span-5">
+					<h3 class="font-display text-[clamp(1.5rem,2.6vw,2.1rem)] font-light leading-tight tracking-[-0.01em] text-fg">
+						{s.compareTitle}
+					</h3>
+					<!-- Pilihan Standard / Premium — hanya daftar paket yang dipilih
+						yang tampil. -->
+					<div class="rate-toggle mt-6 self-start" role="group" aria-label={s.planLabel}>
+						<button
+							type="button"
+							aria-pressed={benefitPlan === "STANDARD"}
+							onclick={() => (benefitPlan = "STANDARD")}
+							class="rate-toggle-btn"
+						>
+							{s.standar}
+						</button>
+						<button
+							type="button"
+							aria-pressed={benefitPlan === "PREMIUM"}
+							onclick={() => (benefitPlan = "PREMIUM")}
+							class="rate-toggle-btn"
+						>
+							{s.subscribe}
+						</button>
+					</div>
+
+					<!-- Panel mengisi sisa tinggi kolom (sejajar dengan gambar
+						perbandingan): deskripsi, harga, manfaat, lalu tombol di dasar. -->
+					<div class="ben-panel">
+						<p class="ben-when">{benefitPlan === "PREMIUM" ? s.subscribeWhen : s.standarWhen}</p>
+						<p class="ben-price">
+							{#if (benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) != null}
+								<span class="rate-from">{s.from}</span><span class="ben-num">{fmtIDR((benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) ?? 0)}</span><span class="rate-unit">{benefitPlan === "PREMIUM" ? s.perMonth : standarType === "VIDEO" ? s.perClip : s.perItem}</span>
+							{:else}
+								<span class="ben-num text-fg-muted">…</span>
+							{/if}
+						</p>
+						<ul class="ben-list">
+							{#each (benefitPlan === "PREMIUM" ? s.subscribeBenefits : s.standarBenefits) as b (b)}
+								<li>{b}</li>
+							{/each}
+						</ul>
+						<a href="/pricing" class="rate-cta ben-cta">{s.subscribeCta}</a>
+					</div>
 				</div>
 			</Reveal>
-		</Parallax>
+		{/if}
+
+		<!-- Dinding logo pelanggan: kurasi CMS (section `percaya`) menang bila
+			diisi — tiap foto terpilih jadi satu logo; kosong = wordmark dummy. -->
+		<Reveal class="mt-16 lg:mt-24">
+			<LogoCloud eyebrow={trustSec?.kicker || s.trustEyebrow} items={trustLogos} />
+		</Reveal>
 	</section>
+	</div>
 
 	</div>
 
-	<section class="on-darkroom relative h-[80svh] min-h-[520px] w-full overflow-hidden bg-bg">
-		<ParallaxImage
-			src={mulaiImg}
-			alt="Horizon Nusantara"
-			sizes="100vw"
-			class="absolute inset-0"
-			amount={10}
-			priority
-		/>
-		<div class="absolute inset-0 bg-ocean-deep/72"></div>
-		<!-- Feather ke var(--bg) hanya masuk akal di mode gelap: di sana --bg
-			mendekati hitam, jadi fotonya larut ke kamar gelap. Di mode terang
-			--bg krem, dan pudarannya jadi kabut putih yang memakan 15vh dari
-			atas dan 18vh dari bawah foto. Di mode terang tepi fotonya dibiarkan
-			tegas — pelat foto dengan tepi bersih, bukan foto yang mengabut. -->
-		<div
-			aria-hidden="true"
-			class="pointer-events-none absolute inset-x-0 -top-px hidden h-[15vh] dark:block"
-			style="background: linear-gradient(to bottom, var(--bg), color-mix(in srgb, var(--bg) 45%, transparent) 45%, transparent);"
-		></div>
-		<div
-			aria-hidden="true"
-			class="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[18vh] dark:block"
-			style="background: linear-gradient(to top, var(--bg), transparent);"
-		></div>
-		<div class="grain absolute inset-0 opacity-[0.16] mix-blend-soft-light"></div>
-		<Reveal class="relative z-10 mx-auto flex h-full max-w-[1500px] flex-col items-center justify-center px-6 text-center [text-shadow:0_2px_30px_rgba(5,6,8,0.85)]">
-			{#if user}
-				<p data-reveal class="kicker text-safelight">{s.closingAuthed.kicker}</p>
-				<h2 data-reveal class="mt-6 font-display text-[clamp(2.4rem,6vw,5.5rem)] font-light leading-[0.98] tracking-[-0.02em] text-ivory">
-					{s.closingAuthed.title} <span class="serif-em text-safelight">{firstName}</span>
-				</h2>
-				<p data-reveal class="mt-7 max-w-lg text-ivory/75">{s.closingAuthed.body}</p>
-				<span data-reveal class="mt-10 inline-flex">
-					<Magnetic strength={0.4}>
-						<a
-							href="/profile"
-							class="arrow-link inline-flex items-center gap-3 rounded-full border border-ivory/40 px-7 py-3.5 text-sm font-medium text-ivory transition-colors duration-500 hover:border-safelight hover:bg-safelight"
-						>
-							{s.closingAuthed.cta}
-							<span class="arr">→</span>
-						</a>
-					</Magnetic>
-				</span>
-			{:else}
-				<p data-reveal class="kicker text-safelight">{mulai?.kicker || c.closing.kicker}</p>
-				<h2 data-reveal class="mt-6 font-display text-[clamp(2.4rem,6vw,5.5rem)] font-light leading-[0.98] tracking-[-0.02em] text-ivory">
-					{#if mulai?.title}
-						{mulai.title}
-					{:else}
-						{c.closing.title} <span class="serif-em text-safelight">{c.closing.titleEm}</span>
-					{/if}
-				</h2>
-				<p data-reveal class="mt-7 max-w-lg text-ivory/75">{mulai?.body || c.closing.body}</p>
-				<span data-reveal class="mt-10 inline-flex">
-					<Magnetic strength={0.4}>
-						<a
-							href="/login"
-							class="arrow-link inline-flex items-center gap-3 rounded-full border border-ivory/40 px-7 py-3.5 text-sm font-medium text-ivory transition-colors duration-500 hover:border-safelight hover:bg-safelight"
-						>
-							{mulai?.cta || c.closing.cta}
-							<span class="arr">→</span>
-						</a>
-					</Magnetic>
-				</span>
-			{/if}
-		</Reveal>
-	</section>
+	<!-- Penutup: etalase bingkai pilihan (menggantikan ajakan "darkroom"). -->
+	<FeaturedShowcase photos={featuredPhotos} />
 </div>
+
+<style>
+	/* Tombol suara video hero: pil kaca yang selalu terlihat (bukan cuma
+		saat hover). Equalizer menari saat menyala, rebah saat dibisukan. */
+	.hero-sound {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.7rem;
+		height: 2.75rem;
+		padding: 0 1rem 0 0.9rem;
+		margin-top: 1.25rem;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		background-color: rgba(10, 11, 14, 0.42);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px -10px rgba(0, 0, 0, 0.6);
+		color: #fff;
+		backdrop-filter: blur(12px) saturate(1.3);
+		-webkit-backdrop-filter: blur(12px) saturate(1.3);
+		cursor: pointer;
+		transition: border-color 0.25s, background-color 0.25s, box-shadow 0.25s;
+	}
+	.hero-sound:hover,
+	.hero-sound:focus-visible {
+		border-color: color-mix(in srgb, var(--safelight) 70%, transparent);
+	}
+	.hero-sound:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: 3px;
+	}
+	.hs-bars {
+		display: inline-flex;
+		align-items: flex-end;
+		gap: 2px;
+		height: 12px;
+	}
+	.hs-bars i {
+		width: 2px;
+		height: 100%;
+		border-radius: 1px;
+		background: var(--safelight);
+		transform: scaleY(0.25);
+		transform-origin: bottom;
+	}
+	.hs-bars.is-on i {
+		animation: hs-eq 0.9s ease-in-out infinite;
+	}
+	.hs-bars.is-on i:nth-child(2) { animation-delay: -0.18s; }
+	.hs-bars.is-on i:nth-child(3) { animation-delay: -0.36s; }
+	.hs-bars.is-on i:nth-child(4) { animation-delay: -0.54s; }
+	.hs-bars.is-on i:nth-child(5) { animation-delay: -0.72s; }
+	@keyframes hs-eq {
+		0%, 100% { transform: scaleY(0.3); }
+		50% { transform: scaleY(1); }
+	}
+	.hs-label {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.45rem;
+		font-size: 0.82rem;
+	}
+	.hs-k {
+		color: rgba(255, 255, 255, 0.65);
+	}
+	.hs-v {
+		color: #fff;
+		font-weight: 500;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.hs-bars.is-on i {
+			animation: none;
+			transform: scaleY(0.7);
+		}
+	}
+	/* Daftar manfaat paket terpilih: butir bertanda strip (bukan titik). */
+	.ben-panel {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		margin-top: 1.75rem;
+		padding: clamp(1.4rem, 2.4vw, 2.2rem);
+		border: 1px solid var(--hair);
+		border-radius: 1.25rem;
+		background: color-mix(in srgb, var(--paper) 55%, transparent);
+	}
+	.ben-when {
+		max-width: 44ch;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		color: var(--fg-muted);
+	}
+	.ben-price {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin-top: 1.4rem;
+		padding-bottom: 1.4rem;
+		border-bottom: 1px solid var(--hair);
+	}
+	.ben-num {
+		font-family: var(--font-display);
+		font-size: clamp(1.9rem, 3vw, 2.6rem);
+		font-weight: 300;
+		line-height: 1;
+		color: var(--fg);
+	}
+	.ben-cta.rate-cta {
+		margin-top: auto;
+		align-self: flex-start;
+		padding: 0.75rem 1.6rem;
+		border-radius: 999px;
+		background: var(--safelight);
+		color: #fff;
+		font-weight: 500;
+		text-decoration: none;
+		box-shadow: 0 12px 30px -14px var(--safelight-glow);
+		transition: transform 0.25s ease, background 0.25s ease;
+	}
+	.ben-cta.rate-cta:hover,
+	.ben-cta.rate-cta:focus-visible {
+		color: #fff;
+		background: var(--safelight-lamp, var(--safelight));
+		transform: translateY(-2px);
+	}
+	.ben-list {
+		margin-top: 1.4rem;
+		margin-bottom: 2rem;
+		max-width: 52ch;
+		list-style: none;
+		padding: 0;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		color: var(--fg-muted);
+	}
+	.ben-list li {
+		position: relative;
+		padding-left: 1.6rem;
+	}
+	.ben-list li + li {
+		margin-top: 0.4rem;
+	}
+	.ben-list li::before {
+		content: "";
+		position: absolute;
+		left: 0.2rem;
+		top: 0.38em;
+		width: 0.42rem;
+		height: 0.78rem;
+		border: solid var(--safelight);
+		border-width: 0 2px 2px 0;
+		transform: rotate(45deg);
+	}
+	/* Pilihan jenis aset di baris Standar. */
+	.rate-toggle {
+		display: inline-flex;
+		margin-top: 0.9rem;
+		border: 1px solid var(--hair);
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.rate-toggle-btn {
+		padding: 0.38rem 0.95rem;
+		font-family: var(--font-body);
+		font-size: 0.82rem;
+		color: var(--fg-muted);
+		background: transparent;
+		cursor: pointer;
+		transition: color 0.3s ease, background-color 0.3s ease;
+	}
+	.rate-toggle-btn:hover {
+		color: var(--fg);
+	}
+	.rate-toggle-btn[aria-pressed="true"] {
+		background: color-mix(in srgb, var(--fg) 10%, transparent);
+		color: var(--fg);
+	}
+	.rate-toggle-btn:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: -2px;
+	}
+
+	/* Perbandingan pratinjau vs unduhan. Dua lapis gambar yang sama; lapis
+	   bersih dipotong clip-path mengikuti posisi penggeser. Penggesernya
+	   input[type=range] sungguhan supaya bisa dipakai lewat keyboard. */
+	.cmp-stage {
+		position: relative;
+		overflow: hidden;
+		aspect-ratio: 3 / 2;
+		border: 1px solid var(--hair);
+		background: var(--surface);
+	}
+	/* Di layar sempit, panggungnya keluar dari margin halaman sampai mentok
+	   tepi layar: bidang bandingnya jadi selebar mungkin, dan garis geser
+	   punya ruang gerak yang cukup untuk jempol. Keterangan di bawahnya
+	   tetap di dalam margin. */
+	@media (max-width: 899px) {
+		.cmp-stage {
+			margin-inline: calc(50% - 50vw);
+			border-left: 0;
+			border-right: 0;
+			aspect-ratio: 4 / 3;
+		}
+	}
+	.cmp-img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		/* Sedikit diperbesar: yang dibandingkan detailnya, dan bingkai penuh
+		   versi bersih tak perlu terpampang utuh di beranda. */
+		transform: scale(1.35);
+	}
+	/* File asli muncul di atas thumbnail begitu selesai dimuat. */
+	.cmp-orig {
+		opacity: 0;
+		transition: opacity 0.5s ease;
+	}
+	.cmp-orig.is-ready {
+		opacity: 1;
+	}
+	/* ── Strip drone: split sticky, rel digeser gulir (tanpa baki) ───── */
+	/* Ruang kosong di atas kartu (padding nav + pemusatan dalam 100svh) ±100px
+	   ditambah Seam di atasnya membuat jeda dari strip arsip terlalu jauh.
+	   Section ditarik naik: area kosong itu tumpang tindih dengan jeda di
+	   atasnya (transparan, tak menutupi apa pun), sedangkan posisi kartu saat
+	   pin tidak berubah. */
+	.drone-section {
+		margin-top: calc(-1 * clamp(64px, 15svh, 180px));
+		/* Tumpang tindih dengan strip arsip di atasnya: area kosong section tak
+		   boleh menelan klik; hanya teks dan bidang kartu yang interaktif. */
+		pointer-events: none;
+	}
+	.drone-section :is(.drone-copy, .dg-view) {
+		pointer-events: auto;
+	}
+	.drone-split {
+		position: sticky;
+		top: 0;
+		min-height: 100svh;
+		display: grid;
+		grid-template-columns: minmax(260px, 5fr) 8fr;
+		gap: clamp(1.5rem, 3vw, 3rem);
+		align-items: center;
+		/* Selebar layar (bukan max-width) supaya bidang bisa melebar sampai
+		   tepi; lebar konten 1500px dijaga lewat padding inline.
+		   Padding atas pas setinggi navbar + sedikit napas: konten tetap
+		   di tengah vertikal, jadi tiap px padding atas = px ruang hitam
+		   sebelum panel saat section masuk layar. */
+		padding: calc(var(--nav-h, 72px) + 0.25rem) max(clamp(1.5rem, 3vw, 2.5rem), calc((100% - 1500px) / 2)) 1rem;
+		overflow: hidden;
+	}
+	.drone-copy {
+		min-width: 0;
+		will-change: transform, opacity;
+	}
+	.dg-view {
+		will-change: clip-path;
+		position: relative;
+		min-width: 0;
+		overflow: hidden;
+		overscroll-behavior-x: contain;
+	}
+	.dg-view:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: -2px;
+	}
+	.dg-track {
+		display: flex;
+		gap: 0;
+		width: max-content;
+		padding-right: 0;
+		position: relative;
+		align-items: stretch;
+		will-change: transform;
+	}
+	/* Panel full-bleed ala rujukan: tanpa radius, tanpa gap, selalu berwarna.
+	   Judul muncul saat hover/fokus (atau saat kartu di tengah di layar sentuh). */
+	.dg-card {
+		position: relative;
+		flex: 0 0 auto;
+		height: clamp(420px, 84svh, 800px);
+		aspect-ratio: 3 / 4;
+		overflow: hidden;
+		border-radius: 0;
+		background: #1a1b1f;
+		isolation: isolate;
+	}
+	.dg-card img,
+	.dg-card video {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		pointer-events: none;
+	}
+	.dg-cap {
+		position: absolute;
+		inset: auto 0 0;
+		z-index: 2;
+		padding: 2.4rem 1rem 1rem;
+		background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent);
+		color: #fff;
+		opacity: 0;
+		transition: opacity 0.4s ease;
+		pointer-events: none;
+	}
+	.dg-card:hover .dg-cap,
+	.dg-card:focus-visible .dg-cap,
+	.dg-card[data-active] .dg-cap {
+		opacity: 1;
+	}
+	.dg-title {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-display);
+		font-size: 1rem;
+		font-weight: 500;
+	}
+	.dg-card:hover,
+	.dg-card:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: -2px;
+	}
+	/* Penanda DRAG ala rujukan: mengikuti tengah viewport, hilang saat
+	   berinteraksi keyboard / reduce-motion. */
+	.dg-hint {
+		position: sticky;
+		left: 50%;
+		display: inline-flex;
+		margin: -38% 0 1rem -1.4rem;
+		padding: 0.3rem 0.55rem;
+		border: 1px solid rgba(255, 255, 255, 0.6);
+		border-radius: 4px;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.12em;
+		color: #fff;
+		pointer-events: none;
+		mix-blend-mode: difference;
+	}
+	@media (max-width: 900px) {
+		.drone-split {
+			position: static;
+			min-height: 0;
+			grid-template-columns: 1fr;
+			gap: 1.25rem;
+			padding-top: clamp(2.5rem, 6vh, 4rem);
+		}
+		.dg-view {
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.dg-view::-webkit-scrollbar {
+			display: none;
+		}
+		.dg-track {
+			transform: none !important;
+		}
+		.dg-card {
+			height: min(62svh, 520px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.drone-split {
+			position: static;
+			min-height: 0;
+		}
+		.dg-view {
+			overflow-x: auto;
+		}
+		.dg-track {
+			transform: none !important;
+		}
+		.dg-cap {
+			transition: none;
+		}
+		.dg-hint {
+			display: none;
+		}
+	}
+	.cmp-clean {
+		position: absolute;
+		inset: 0;
+		overflow: hidden;
+		/* Sebelum sisi bersih terlukis, jangan biarkan watermark di bawahnya
+		   mengintip — tampilkan gelap saja. */
+		background: var(--base);
+	}
+	.cmp-line {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1px;
+		background: var(--safelight);
+		pointer-events: none;
+		/* Saat mentok di 0% atau 100%, garisnya tepat di tepi panggung —
+		   digeser setengah lebarnya supaya tidak separuh terpotong. */
+		transform: translateX(-0.5px);
+	}
+	.cmp-line::after {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 34px;
+		height: 34px;
+		transform: translate(-50%, -50%);
+		border: 1px solid var(--safelight);
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--color-ocean-deep) 55%, transparent);
+		backdrop-filter: blur(3px);
+	}
+	.cmp-tag {
+		position: absolute;
+		bottom: 0.75rem;
+		padding: 0.25rem 0.6rem;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		letter-spacing: 0.08em;
+		color: #f1efe9;
+		background: color-mix(in srgb, var(--color-ocean-deep) 62%, transparent);
+		backdrop-filter: blur(4px);
+		pointer-events: none;
+		/* Memudar mengikuti posisi slider (inline opacity): geser ke sisi
+		   Download → label Preview hilang, dan sebaliknya. */
+		transition: opacity 0.3s ease;
+	}
+	.cmp-tag-left { left: 0.75rem; }
+	.cmp-tag-right { right: 0.75rem; }
+	/* Penggeser menutupi seluruh bidang; thumb-nya dibuat tak terlihat karena
+	   penanda visualnya sudah berupa garis + lingkaran di atas. */
+	.cmp-range {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		opacity: 0;
+		cursor: ew-resize;
+		appearance: none;
+		background: transparent;
+	}
+	.cmp-range:focus-visible {
+		opacity: 1;
+		outline: 2px solid var(--safelight);
+		outline-offset: -2px;
+	}
+
+	/* Papan tarif: baris-baris pada satu lembar, harga sejajar di satu kolom.
+	   Lembarnya duduk di atas satu bingkai arsip yang hanyut parallax, diredam
+	   scrim supaya angka tetap kontras. */
+	.rate-sheet {
+		position: relative;
+		overflow: hidden;
+		border-top: 1px solid var(--hair);
+		border-bottom: 1px solid var(--hair);
+	}
+	/* Kelasnya menempel di <img> dalam komponen anak → butuh :global,
+	   tetap dibatasi ke dalam papan tarif. */
+	.rate-sheet :global(.rate-img) {
+		object-fit: cover;
+		/* Pelat di bawah kaca: warnanya diredam supaya angka tetap yang dibaca. */
+		filter: grayscale(0.55) contrast(0.92) blur(1.5px);
+		transform: scale(1.04);
+	}
+	.rate-scrim {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background:
+			/* pekat di kolom nama (kiri) dan di belakang angka (kanan) */
+			linear-gradient(
+				100deg,
+				color-mix(in srgb, var(--bg) 97%, transparent) 38%,
+				color-mix(in srgb, var(--bg) 74%, transparent) 60%,
+				color-mix(in srgb, var(--bg) 93%, transparent) 100%
+			);
+	}
+	.rate-row {
+		position: relative;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: 1rem;
+		padding: 1.25rem 1rem;
+		transition: background-color 0.4s ease;
+	}
+	.rate-row + .rate-row {
+		border-top: 1px solid var(--hair);
+	}
+	.rate-row:hover {
+		background: color-mix(in srgb, var(--fg) 3%, transparent);
+	}
+	.rate-row:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: -2px;
+	}
+	/* Opsi unggulan: satu tanda saja — garis safelight dan rona tipis. */
+	/* Opsi unggulan: rona safelight yang memudar ke kanan, bukan pelat penuh. */
+	.rate-row--pick {
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--safelight) 9%, transparent),
+			transparent 70%
+		);
+	}
+	.rate-row--pick:hover {
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--safelight) 14%, transparent),
+			transparent 74%
+		);
+	}
+	.rate-row--pick::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: -1px;
+		bottom: -1px;
+		width: 2px;
+		background: var(--safelight);
+	}
+	.rate-tag {
+		display: inline-block;
+		margin-left: 0.6rem;
+		padding: 0.2rem 0.6rem;
+		border: 1px solid color-mix(in srgb, var(--safelight) 45%, transparent);
+		border-radius: 999px;
+		vertical-align: middle;
+		font-family: var(--font-body);
+		font-size: 0.75rem;
+		line-height: 1.2;
+		color: var(--safelight);
+	}
+	.rate-price {
+		margin: 0;
+		white-space: nowrap;
+		font-family: var(--font-display);
+		font-weight: 300;
+		font-size: clamp(2rem, 4vw, 3rem);
+		line-height: 1;
+		letter-spacing: -0.02em;
+		font-variant-numeric: tabular-nums;
+		color: var(--fg);
+	}
+	.rate-from,
+	.rate-unit {
+		font-family: var(--font-body);
+		font-size: 0.95rem;
+		letter-spacing: 0;
+		color: var(--fg-muted);
+	}
+	.rate-from {
+		margin-right: 0.5rem;
+	}
+	.rate-unit {
+		margin-left: 0.35rem;
+	}
+	.rate-cta {
+		font-size: 0.95rem;
+		color: var(--fg);
+		text-decoration: underline;
+		text-decoration-color: color-mix(in srgb, var(--fg) 30%, transparent);
+		text-underline-offset: 0.35em;
+		transition: color 0.3s ease, text-decoration-color 0.3s ease;
+	}
+	.rate-row:hover .rate-cta,
+	.rate-row:focus-visible .rate-cta {
+		color: var(--safelight);
+		text-decoration-color: var(--safelight);
+	}
+	/* Isi kolom tengah tiap baris berbeda karena isinya memang beda:
+	   Standar menunjukkan bingkainya, Subscribe menunjukkan tangga kuotanya. */
+	.rate-strip {
+		display: none;
+	}
+	.rate-frame {
+		position: relative;
+		display: block;
+		width: 5.6rem;
+		aspect-ratio: 3 / 2;
+		overflow: hidden;
+		border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+		filter: grayscale(0.3);
+		transition: filter 0.4s ease, transform 0.4s ease;
+	}
+	.rate-row:hover .rate-frame {
+		filter: grayscale(0);
+	}
+	.rate-row:hover .rate-frame:nth-child(2) {
+		transform: translateY(-3px);
+	}
+	.rate-ladder {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.45rem;
+	}
+	.rate-chip {
+		min-width: 2.6rem;
+		padding: 0.3rem 0.5rem;
+		border: 1px solid color-mix(in srgb, var(--safelight) 38%, transparent);
+		border-radius: 4px;
+		text-align: center;
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		letter-spacing: 0.04em;
+		color: color-mix(in srgb, var(--fg) 88%, transparent);
+	}
+	.rate-chip-unit {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.06em;
+		color: var(--fg-muted);
+	}
+
+	/* Garis titik pengikat nama → harga: membaca baris jadi satu kesatuan,
+	   kebiasaan papan tarif lab cetak. */
+	.rate-lead {
+		display: none;
+	}
+	@media (min-width: 768px) {
+		.rate-strip {
+			display: flex;
+			align-items: center;
+			gap: 0.55rem;
+			justify-self: center;
+		}
+		.rate-ladder {
+			justify-self: center;
+		}
+		.rate-lead {
+			display: block;
+			align-self: center;
+			height: 1px;
+			background-image: linear-gradient(
+				90deg,
+				color-mix(in srgb, var(--fg) 26%, transparent) 0 2px,
+				transparent 2px 9px
+			);
+			background-size: 9px 1px;
+			opacity: 0.55;
+		}
+		.rate-row {
+			grid-template-columns: minmax(0, 1fr) minmax(2rem, 1fr) auto 11rem;
+			/* Tengah vertikal (bukan baseline): sejak kedua kotak disamakan
+			   tingginya, baseline menempelkan isi ke atas dan menyisakan
+			   ruang kosong di bawah. */
+			align-items: center;
+			column-gap: 4rem;
+			padding: 1.5rem 2rem;
+			/* Samakan tinggi kedua kotak: konten boleh lebih tinggi, tapi
+			   tidak boleh lebih pendek dari ini. */
+			min-height: 10rem;
+		}
+		.rate-price {
+			text-align: right;
+		}
+		.rate-cta {
+			justify-self: end;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rate-row,
+		.rate-cta {
+			transition: none;
+		}
+	}
+</style>

@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { fmtIDR, fetchCartEventDiscounts } from "$lib/data";
 	import { apiPost, ApiError } from "$lib/api";
+	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiCreateOrderResult } from "$lib/types";
 	import Reveal from "./Reveal.svelte";
 
@@ -125,9 +127,15 @@
 			const res = await apiPost<ApiResponse<ApiCreateOrderResult>>("/api/order", {
 				voucherCode: voucher.trim() || undefined,
 			});
+			if (res.success && res.data.orderId) {
+				// Halaman bayar milik Lakuna (Midtrans Core API), bukan halaman
+				// Snap. Jangan clear cart di sini — backend menghapus item
+				// STANDAR otomatis saat status jadi PAID (lewat webhook/check).
+				void goto(`/payment/pay/ORDER-${encodeURIComponent(res.data.orderId)}`);
+				return;
+			}
 			if (res.success && res.data.redirectUrl) {
-				// Backend membuat order dari cart server-side. Jangan clear cart di sini —
-				// backend menghapus item STANDAR otomatis saat status jadi PAID (lewat webhook/check).
+				// Cadangan lama (redirect Snap) bila backend tak mengirim orderId.
 				// Validasi dulu: jangan ikuti URL ke host asing/skema berbahaya.
 				if (!isSafePaymentUrl(res.data.redirectUrl)) {
 					error = t.errBadRedirect;
@@ -158,7 +166,7 @@
 		<p class="kicker text-safelight">{t.kicker}</p>
 		<h1 class="mt-4 font-display text-[clamp(1.8rem,5vw,3.4rem)] font-light tracking-[-0.02em] text-fg sm:mt-5">{t.needLogin}</h1>
 		<p class="mt-3 text-fg-muted sm:mt-4">{t.needLoginBody}</p>
-		<a href="/login" class="mt-6 rounded-full bg-safelight px-7 py-3.5 text-sm font-medium text-ivory sm:mt-8">{t.goLogin}</a>
+		<button type="button" onclick={() => authModal.open("/payment")} class="press mt-6 rounded-full bg-safelight px-7 py-3.5 text-sm font-medium text-ivory sm:mt-8">{t.goLogin}</button>
 	</section>
 {:else if !cart.length}
 	<section class="mx-auto flex min-h-[60svh] max-w-[1500px] flex-col items-center justify-center px-5 pt-32 text-center sm:px-6 lg:pt-44">
@@ -197,7 +205,7 @@
 					</p>
 				{/if}
 
-				<button type="submit" disabled={status === "processing"} class="w-full rounded-full bg-safelight py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.02] disabled:opacity-60">
+				<button type="submit" disabled={status === "processing"} class="press w-full rounded-full bg-safelight py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.02] disabled:opacity-60">
 					{status === "processing" ? t.processing : `${t.pay} · ${fmtIDR(grandTotal)}`}
 				</button>
 			</form>

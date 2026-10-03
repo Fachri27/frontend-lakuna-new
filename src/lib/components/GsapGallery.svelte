@@ -1,7 +1,10 @@
 <script lang="ts">
-	import gsap from "gsap";
+import { probeCredit, coverBackground } from "$lib/creditCrop";
+import { primePageTurn, playPageTurn, PAGE_TURN_VOLUME, PAGE_TURN_EXIT_VOLUME } from "$lib/pageTurn";
+import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	import { imgFor, type Photo } from "$lib/data";
+	import { i18n } from "$lib/i18n.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
 
@@ -10,7 +13,7 @@
 	 * Foto mengorbit silinder 3D sambil pull-quote Fraunces terungkap kata demi kata.
 	 *
 	 * PENGGANDENGAN via CSS sticky (bukan GSAP pin): section diberi tinggi eksplisit
-	 * (200vh), pinEl `sticky top-0 h-screen` nempel di viewport selama orbit lalu
+	 * (160vh), pinEl `sticky top-0 h-screen` nempel di viewport selama orbit lalu
 	 * lepas otomatis. Pola sama dengan hero sticky di Home.
 	 *
 	 * Ekor 100vh di bawah pinEl dulu dihabiskan oleh FilmStripSeam yang menyusul;
@@ -27,15 +30,18 @@
 	const MAX_IMG = 8;
 	const SLICES = 10;
 
-	const WORDS = [
-		{ text: "Setiap", accent: false },
-		{ text: "foto", accent: false },
-		{ text: "adalah", accent: false },
-		{ text: "cerita", accent: true },
-		{ text: "yang", accent: false },
-		{ text: "tak", accent: false },
-		{ text: "terlupakan", accent: false }
-	];
+	// Kalimat orbit ikut bahasa situs (permintaan pemilik: versi Inggris
+	// tetap Inggris). Jumlah item kedua bahasa SAMA (10, termasuk jeda
+	// baris "\n") karena wordEls dialokasikan sekali.
+	// Aksen (>1) menandai kata ungu sesuai referensi.
+	const PHRASE = {
+		id: ["Bumi", "itu", "sebuah", "karya", "seni,", "\n", "dan", "kita", "hanyalah", "saksi"],
+		en: ["The", "earth", "is", "an", "art,", "\n", "we're", "only", "a", "witness"],
+	};
+	const ACCENT = { id: [4, 8, 9], en: [4, 8, 9] };
+	const WORDS = $derived(
+		PHRASE[i18n.lang].map((text, i) => ({ text, br: text === "\n", accent: ACCENT[i18n.lang].includes(i) })),
+	);
 
 	function thumbUrl(p: Partial<Photo>, i: number): string {
 		return imgFor(`lf${p.id ?? i}`, 400, 300, p.thumbUrl);
@@ -54,11 +60,18 @@
 		const h = host.toLowerCase();
 		if ((IMG_HOSTS as string[]).includes(h)) return true;
 		if (h === "localhost" || h === "127.0.0.1") return true;
-		try {
-			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
-			if (h === base.hostname.toLowerCase()) return true;
-		} catch {
-			/* abaikan — allowlist statis di atas tetap berlaku */
+		// Backend asli + MinIO publik (keduanya bisa berupa tunnel saat share).
+		for (const raw of [
+			import.meta.env.VITE_API_URL,
+			import.meta.env.VITE_MINIO_PUBLIC_URL,
+			import.meta.env.MINIO_PUBLIC_URL,
+		]) {
+			try {
+				if (!raw) continue;
+				if (h === new URL(raw).hostname.toLowerCase()) return true;
+			} catch {
+				/* abaikan — allowlist statis di atas tetap berlaku */
+			}
 		}
 		return false;
 	}
@@ -96,7 +109,7 @@
 	let sectionEl: HTMLElement | undefined = $state();
 	let pinEl: HTMLDivElement | undefined = $state();
 	const wraps = $state<(HTMLDivElement | null)[]>(Array.from({ length: MAX_IMG }, () => null));
-	const wordEls = $state<(HTMLSpanElement | null)[]>(Array.from({ length: WORDS.length }, () => null));
+	const wordEls = $state<(HTMLSpanElement | null)[]>(Array.from({ length: PHRASE.en.length }, () => null));
 
 	const count = $derived(Math.min(photos.length, MAX_IMG));
 
@@ -112,64 +125,43 @@
 		// atau berlomba dengan pin peta saat refresh.
 		void count;
 
+		// Bunyi balik halaman per foto yang tiba di depan orbit: preload sekali di sini.
+		primePageTurn();
+		// Keadaan tiap foto pada pembaruan sebelumnya: -1 belum masuk, 0 di
+		// orbit, 1 sudah keluar. null = belum dicatat (refresh di tengah
+		// section tidak boleh berbunyi tanpa gerakan).
+		let photoState: number[] | null = null;
+
+		const stageEl = pinNode.querySelector<HTMLElement>(".cg-stage");
 		const ctx = gsap.context(() => {
 			const vw = window.innerWidth;
-
-			// ── Mobile: kolase cetakan, bukan orbit ───────────────────────
-			// Kedalaman 3D butuh lebar. Di 390px orbitnya cuma melewatkan satu-dua
-			// foto kecil sekaligus sepanjang dua layar. Di ponsel section ini
-			// berganti bentuk: delapan cetakan ditata bertumpuk miring seperti di
-			// atas meja, semuanya terlihat sekaligus, kalimatnya di tengah. Tidak
-			// bergantung timing scroll sama sekali.
-			if (vw < 640) {
-				const LAY = [
-					{ l: 3, t: 2, w: 45, r: -3.5 },
-					{ l: 53, t: 8, w: 41, r: 2.5 },
-					{ l: 9, t: 23, w: 42, r: 2 },
-					{ l: 51, t: 30, w: 45, r: -2 },
-					{ l: 2, t: 58, w: 44, r: -2.5 },
-					{ l: 54, t: 63, w: 41, r: 3 },
-					{ l: 13, t: 79, w: 43, r: 2 },
-					{ l: 52, t: 85, w: 40, r: -3 }
-				];
-				wraps.forEach((wrap, wi) => {
-					if (!wrap) return;
-					const spec = LAY[wi % LAY.length];
-					wrap.innerHTML = "";
-					wrap.className = "cvd-target";
-					wrap.style.cssText = `
-						position:absolute;
-						left:${spec.l}%;
-						top:${spec.t}%;
-						width:${spec.w}%;
-						aspect-ratio:3/2;
-						background-image:${safeBg(thumbUrl(photos[wi] ?? {}, wi))};
-						background-size:cover;
-						background-position:center;
-						transform:rotate(${spec.r}deg);
-						box-shadow:0 20px 44px -20px rgba(0,0,0,0.85);
-						opacity:1;
-					`;
-				});
-				return;
-			}
+			const vh = window.innerHeight;
+			// Layar sempit (ponsel sampai tablet kecil) memakai foto yang relatif
+			// lebih besar terhadap layarnya; di atas itu barulah proporsi desktop.
+			const narrow = vw < 900;
 
 			// ── Dimensi orbit ─────────────────────────────────────────────
-			const rx = vw * 0.34;
-			const rz = 500;
-			const tiltY = 180;
+			// Semua ukuran diturunkan dari lebar & tinggi layar, bukan dari satu
+			// ambang mobile/desktop. Dulu di lebar 640–900 orbit memakai angka
+			// desktop (radius 0.34×lebar, foto 120px): kartunya terpotong tepi
+			// layar dan menabrak kalimat di tengah.
+			const imgW = Math.round(Math.min(Math.max(96, vw * (narrow ? 0.26 : 0.14)), 210));
+			// Radius mendatar dibatasi supaya kartu terjauh tetap utuh di layar.
+			const rxMax = vw / 2 - imgW / 2 - 16;
+			const rx = Math.min(vw * (narrow ? 0.3 : 0.34), rxMax);
+			// Kedalaman ditahan di layar sempit: makin besar rz, makin besar pula
+			// kartu terdepan diperbesar perspektif (900/(900−rz)) sampai menutupi
+			// separuh layar.
+			const rz = Math.round(Math.min(Math.max(210, vw * (narrow ? 0.42 : 0.55)), 500));
+			// Ayunan vertikal mengikuti tinggi layar: di layar pendek orbitnya
+			// ikut memendek, jadi kartu tidak keluar atas-bawah.
+			const tiltY = Math.round(Math.min(Math.max(90, vh * 0.16), 180));
 			const offX = vw * 0.85;
-
-			// Di layar sempit rumus desktop memberi 120px (vw*0.14 = 55px, lalu
-			// dijepit ke minimum 120) — terbaca sebagai serpihan, bukan foto.
-			// 42% lebar layar memberi 164px di 390px; dengan perspektif, saat foto
-			// berada paling dekat ia merender ~370px, hampir selebar layar.
-			const imgW =
-				vw < 640
-					? Math.min(Math.round(vw * 0.42), 200)
-					: Math.min(Math.max(120, vw * 0.14), 210);
-			const imgH = (imgW * 2) / 3;
-			const orbitR = (vw * 0.34 + 500) / 2;
+			const imgH = Math.round((imgW * 2) / 3);
+			// Di layar sempit orbitnya diturunkan ke bawah kalimat, jadi foto
+			// melintas di bawah teks alih-alih menabraknya di tengah.
+			const yOffset = narrow ? Math.round(imgH * 0.7 + 12) : 0;
+			const orbitR = (rx + rz) / 2;
 			const bendRad = imgW / orbitR;
 			const cylR = orbitR;
 			const sliceW = imgW / SLICES;
@@ -188,8 +180,10 @@
 					will-change:transform,opacity;
 					opacity:0;
 				`;
+				const slices: HTMLElement[] = [];
 				for (let s = 0; s < SLICES; s++) {
 					const sl = document.createElement("div");
+					slices.push(sl);
 					sl.className = "cvd-target";
 					const displayW = sliceW + 1.5;
 					const angle = (s - (SLICES - 1) / 2) * stepDeg;
@@ -201,7 +195,10 @@
 						left:50%;
 						margin-left:${(-displayW / 2).toFixed(1)}px;
 						background-image:${src};
-						background-size:${imgW.toFixed(1)}px ${imgH.toFixed(1)}px;
+						/* Lebar saja (tinggi auto) + tanpa ulang: pita kredit di
+						   dasar thumbnail jatuh di bawah irisan, tak terlihat. */
+						background-size:${imgW.toFixed(1)}px auto;
+						background-repeat:no-repeat;
 						background-position:${(-s * sliceW).toFixed(1)}px 0;
 						transform-origin:50% 50% ${(-cylR).toFixed(1)}px;
 						transform:rotateY(${angle.toFixed(2)}deg);
@@ -210,6 +207,26 @@
 					`;
 					wrap.appendChild(sl);
 				}
+				// Pita kredit di dasar thumbnail: setelah ukuran aslinya diketahui,
+				// skala background seperti `cover` terhadap bagian foto saja.
+				// Probe gagal (jaringan) dicoba ulang beberapa kali; selama itu
+				// irisan belum diberi ukuran final.
+				const rawSrc = thumbUrl(photos[wi] ?? {}, wi);
+				const applyCrop = (attempt: number) => {
+					void probeCredit(rawSrc).then((d) => {
+						if (!slices[0]?.isConnected) return; // sudah dibangun ulang
+						if (!d) {
+							if (attempt < 4) window.setTimeout(() => applyCrop(attempt + 1), 1200 * (attempt + 1));
+							return;
+						}
+						const c = coverBackground(imgW, imgH, d);
+						slices.forEach((sl, s) => {
+							sl.style.backgroundSize = `${c.width.toFixed(1)}px ${c.height.toFixed(1)}px`;
+							sl.style.backgroundPosition = `${(c.offsetX - s * sliceW).toFixed(1)}px 0px`;
+						});
+					});
+				};
+				applyCrop(0);
 			});
 
 			wordEls.forEach((el) => {
@@ -224,20 +241,20 @@
 			function getPos(t: number) {
 				if (t <= 0.12) {
 					const p = t / 0.12;
-					return { x: -offX * (1 - p), y: tiltY, z: rz * p, rotY: 0 };
+					return { x: -offX * (1 - p), y: tiltY + yOffset, z: rz * p, rotY: 0 };
 				}
 				if (t <= 0.88) {
 					const p = (t - 0.12) / 0.76;
 					const angle = entryAngle - p * Math.PI * 2;
 					return {
 						x: Math.cos(angle) * rx,
-						y: (Math.sin(angle) / 1) * tiltY * 0.5 + tiltY * 0.5,
+						y: (Math.sin(angle) / 1) * tiltY * 0.5 + tiltY * 0.5 + yOffset,
 						z: Math.sin(angle) * rz,
 						rotY: p * Math.PI * 2
 					};
 				}
 				const p = (t - 0.88) / 0.12;
-				return { x: offX * p, y: tiltY, z: rz * (1 - p), rotY: Math.PI * 2 };
+				return { x: offX * p, y: tiltY + yOffset, z: rz * (1 - p), rotY: Math.PI * 2 };
 			}
 
 			ScrollTrigger.create({
@@ -247,11 +264,85 @@
 				// sebelum itu — dan selama satu layar itu semua wrap ber-opacity 0.
 				// Hasilnya jurang: peta naik, layar kosong gelap, baru fotonya
 				// datang. Dimajukan supaya foto pertama sudah terbang masuk saat
-				// peta masih pamit.
-				start: "top 30%",
-				end: "bottom bottom",
-				onUpdate: (self) => {
-					const progress = self.progress;
+				// peta masih pamit. Selama pin belum menempel, panggung diangkat
+				// (lihat `lift`) supaya orbit sudah berpusat di tengah layar —
+				// jadi foto muncul dari balik tepi peta, bukan menumpuk di bawah.
+				start: "top 60%",
+				// Selesai TEPAT saat section berikutnya mulai masuk layar. Section
+				// ini memakai margin-bottom negatif setinggi pin (lihat CSS), jadi
+				// section berikutnya naik menutupi pin yang sudah kosong — tanpa
+				// layar kosong di antaranya. Dulu:
+				//  • "bottom top": orbit masih jalan saat Membership sudah tampil;
+				//  • "bottom bottom" tanpa tumpang: pin kosong setinggi satu layar
+				//    masih harus digulir.
+				//
+				// Ekor orbit (kalimat sudah pergi, tinggal 1–3 foto di tepi)
+				// terasa kosong ±½ layar, jadi section berikutnya ditumpangkan
+				// lebih jauh lagi (35vh ekstra, lihat margin-bottom di CSS) dan
+				// masuk selama ekor itu dan menutupi sisa foto dari bawah — tak
+				// pernah tampil bersama orbit yang masih ramai.
+				end: () => `bottom bottom+=${pinNode.offsetHeight}`,
+			onUpdate: (self) => {
+				const progress = self.progress;
+
+				// ── Bunyi balik halaman ───────────────────────────────
+				// Tiap foto berbunyi saat MUNCUL (imgT melewati 0) dan, lebih
+				// pelan, saat HILANG (melewati 1) — dua arah gulir, sampai
+				// foto terakhir keluar. Dulu hanya saat "foto terdepan"
+				// berganti: di ekor orbit terdepan tak berganti lagi, jadi
+				// foto-foto yang keluar sampai section tertutup diam saja.
+				// Ambang bunyi mengikuti yang TERLIHAT, bukan t = 0 / 1: di t ≈ 0 foto masih
+				// jauh di luar layar kiri dan transparan (alpha baru penuh di t = 0,06), jadi
+				// bunyinya mendahului gambar. Diukur: semua bunyi masuk berbunyi saat foto 0%
+				// di dalam layar. Kini bunyi masuk saat foto sudah tampil penuh di layar, dan
+				// bunyi keluar saat foto mulai meninggalkan layar (bukan sesudah hilang).
+				const SOUND_ENTER_T = 0.08;
+				const SOUND_EXIT_T = 0.95;
+				const now = Array.from({ length: count }, (_, i) => {
+					const t = progress * totalRange - i * stagger;
+					return t <= SOUND_ENTER_T ? -1 : t >= SOUND_EXIT_T ? 1 : 0;
+				});
+				// Pembaruan pertama tepat di awal section (masuk dari atas):
+				// anggap semua foto belum masuk, supaya foto pertama yang sudah
+				// mulai terbang ikut berbunyi. Di tengah section (refresh) tetap
+				// hanya dicatat — tanpa gerakan, tanpa bunyi.
+				if (!photoState && progress < 0.04) photoState = now.map(() => -1);
+				if (photoState) {
+					// Dihitung PER FOTO: beberapa foto yang berganti keadaan dalam
+					// satu pembaruan (gulir cepat) masing-masing tetap berbunyi,
+					// berurutan dengan jeda pendek — bukan dilebur jadi satu.
+					const queue: number[] = [];
+					for (let i = 0; i < count; i++) {
+						const was = photoState[i];
+						const is = now[i];
+						if (was === is) continue;
+						if (is === 0) queue.unshift(PAGE_TURN_VOLUME); // masuk orbit
+						else if (was === 0) queue.push(PAGE_TURN_EXIT_VOLUME); // keluar orbit
+					}
+					queue.forEach((vol, k) => {
+						if (k === 0) playPageTurn(vol);
+						else window.setTimeout(() => playPageTurn(vol), k * 110);
+					});
+				}
+				photoState = now;
+
+					// ── Angkat panggung ───────────────────────────────────
+					// Pin baru menempel saat puncak section tiba di puncak layar;
+					// sebelum itu pusat orbit = puncak section + ½ layar, yang di
+					// awal masih jauh di bawah — foto menumpuk di sepertiga bawah
+					// dan sisanya kosong. Geser panggung ke atas sejauh puncak
+					// section dari puncak layar: pusat orbit tetap di tengah layar.
+					// Bagian yang naik melewati puncak section terpotong
+					// overflow pin, jadi foto tampak muncul dari balik tepi peta.
+					if (stageEl) {
+						const r = sectionNode.getBoundingClientRect();
+						const vh = window.innerHeight;
+						// Hanya saat masuk; saat keluar orbit sudah selesai.
+						const shift = r.top > 0 ? -r.top : 0;
+						stageEl.style.transform = shift ? `translateY(${shift.toFixed(1)}px)` : "";
+						// Keluar: foto TIDAK diredupkan — section berikutnya (berlatar,
+						// menumpang ekor pin) naik dan menutupinya dari bawah.
+					}
 
 					// ── Foto ──────────────────────────────────────────────
 					wraps.forEach((img, i) => {
@@ -324,7 +415,13 @@
 	<style>
 		.cg-section {
 			position: relative;
-			min-height: 200vh;
+			/* 375vh = 240vh jarak gulir orbit + 100vh ekor pin + 35vh
+			   ekstra. Ekor + 35vh itu ditumpangi section
+			   berikutnya lewat margin-bottom negatif: ia masuk selagi ekor orbit
+			   yang tinggal beberapa foto masih berjalan dan menutupinya dari
+			   bawah, tanpa layar kosong. */
+			min-height: 375vh;
+			margin-bottom: -135vh;
 			/* --bg, bukan --darkroom: --darkroom sengaja tetap gelap di kedua
 			   tema, jadi di mode terang section ini jadi pelat hitam di tengah
 			   halaman kertas. --bg adalah nada dasar halaman. */
@@ -333,6 +430,9 @@
 		.cg-pin {
 			position: sticky;
 			top: 0;
+			/* Kurung z-index foto orbit (600+) di dalam pin: section berikutnya
+			   menumpang ekor pin (margin negatif) dan harus selalu di atasnya. */
+			isolation: isolate;
 			width: 100%;
 			height: 100vh;
 			display: flex;
@@ -364,12 +464,12 @@
 			   900/(900−600) = 3×: max-width 620px saja sudah merender 1860px dan
 			   meluber dari viewport 1710px. Angka di sini bukan ukuran layar. */
 			font-family: var(--font-display);
-			font-size: clamp(18px, 3vw, 32px);
+			font-size: clamp(24px, 4vw, 46px);
 			font-weight: 300;
 			letter-spacing: -0.02em;
 			color: var(--fg);
 			line-height: 1.15;
-			max-width: 600px;
+			max-width: 660px;
 			padding: 0 2rem;
 			margin: 0;
 			opacity: 0;
@@ -386,29 +486,21 @@
 		}
 		/* Sama dengan .serif-em di app.css: display italic 400, warna safelight. */
 		/* ── Mobile ──────────────────────────────────────────────────────
-		   Kedalaman 3D butuh lebar. Di 390px foto-fotonya jadi serpihan yang
-		   tercecer dan frasanya terpotong di tengah kalimat — frasa duduk di
-		   translateZ(600px) dengan perspective 900px, jadi kotak 600px merender
-		   1800px, jauh melebihi layar. Ditambah ~2 layar hitam kosong karena
-		   min-height 200vh.
-
-		   Di mobile karusel 3D-nya disembunyikan dan frasanya berdiri sendiri
-		   sebagai satu kalimat penuh. `transform: none` pakai !important karena
-		   handler scroll menulis transform inline. */
-		/* ── Mobile ──────────────────────────────────────────────────────
-		   Tanpa orbit, section ini tidak butuh jarak scroll lagi: tingginya
-		   satu layar, dan kolasenya ditata di dalam pin. Frasanya dibuat
-		   terlihat permanen (di desktop opacity-nya digerakkan handler scroll
-		   yang di mobile sudah tidak jalan) dan diberi alas radial supaya
-		   terbaca di atas cetakan-cetakan di belakangnya. */
-		@media (max-width: 639px) {
+		   Tetap ngorbit seperti desktop, hanya lingkarannya yang dikecilkan
+		   (lihat dimensi orbit di effect). Yang disesuaikan di sini hanya
+		   tipografi frasa + jarak scroll: frasa lebih kecil dan kalimat penuh
+		   (max 17ch), tapi opacity/transform-nya tetap digerakkan handler
+		   scroll — tanpa override !important. */
+		@media (max-width: 899px) {
 			.cg-section {
-				min-height: 100svh;
+				min-height: 375svh;
+				margin-bottom: -135svh;
+			}
+			.cg-pin {
+				height: 100svh;
 			}
 			.cg-phrase {
-				opacity: 1 !important;
-				transform: none !important;
-				font-size: clamp(21px, 6.2vw, 28px);
+				font-size: clamp(21px, 5vw, 30px);
 				max-width: 17ch;
 				padding: 0 1.25rem;
 			}
@@ -438,7 +530,9 @@
 
 			<p class="cg-phrase">
 				{#each WORDS as w, i}
-					{#if w.accent}
+					{#if w.br}
+						<br />
+					{:else if w.accent}
 						<span class="cg-accent-wrap">
 							<span bind:this={wordEls[i]} class="word">{w.text}</span>
 						</span>

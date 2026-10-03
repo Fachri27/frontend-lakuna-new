@@ -23,6 +23,8 @@ export type Photo = {
   title: Localized;
   author: string;
   location?: string;
+  /** Tipe aset dari API — beranda perlu memisahkan foto dari video. */
+  assetType?: "FOTO" | "VIDEO";
   cat: Cat;
   seed: string;
   w: number;
@@ -35,6 +37,10 @@ export type Photo = {
   featured?: boolean;
   thumbUrl?: string;
   watermarkUrl?: string;
+  /** Presigned file asli dari API (untuk VIDEO = mp4, dipakai hover-preview). */
+  originalUrl?: string | null;
+  /** Klip kartu bersih (VIDEO): diputar saat hover di grid/contact sheet. */
+  clipUrl?: string | null;
 };
 
 export type Video = {
@@ -44,9 +50,17 @@ export type Video = {
   cat: Cat;
   seed: string;
   duration: string;
+  /** Lokasi & kategori asli dari API — dipakai meta di grid beranda. */
+  location?: string;
+  category?: string;
   price: number;
   desc: Localized;
   thumbUrl?: string;
+  /** Kata kunci & kategori asli dari API — pil meta di halaman detail. */
+  keywords: string[];
+  categories: string[];
+  /** URL mp4 preview (dipetakan dari ApiPhoto.originalUrl). */
+  previewUrl?: string | null;
 };
 
 export type Plan = {
@@ -98,15 +112,84 @@ function apiCatToCat(categoryNames: string[]): Cat {
   return "nature";
 }
 
+// Ingatan URL per foto: setiap ronde fetch menandatangani ulang semua
+// presigned URL, jadi tanpa ini SETIAP komponen yang fetch sendiri
+// (ArchiveStrip, orbit, halaman foto/video, terkait) menukar puluhan URL
+// tiap mount — gambar dimuat ulang dan marquee restart. Diingat per id,
+// dipakai ulang selama masih berlaku & host sama (diurus pickStableUrl);
+// metadata lain selalu yang segar. Seluruh aplikasi stabil otomatis.
+type RememberedUrls = {
+  thumbUrl?: string | null;
+  watermarkUrl?: string | null;
+  originalUrl?: string | null;
+  previewUrl?: string | null;
+  clipUrl?: string | null;
+};
+const urlMemory = new Map<string, RememberedUrls>();
+// v2: aset publik diregenerasi (kecil + watermark + pita kredit) — URL lama
+// yang diingat menunjuk berkas versi lama di cache browser.
+const URLMEM_KEY = "lakuna:url-mem:v5";
+let urlMemSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Ingatan URL persisten (localStorage): modul JS lahir ulang tiap reload,
+// jadi ingatan memori saja tidak menstabilkan refresh. Disimpan debounce 2
+// detik; kedaluwarsa dinilai per pakai (pickStableUrl), jadi entri basi tak
+// pernah dipakai. Dibatasi 500 foto terbaru.
+try {
+  const raw = localStorage.getItem(URLMEM_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw) as Record<string, RememberedUrls>;
+    for (const [id, urls] of Object.entries(parsed)) urlMemory.set(id, urls);
+  }
+} catch {
+  /* abaikan */
+}
+
+function persistUrlMemory() {
+  if (urlMemSaveTimer) return;
+  urlMemSaveTimer = setTimeout(() => {
+    urlMemSaveTimer = null;
+    try {
+      const entries = [...urlMemory.entries()].slice(-500);
+      localStorage.setItem(URLMEM_KEY, JSON.stringify(Object.fromEntries(entries)));
+    } catch {
+      /* storage penuh — abaikan */
+    }
+  }, 2000);
+}
+
+function stableUrls(id: string, urls: RememberedUrls): RememberedUrls {
+  const prev = urlMemory.get(id);
+  const pick = (o?: string | null, n?: string | null) =>
+    n ? pickStableUrl(o, n) : (n ?? o ?? null);
+  const out: RememberedUrls = {
+    thumbUrl: pick(prev?.thumbUrl, urls.thumbUrl),
+    watermarkUrl: pick(prev?.watermarkUrl, urls.watermarkUrl),
+    originalUrl: pick(prev?.originalUrl, urls.originalUrl),
+    previewUrl: pick(prev?.previewUrl, urls.previewUrl),
+    clipUrl: pick(prev?.clipUrl, urls.clipUrl),
+  };
+  urlMemory.set(id, out);
+  persistUrlMemory();
+  return out;
+}
+
 export function adaptPhoto(api: ApiPhoto): Photo {
   const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
   const keywords = (api.photoKeywords ?? []).map((pk) => pk.keyword.name);
   const cat = apiCatToCat(cats);
+  const urls = stableUrls(api.id, {
+    thumbUrl: api.thumbUrl,
+    watermarkUrl: api.watermarkUrl ?? undefined,
+    originalUrl: api.originalUrl ?? undefined,
+    clipUrl: api.clipUrl ?? undefined,
+  });
   return {
     id: api.id,
     title: { id: api.title, en: api.title },
     author: api.photographer || "Unknown",
     location: api.location || undefined,
+    assetType: api.type === "VIDEO" ? "VIDEO" : "FOTO",
     cat,
     seed: api.id,
     w: api.width || 1600,
@@ -118,12 +201,38 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     keywords: [...new Set(keywords.filter(Boolean))],
     tags: api.tags ?? [],
     desc: { id: api.description || api.title, en: api.description || api.title },
-    thumbUrl: api.thumbUrl,
-    watermarkUrl: api.watermarkUrl ?? undefined,
+    thumbUrl: urls.thumbUrl ?? undefined,
+    watermarkUrl: urls.watermarkUrl ?? undefined,
+    originalUrl: urls.originalUrl ?? null,
+    clipUrl: urls.clipUrl ?? null,
   };
 }
 
+/**
+ * URL preview video yang layak dipasang di <video>: hanya file asli (atau
+ * transcode H.264 di watermarkUrl untuk tipe VIDEO). Fallback picsum backend
+ * adalah GAMBAR jpg — dipasang sebagai src video ia gagal diputar DAN memicu
+ * error CSP media-src. Tolak di sini, kartu menampilkan poster diam.
+ */
+export function pickVideoPreview(
+  originalUrl?: string | null,
+  watermarkUrl?: string | null,
+): string | null {
+  for (const u of [originalUrl, watermarkUrl]) {
+    if (u && !u.includes("picsum.photos")) return u;
+  }
+  return null;
+}
+
 export function adaptVideo(api: ApiPhoto): Video {
+  const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
+  const keywords = (api.photoKeywords ?? []).map((pk) => pk.keyword.name);
+  const urls = stableUrls(api.id, {
+    thumbUrl: api.thumbUrl,
+    watermarkUrl: api.watermarkUrl ?? undefined,
+    originalUrl: api.originalUrl ?? undefined,
+    clipUrl: api.clipUrl ?? undefined,
+  });
   return {
     id: api.id,
     title: { id: api.title, en: api.title },
@@ -131,9 +240,15 @@ export function adaptVideo(api: ApiPhoto): Video {
     cat: "cinema",
     seed: api.id,
     duration: "02:00",
+    location: api.location || undefined,
+    category: (api.photoCategories ?? [])[0]?.category?.name,
     price: api.price,
     desc: { id: api.description || api.title, en: api.description || api.title },
-    thumbUrl: api.thumbUrl,
+    thumbUrl: urls.thumbUrl ?? undefined,
+    keywords: [...new Set(keywords.filter(Boolean))],
+    categories: [...new Set(cats.filter(Boolean))],
+    // Kartu: klip bersih dulu; pratinjau ber-watermark bila klip belum ada.
+    previewUrl: pickVideoPreview(urls.clipUrl, urls.watermarkUrl),
   };
 }
 
@@ -159,6 +274,8 @@ export async function fetchPhotos(opts?: {
   cat?: string;
   search?: string;
   type?: "FOTO" | "VIDEO";
+  /** Urutan hasil; default terbaru. */
+  sort?: "newest" | "price_asc" | "price_desc";
   page?: number;
   limit?: number;
 }): Promise<{ photos: Photo[]; total: number; totalPages: number }> {
@@ -170,6 +287,7 @@ export async function fetchPhotos(opts?: {
   if (opts?.cat) params.set("categoryId", opts.cat);
   if (opts?.search) params.set("search", opts.search);
   if (opts?.type) params.set("type", opts.type);
+  if (opts?.sort) params.set("sort", opts.sort);
   params.set("page", String(opts?.page ?? 1));
   params.set("limit", String(opts?.limit ?? 24));
 
@@ -247,6 +365,53 @@ function dummyRelated(id: string, limit: number): Photo[] {
   return [...same, ...rest].slice(0, limit).map(adaptPhoto);
 }
 
+/**
+ * Semua item bertipe VIDEO dari database (atau dataset dummy saat
+ * VITE_USE_DUMMY_IMAGES=true) — dipakai section video drone beranda.
+ */
+export async function fetchVideos(limit = 12): Promise<{ videos: Video[]; total: number }> {
+  const r = await fetchPhotos({ type: "VIDEO", limit });
+  return {
+    videos: r.photos.map((p) => ({
+      id: p.id,
+      title: p.title,
+      author: p.author,
+      cat: "cinema" as const,
+      seed: p.seed,
+      duration: "02:00",
+      location: p.location,
+      category: p.categories?.[0],
+      price: p.price,
+      desc: p.desc,
+      thumbUrl: p.thumbUrl,
+      keywords: p.keywords,
+      categories: p.categories,
+      previewUrl: pickVideoPreview(p.clipUrl, p.watermarkUrl),
+    })),
+    total: r.total,
+  };
+}
+
+const originalViewCache = new Map<string, Promise<string | null>>();
+
+/**
+ * URL file asli (tanpa watermark) satu foto untuk viewer layar penuh.
+ * Diminta hanya saat viewer dibuka; null bila tak tersedia (dummy, video,
+ * belum approved) — pemanggil kembali ke pratinjau ber-watermark.
+ */
+export function fetchPhotoOriginal(id: string): Promise<string | null> {
+  let p = originalViewCache.get(id);
+  if (!p) {
+    p = apiGet<ApiResponse<{ url: string }>>(`/api/photos/${encodeURIComponent(id)}/view`)
+      .then((r) => r.data?.url ?? null)
+      .catch(() => null);
+    originalViewCache.set(id, p);
+    // URL presigned berlaku 10 menit — buang dari cache sebelum basi.
+    setTimeout(() => originalViewCache.delete(id), 8 * 60 * 1000);
+  }
+  return p;
+}
+
 export async function fetchPhotoById(id: string): Promise<Photo | null> {
   // Mode dummy: cek dataset lokal dulu, hemat 1x fetch yang pasti gagal di Vercel.
   if (USE_DUMMY_IMAGES) {
@@ -268,11 +433,35 @@ export async function fetchRelatedPhotos(id: string, limit = 4): Promise<Photo[]
     if (d.length > 0) return d;
   }
   try {
-    const res = await apiGet<ApiResponse<ApiPhoto[]>>(`/api/photos/${id}/related?limit=${limit}`);
-    if (USE_DUMMY_IMAGES && res.data.length === 0) return dummyRelated(id, limit);
-    return res.data.map(adaptPhoto);
+    const res = await apiGet<ApiResponse<ApiPhoto[]> & { photos?: ApiPhoto[] }>(
+      `/api/photos/${id}/related?limit=${limit}`,
+    );
+    // Backend mengembalikan { success, photos: [...] } (bukan ApiResponse.data).
+    const rows = Array.isArray(res.data) ? res.data : (res.photos ?? []);
+    if (USE_DUMMY_IMAGES && rows.length === 0) return dummyRelated(id, limit);
+    return rows.map(adaptPhoto);
   } catch {
     return dummyRelated(id, limit);
+  }
+}
+
+/**
+ * Karya lain dari kontributor yang sama (galeri kontributor di halaman
+ * detail). Backend `search` mencakup kolom photographer, tapi disaring lagi
+ * di klien berdasarkan nama persis — search juga kena judul/kategori.
+ */
+export async function fetchContributorWorks(
+  author: string,
+  excludeId: string,
+  limit = 8,
+): Promise<Photo[]> {
+  const name = author.trim();
+  if (!name) return [];
+  try {
+    const r = await fetchPhotos({ search: name, limit: limit + 8 });
+    return r.photos.filter((p) => p.author === name && p.id !== excludeId).slice(0, limit);
+  } catch {
+    return [];
   }
 }
 
@@ -373,15 +562,294 @@ export async function fetchCartEventDiscounts(
 }
 
 /** Konten beranda yang dikelola CMS (hero/manifesto/anjungan_1/mulai). */
+let homepageCache: Record<string, HomepageSection> | null = null;
+let homepageCacheAt = 0;
+/** Umur cache homepage per sesi. Lebih lama = kembali ke home terasa instan, tapi
+ *  perubahan dari CMS (hero, kurasi) terlambat muncul tanpa muat ulang. */
+const HOMEPAGE_TTL = 30_000;
+
+/** Buang cache lalu fetch ulang — untuk memulihkan URL presigned yang
+ *  kedaluwarsa (1 jam) atau mati saat tunnel storage restart, tanpa refresh
+ *  halaman. Dipakai hero beranda saat gambar CMS gagal dimuat. */
+export async function refreshHomepage(): Promise<Record<string, HomepageSection>> {
+	homepageCache = null;
+	homepageCacheAt = 0;
+	return fetchHomepage();
+}
+
 export async function fetchHomepage(): Promise<Record<string, HomepageSection>> {
-  try {
-    const res = await apiGet<ApiResponse<HomepageSection[]>>("/api/homepage");
-    const map: Record<string, HomepageSection> = {};
-    for (const s of res.data) map[s.key] = s;
-    return map;
-  } catch {
-    return {};
-  }
+	// Cache sesi: kembali ke home dari halaman lain langsung memakai URL gambar
+	// asli tanpa fetch ulang — tanpa ini hero sempat memakai dummy picsum.
+	if (homepageCache && Date.now() - homepageCacheAt < HOMEPAGE_TTL) return homepageCache;
+	try {
+		const res = await apiGet<ApiResponse<HomepageSection[]>>("/api/homepage");
+		const map: Record<string, HomepageSection> = {};
+		for (const s of res.data) map[s.key] = s;
+		homepageCache = map;
+		homepageCacheAt = Date.now();
+		return map;
+	} catch {
+		return homepageCache ?? {};
+	}
+}
+
+/**
+ * Snapshot beranda — cat instan saat mount, segarkan di latar.
+ *
+ * Keluhan "landing telat menampilkan gambar asli": tiap buka (apalagi refresh)
+ * semua list difetch ulang, dan gambar asli baru mulai diunduh setelah
+ * presigned URL datang dari API. Dengan snapshot, mount langsung melukis data
+ * terakhir (memori untuk kembali dari halaman lain, sessionStorage untuk
+ * refresh), sementara fetch segar berjalan di belakang dan menimpa begitu tiba.
+ *
+ * Batas 45 menit di bawah masa berlaku presigned MinIO (1 jam; penggabungan
+ * per-id membuang URL yang tersisa <5 menit), dan
+ * snapshot dibuang bila VITE_API_URL berubah (ganti tunnel) — URL basi tak
+ * pernah dipakai. Kegagalan baca/tulis storage diabaikan diam-diam.
+ */
+export type HomeSnapshot = {
+	at: number;
+	apiBase: string;
+	horizontal: Photo[];
+	latest: Photo[];
+	archiveTotal: number;
+	videos: Video[];
+	videoTotal: number;
+	plans: Plan[];
+	hp: Record<string, HomepageSection>;
+};
+
+const SNAP_TTL = 45 * 60 * 1000;
+// v3: snapshot basi yang sempat menyimpan URL picsum (era backend menjawab
+// picsum saat presign MinIO gagal) dibuang paksa — jangan turunkan versi ini
+// tanpa alasan.
+const SNAP_KEY = "lakuna:home-snap:v9";
+let snapMem: HomeSnapshot | null = null;
+
+function snapshotApiBase(): string {
+	try {
+		return import.meta.env.VITE_API_URL || "http://localhost:3000";
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * Backend berbohong dengan sopan: saat presign MinIO gagal (tunnel storage
+ * mati), thumbUrl/watermarkUrl diisi `https://picsum.photos/seed/{id}/...`
+ * sebagai fallback. Di browser itu tampil sebagai "foto dummy", dan karena
+ * tak kosong, saringan snapshot meloloskannya — dummy menempel sampai cache
+ * kedaluwarsa. Saring baris beracun itu di sini: sisakan yang URL-nya asli.
+ */
+export function stripPicsumPhotos<T extends { thumbUrl?: string | null }>(rows: T[]): T[] {
+	return rows.filter((r) => !r.thumbUrl?.includes("picsum.photos"));
+}
+
+/** True bila payload homepage mengandung URL picsum (presign gagal massal). */
+export function homepageHasPicsum(hp: Record<string, HomepageSection>): boolean {
+	try {
+		return JSON.stringify(hp).includes("picsum.photos");
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * URL media anti-goyang: ronde fetch segar menandatangani ulang SEMUA
+ * presigned URL (signature per-request), sehingga tanpa penggabungan ini
+ * setiap revalidasi menukar 80+ URL → seluruh gambar dimuat ulang, strip
+ * marquee restart, compare bertukar. Audit membuktikan 82/84 URL berubah
+ * tiap refresh. Aturannya: URL lama dipertahankan selama masih berlaku
+ * (>5 menit sebelum kedaluwarsa) dan host-nya sama; URL picsum (presign
+ * gagal) tidak pernah menimpa URL asli, dan URL asli selalu menimpa picsum.
+ */
+function presignedFresh(url: string, marginMs = 5 * 60 * 1000): boolean {
+	try {
+		const u = new URL(url);
+		const d = u.searchParams.get("X-Amz-Date");
+		const e = Number(u.searchParams.get("X-Amz-Expires") ?? "0");
+		// Bukan presigned (dummy/lokal/eksternal) — tak ada kedaluwarsa.
+		if (!d || !e) return true;
+		const t = Date.parse(d.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, "$1-$2-$3T$4:$5:$6Z"));
+		if (Number.isNaN(t)) return true;
+		return Date.now() < t + e * 1000 - marginMs;
+	} catch {
+		return true;
+	}
+}
+
+function sameHost(a: string, b: string): boolean {
+	try {
+		return new URL(a).host === new URL(b).host;
+	} catch {
+		return false;
+	}
+}
+
+export function pickStableUrl(oldU?: string | null, newU?: string | null): string | null {
+	if (!newU) return oldU ?? null;
+	if (newU.includes("picsum.photos")) {
+		return oldU && !oldU.includes("picsum.photos") ? oldU : newU;
+	}
+	if (!oldU || oldU.includes("picsum.photos")) return newU;
+	// Host beda = ganti tunnel: URL lama pasti mati.
+	if (!sameHost(oldU, newU)) return newU;
+	// File beda (path/key storage berubah, mis. foto diganti lewat CMS — tiap
+	// upload memakai key UUID baru): URL lama menunjuk file LAMA. Dulu tetap
+	// dipertahankan selama belum kedaluwarsa, jadi foto yang diedit di CMS
+	// tak berubah di situs sampai ±1 jam. Hanya tanda tangan yang beda = file
+	// sama → URL lama dipertahankan agar gambar tak dimuat ulang.
+	if (!samePath(oldU, newU)) return newU;
+	return presignedFresh(oldU) ? oldU : newU;
+}
+
+function samePath(a: string, b: string): boolean {
+	try {
+		return new URL(a).pathname === new URL(b).pathname;
+	} catch {
+		return false;
+	}
+}
+
+type MediaRow = {
+	id: string;
+	thumbUrl?: string | null;
+	watermarkUrl?: string | null;
+	originalUrl?: string | null;
+	imageUrl?: string | null;
+	previewUrl?: string | null;
+};
+
+/** Gabung list segar ke list lama per id: metadata baru, URL lama yang masih berlaku. */
+export function mergeMediaById<T extends MediaRow>(oldList: T[], fresh: T[]): T[] {
+	if (!oldList.length) return fresh;
+	const prev = new Map(oldList.map((p) => [p.id, p]));
+	let changed = false;
+	const out = fresh.map((p) => {
+		const o = prev.get(p.id);
+		if (!o) return p;
+		const merged = {
+			...p,
+			thumbUrl: pickStableUrl(o.thumbUrl, p.thumbUrl),
+			watermarkUrl: pickStableUrl(o.watermarkUrl ?? null, p.watermarkUrl ?? null),
+			originalUrl: pickStableUrl(o.originalUrl ?? null, p.originalUrl ?? null),
+			imageUrl: pickStableUrl(o.imageUrl ?? null, p.imageUrl ?? null),
+			previewUrl: pickStableUrl(o.previewUrl ?? null, p.previewUrl ?? null),
+		};
+		if (
+			merged.thumbUrl !== p.thumbUrl || merged.watermarkUrl !== p.watermarkUrl ||
+			merged.originalUrl !== p.originalUrl || merged.imageUrl !== p.imageUrl ||
+			merged.previewUrl !== p.previewUrl
+		) changed = true;
+		return { ...merged, id: p.id } as T;
+	});
+	// Kembalikan referensi lama bila tak ada yang berubah — turunan
+	// $derived tak dihitung ulang, animasi (marquee) tak restart.
+	return changed ? out : (oldList.length === fresh.length && fresh.every((p, i) => oldList[i]?.id === p.id) ? oldList : out);
+}
+
+/** Gabung homepage segar ke lama: imageUrl section + foto kurasi per id. */
+export function mergeHomepage(
+	oldHp: Record<string, HomepageSection>,
+	freshHp: Record<string, HomepageSection>,
+): Record<string, HomepageSection> {
+	const out: Record<string, HomepageSection> = {};
+	for (const [key, sec] of Object.entries(freshHp)) {
+		const prev = oldHp[key];
+		if (!prev) {
+			out[key] = sec;
+			continue;
+		}
+		// URL lama hanya dipertahankan bila menunjuk BERKAS YANG SAMA (path
+		// tanpa query tanda tangan). Dulu dipertahankan selama belum kedaluwarsa
+		// — gambar/video hero yang diganti di CMS tak muncul sampai ±1 jam.
+		const samePath = (a?: string | null, b?: string | null) => {
+			try {
+				return !!a && !!b && new URL(a).pathname === new URL(b).pathname;
+			} catch {
+				return false;
+			}
+		};
+		out[key] = {
+			...sec,
+			imageUrl: samePath(prev.imageUrl, sec.imageUrl) ? pickStableUrl(prev.imageUrl, sec.imageUrl) : sec.imageUrl,
+			photos: sec.photos && prev.photos ? (mergeMediaById(prev.photos, sec.photos) as ApiPhoto[]) : sec.photos,
+		};
+	}
+	return out;
+}
+
+function snapshotFresh(s: HomeSnapshot | null): s is HomeSnapshot {
+	return !!s && Date.now() - s.at < SNAP_TTL && s.apiBase === snapshotApiBase();
+}
+
+export function loadHomeSnapshot(): HomeSnapshot | null {
+	if (snapshotFresh(snapMem)) return snapMem;
+	// localStorage (45 mnt, di bawah umur presigned 60 mnt): reload dalam
+	// sejam memakai URL yang SAMA persis — audit: 82/84 URL berubah tiap
+	// refresh karena signature per-request. sessionStorage hanya cadangan
+	// bila localStorage tak bisa ditulis (mode privat).
+	try {
+		const raw = localStorage.getItem(SNAP_KEY) ?? sessionStorage.getItem(SNAP_KEY);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw) as HomeSnapshot;
+		if (!snapshotFresh(parsed)) return null;
+		snapMem = parsed;
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+export function saveHomeSnapshot(patch: Partial<Omit<HomeSnapshot, "at" | "apiBase">>): void {
+	try {
+		// Jangan pernah meracuni cache dengan data rusak: list kosong atau hp
+		// tanpa kunci berarti ronde fetch yang gagal/degradasi — bukan sesuatu
+		// yang boleh dilukis saat mount berikutnya. Tanpa saringan ini, sekali
+		// saja API menjawab kosong, semua bingkai jadi dummy picsum dan
+		// menempel selamanya karena ronde gagal berikutnya mempertahankan
+		// snapshot basi itu (catch tidak menimpa).
+		const clean: Partial<Omit<HomeSnapshot, "at" | "apiBase">> = {};
+		for (const [k, v] of Object.entries(patch)) {
+			let val: unknown = v;
+			// Baris ber-URL-picsum = presign MinIO sedang gagal: buang barisnya.
+			// Habis semua = ronde rusak, jangan simpan sama sekali.
+			if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0] !== null && "thumbUrl" in val[0]) {
+				val = stripPicsumPhotos(val as { thumbUrl?: string | null }[]);
+			}
+			if (k === "hp" && homepageHasPicsum((val ?? {}) as Record<string, HomepageSection>)) continue;
+			if (Array.isArray(val) && val.length === 0) continue;
+			if (k === "hp" && Object.keys((v ?? {}) as object).length === 0) continue;
+			if (k === "archiveTotal" || k === "videoTotal") {
+				if (typeof v !== "number" || v <= 0) continue;
+			}
+			(clean as Record<string, unknown>)[k] = val;
+		}
+		if (Object.keys(clean).length === 0) return;
+		const prev: HomeSnapshot = snapMem ?? loadHomeSnapshot() ?? {
+			at: 0,
+			apiBase: snapshotApiBase(),
+			horizontal: [],
+			latest: [],
+			archiveTotal: 0,
+			videos: [],
+			videoTotal: 0,
+			plans: [],
+			hp: {},
+		};
+		snapMem = { ...prev, ...clean, at: Date.now(), apiBase: snapshotApiBase() };
+		try {
+			localStorage.setItem(SNAP_KEY, JSON.stringify(snapMem));
+		} catch {
+			try {
+				sessionStorage.setItem(SNAP_KEY, JSON.stringify(snapMem));
+			} catch {
+				/* storage penuh/mode privat — abaikan, fetch segar tetap jalan */
+			}
+		}
+	} catch {
+		/* storage penuh/mode privat — abaikan, fetch segar tetap jalan */
+	}
 }
 
 // ─── Peta Nusantara: titik-titik dari API ───────────────────────────────
@@ -390,8 +858,12 @@ export async function fetchHomepage(): Promise<Record<string, HomepageSection>> 
 // nama tempat di-geocode lewat tabel lookup statis berikut (alias Indonesia
 // → lat/lng). Foto dengan location tidak dikenali dilewati.
 export type MapShot = {
+  /** Id foto di API (untuk meminta file asli saat viewer dibuka). */
+  id?: string;
   seed: string;
   thumbUrl?: string;
+  /** Pratinjau besar untuk viewer (1000 px ber-watermark). */
+  hdUrl?: string;
   caption: Localized;
 };
 
@@ -536,25 +1008,59 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
       cat: shots[0].cat,
       desc: { id: name, en: name },
       photos: shots.map((s) => ({
+        id: s.id,
         seed: s.seed,
         thumbUrl: s.thumbUrl,
+        // Pratinjau 1000 px ber-watermark — file asli tidak pernah dikirim ke publik.
+        hdUrl: s.watermarkUrl ?? undefined,
         caption: s.title,
       })),
     });
   }
+  // Satu tempat, satu titik: nama lokasi yang berbeda ("DKI Jakarta" dan
+  // "Jakarta", "DI Yogyakarta" dan "Yogyakarta") sering dipetakan ke koordinat
+  // yang sama atau nyaris sama. Dibiarkan terpisah, keduanya digambar sebagai
+  // kluster "2 titik" yang TAK PERNAH terurai saat di-zoom — terbaca seolah ada
+  // dua wilayah padahal cuma satu. Titik yang lebih dekat dari NEAR_KM (di
+  // bawah jarak yang masih bisa dipisahkan zoom maksimum kluster) digabung:
+  // bingkainya disatukan, namanya ikut yang bingkainya lebih banyak. Kluster
+  // di peta jadi hanya untuk tempat BERBEDA yang bertumpuk di layar.
+  const NEAR_KM = 6;
+  const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+    const r = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * r;
+    const dLng = (b.lng - a.lng) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(h));
+  };
+  const merged: MapHotspot[] = [];
+  for (const h of hotspots) {
+    const m = merged.find((x) => km(x, h) <= NEAR_KM);
+    if (!m) {
+      merged.push({ ...h, photos: [...h.photos] });
+      continue;
+    }
+    if (h.photos.length > m.photos.length) {
+      m.name = h.name;
+      m.desc = h.desc;
+      m.cat = h.cat;
+      m.lat = h.lat;
+      m.lng = h.lng;
+    }
+    m.photos = [...m.photos, ...h.photos];
+  }
   // Urut west → east (busur Sabang → Merauke).
-  hotspots.sort((a, b) => a.lng - b.lng);
-  return hotspots;
+  merged.sort((a, b) => a.lng - b.lng);
+  return merged;
 }
 
 /**
- * `true`: peta Nusantara memakai dataset dummy (dummy.ts), terlepas dari
- * USE_DUMMY_IMAGES. Set `false` untuk kembali mengambil titik dari /api/photos.
- * Bisa dioverride via env `VITE_USE_DUMMY_MAP=false` (default tetap true).
+ * `false`: peta Nusantara memakai foto database (/api/photos). Set
+ * `VITE_USE_DUMMY_MAP=true` bila butuh dataset dummy (tanpa backend).
  */
 export const USE_DUMMY_MAP = import.meta.env.VITE_USE_DUMMY_MAP
-  ? import.meta.env.VITE_USE_DUMMY_MAP !== "false"
-  : true;
+	? import.meta.env.VITE_USE_DUMMY_MAP !== "false"
+	: false;
 
 /**
  * `false`: gambar memakai URL asli dari API (thumbUrl/watermarkUrl/imageUrl,

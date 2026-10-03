@@ -3,6 +3,7 @@
 	import { catLabel, COLLECTIONS, imgFor } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
 	import ParallaxImage from "./ParallaxImage.svelte";
+	import { scrambleHover } from "$lib/scramble";
 
 	const copy = {
 		id: { kicker: "Rubrik", title: "Koleksi pilihan", sub: "Anjungan editorial — cerita-cerita visual yang dikurasi dari arsip Lakuna.", explore: "Jelajahi", frames: "bingkai" },
@@ -16,7 +17,7 @@
 <section class="mx-auto max-w-[1500px] px-6 pb-12 pt-36 lg:px-10 lg:pt-44">
 	<Reveal>
 		<p data-reveal class="kicker text-safelight">{t.kicker}</p>
-		<h1 data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{t.title}</h1>
+			<h1 use:scrambleHover data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{t.title}</h1>
 		<p data-reveal class="mt-6 max-w-xl text-[1.02rem] leading-relaxed text-fg-muted">{t.sub}</p>
 	</Reveal>
 </section>

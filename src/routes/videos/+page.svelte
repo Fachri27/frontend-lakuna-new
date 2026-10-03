@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from "$app/state";
 	import VideosPage from "$lib/components/VideosPage.svelte";
 </script>
 
@@ -15,4 +16,4 @@
 	/>
 </svelte:head>
 
-<VideosPage />
+<VideosPage initialQ={page.url.searchParams.get("q") ?? undefined} />

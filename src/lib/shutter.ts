@@ -1,4 +1,5 @@
 import { access } from "./access.svelte";
+import { soundOn } from "./sound.svelte";
 
 /**
  * Bunyi saat membuka foto di peta: rekaman kamera Konica vintage — "pop" rana
@@ -39,6 +40,7 @@ export function primeShutter() {
  */
 export function playShutter() {
 	if (typeof window === "undefined") return;
+	if (!soundOn()) return;
 	if (access.settings.reduceMotion) return;
 	if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 

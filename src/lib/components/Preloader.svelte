@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { soundOn } from "$lib/sound.svelte";
 	/**
 	 * Preloader: lensa kamera yang membuka diafragmanya — port dari
 	 * apps/front-lakuna/app/landing/preloader.tsx.
@@ -27,18 +28,32 @@
 	 * Script itu hanya ikut di HTML hasil SSR, jadi navigasi sisi klien tidak
 	 * pernah memicunya. Tandanya (`data-preload="play"` di <html>) dihapus begitu
 	 * preloader selesai.
+	 *
+	 * Prop `heroReady`: lensa membuka ke foto hero beranda, jadi pembukaan
+	 * menunggu gambar hero FINAL selesai dimuat (dilaporkan Home via ApiImage
+	 * onload/onerror) — kalau tidak, lubang menghadap hero yang masih kosong.
+	 * Selama prop ini dikirim, HANYA ia yang ditunggu — bukan event `load` halaman,
+	 * yang bisa tertahan aset lain (font, gambar di bawah lipatan) tanpa ada
+	 * hubungannya dengan hero. Tanpa prop, lensa menunggu `load` seperti biasa.
+	 * MAX_WAIT_MS hanya pengaman untuk hero yang tak kunjung datang.
 	 */
+	let { heroReady }: { heroReady?: boolean } = $props();
+
 	const BLADES = 9;
 	const R = 100; // jari-jari rumah diafragma, dalam satuan lensa
 	const LENS_OUTER = 140;
 	const STEP = (Math.PI * 2) / BLADES;
 
+	/** Jari-jari badan lensa relatif sisi terpendek layar (sisakan ruang readout). */
+	const LENS_FILL = 0.43;
 	const OPEN_R = 78; // lubang saat terbuka penuh, sebelum menukik
 	const SWEEP_CLOSED = 1.25; // lengkung spiral bilah saat tertutup (radian)
 	const SWEEP_OPEN = 0.45;
 
 	const MIN_MS = 900; // selalu tampil sebentar, supaya bukan kedipan
-	const MAX_WAIT_MS = 3500; // jaringan lambat pun tidak menahan lebih lama
+	// Pengaman, bukan jadwal: 3,5 dtk dulu terlalu pendek untuk API dan gambar
+	// lewat tunnel, sehingga lensa membuka ke hero yang masih hitam.
+	const MAX_WAIT_MS = 12000;
 	const OPEN_MS = 950;
 	const ZOOM_DELAY_MS = 600; // menukik mulai sebelum bilah selesai membuka
 	const ZOOM_MS = 800;
@@ -97,6 +112,8 @@
 	const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 	let rootEl = $state<HTMLDivElement>();
+	/** true begitu JS menggambar lensa: latar tinta polos diganti SVG bermasker. */
+	let live = $state(false);
 	let svgEl = $state<SVGSVGElement>();
 	let lensEl = $state<SVGGElement>();
 	let maskGroupEl = $state<SVGGElement>();
@@ -193,7 +210,7 @@
 		}
 
 		const blades = Array.from(bladeGroup.querySelectorAll<SVGPathElement>("path"));
-		root.dataset.js = "on";
+		live = true;
 
 		const previousOverflow = html.style.overflow;
 		html.style.overflow = "hidden";
@@ -212,7 +229,7 @@
 			const w = window.innerWidth;
 			const h = window.innerHeight;
 			svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-			const scale = (Math.min(w, h) * 0.42) / LENS_OUTER;
+			const scale = (Math.min(w, h) * LENS_FILL) / LENS_OUTER;
 			const transform = `translate(${(w / 2).toFixed(1)} ${(h / 2).toFixed(1)}) scale(${(scale * state.zoom).toFixed(4)})`;
 			lens.setAttribute("transform", transform);
 			maskGroup.setAttribute("transform", transform);
@@ -237,6 +254,12 @@
 		};
 		window.addEventListener("load", onLoad);
 
+		// Isi di balik lensa siap dilihat. Prop dibaca saat dipanggil, jadi nilainya
+		// selalu yang terbaru.
+		function contentReady() {
+			return heroReady === undefined ? loaded : heroReady;
+		}
+
 		// Bunyi lensa dimuat sejak awal fase loading supaya tidak ada jeda jaringan
 		// saat diafragma membuka.
 		let lensAudio: HTMLAudioElement | null = null;
@@ -245,7 +268,7 @@
 			lensAudio.preload = "auto";
 			lensAudio.volume = LENS_VOLUME;
 			lensAudio.addEventListener("error", () => {
-				console.warn("[lens] gagal memuat file audio:", LENS_OPEN_SRC);
+				if (import.meta.env.DEV) console.warn("[lens] gagal memuat file audio:", LENS_OPEN_SRC);
 			});
 			lensAudio.load();
 		} catch {
@@ -257,7 +280,7 @@
 		let played = false;
 
 		const playLensOpen = () => {
-			if (!lensAudio || played) return;
+			if (!lensAudio || played || !soundOn()) return;
 			played = true;
 			lensAudio.volume = LENS_VOLUME;
 			try {
@@ -276,10 +299,15 @@
 			});
 		}
 
-		// Ketukan adalah gerakan pengguna yang membuka izin audio: bunyikan, lalu
-		// buka lensa saat itu juga.
+		// Ketukan adalah gerakan pengguna yang membuka izin audio. Kalau hero
+		// sudah tampil, bunyikan dan buka lensa saat itu juga; kalau belum,
+		// tandai izinnya (lensa tetap menunggu hero di wait loop, lalu membuka
+		// DENGAN bunyi) — jangan membuka ke lubang hitam.
 		const onTap = () => {
 			if (opening || !lensAudio || sound !== "blocked") return;
+			sound = "auto";
+			hint = false;
+			if (!contentReady()) return;
 			playLensOpen();
 			open(performance.now());
 		};
@@ -301,6 +329,10 @@
 			opening = true;
 			hint = false;
 			stopListening();
+			// Aba-aba untuk beranda: riak air di seluruh hero.
+			window.dispatchEvent(new Event("lakuna:lens-open"));
+			// Blitz kamera kini menyala DI HERO (Home, .hero-flash), bukan di
+			// atas lensa — lensa tak ikut tersiram putih.
 			if (sound === "auto") playLensOpen();
 			// Ketukan bisa datang sebelum cincin sampai di f/1.4: selesaikan putarannya
 			// bersama bukaan, bukan melompat.
@@ -309,14 +341,20 @@
 			const zoomMax = () => {
 				const w = window.innerWidth;
 				const h = window.innerHeight;
-				const scale = (Math.min(w, h) * 0.42) / LENS_OUTER;
+				const scale = (Math.min(w, h) * LENS_FILL) / LENS_OUTER;
 				return (Math.hypot(w, h) / 2 / (OPEN_R * Math.cos(Math.PI / BLADES) * scale)) * 1.08;
 			};
 
 			const step = (now: number) => {
 				if (cancelled) return;
 				const elapsed = now - t0;
-
+				// Pengaman macet: di perangkat lambat rAF bisa seret hingga fase
+				// menukik (busur raksasa) terlihat berlama-lama. Paksa selesai
+				// setelah 5 detik dinding apa pun yang terjadi.
+				if (performance.now() - t0 > 5000) {
+					finish();
+					return;
+				}
 				const o = easeInOutCubic(clamp01(elapsed / OPEN_MS));
 				state.r = OPEN_R * o;
 				state.sweep = SWEEP_CLOSED + (SWEEP_OPEN - SWEEP_CLOSED) * o;
@@ -326,7 +364,11 @@
 
 				const zt = clamp01((elapsed - ZOOM_DELAY_MS) / ZOOM_MS);
 				state.zoom = 1 + (zoomMax() - 1) * easeInCubic(zt);
-				state.decor = 1 - clamp01(zt * 1.6);
+				// Dekorasi (ring, angka, ukiran) hilang di sepertiga awal
+				// menukik: kalau ikut membesar sampai akhir, yang tersisa di
+				// layar hanya busur-busur raksasa tanpa konteks. Bilah + lubang
+				// yang mengantar reveal, bukan cincinnya.
+				state.decor = 1 - clamp01(zt * 3);
 
 				apply();
 
@@ -343,7 +385,8 @@
 		const wait = (now: number) => {
 			if (cancelled || opening) return;
 			const elapsed = now - start;
-			const ready = loaded && elapsed >= (sound === "blocked" ? HINT_MIN_MS : MIN_MS);
+			// Jangan membuka ke lubang hitam — tunggu foto hero tampil.
+			const ready = contentReady() && elapsed >= (sound === "blocked" ? HINT_MIN_MS : MIN_MS);
 			const target = ready ? 1 : Math.min(0.85, elapsed / 1600);
 			progress += (target - progress) * 0.1;
 			state.ring = RING_START_DEG * (1 - progress);
@@ -371,13 +414,15 @@
 
 <svelte:head>
 	{@html EARLY_TAG}
-	<!-- Mulai fetch bunyi lensa sejak HTML di-parse, supaya saat open() fired
-	     metadata audio sudah siap dan tidak ada race currentTime/play. -->
-	<link rel="preload" href="/sounds/lens-open.mp3" as="audio" type="audio/mpeg" />
+	<!-- Catatan: JANGAN tambah <link rel="preload" as="audio"> untuk bunyi lensa:
+	     Chrome tidak menerima `audio` sebagai nilai `as` dan membanjiri console
+	     dengan warning "unsupported as value". Fetch awal sudah ditangani
+	     `lensAudio.load()` di effect (elemen Audio dibuat + load sejak fase
+	     loading), jadi tidak ada yang hilang. -->
 </svelte:head>
 
 {#if !done}
-	<div bind:this={rootEl} class="l-pre" aria-hidden="true">
+	<div bind:this={rootEl} class="l-pre" class:is-live={live} aria-hidden="true">
 		<svg bind:this={svgEl} class="l-pre__svg" preserveAspectRatio="none">
 			<defs>
 				<!-- Putih = tertutup overlay, hitam = lubang tempat beranda terlihat.
@@ -390,11 +435,23 @@
 					</g>
 				</mask>
 
+				<!-- Bilah logam: kilap tegas di satu sisi, gelap di sisi lain —
+				     dulu rentang #2c→#09 nyaris hilang di atas latar hitam. -->
 				<linearGradient id="l-pre-metal" gradientTransform="rotate(35)">
-					<stop offset="0" stop-color="#2c2c2c" />
-					<stop offset="0.45" stop-color="#161616" />
-					<stop offset="1" stop-color="#090909" />
+					<stop offset="0" stop-color="#5a5a60" />
+					<stop offset="0.22" stop-color="#2e2e33" />
+					<stop offset="0.6" stop-color="#141417" />
+					<stop offset="1" stop-color="#0a0a0c" />
 				</linearGradient>
+				<radialGradient id="l-pre-barrel" cx="0.35" cy="0.25" r="0.9">
+					<stop offset="0" stop-color="#26262a" />
+					<stop offset="0.7" stop-color="#121214" />
+					<stop offset="1" stop-color="#0b0b0d" />
+				</radialGradient>
+				<radialGradient id="l-pre-vignette" cx="0.5" cy="0.5" r="0.75">
+					<stop offset="0" stop-color="#15151a" />
+					<stop offset="1" stop-color="#050506" />
+				</radialGradient>
 
 				<radialGradient id="l-pre-glass" cx="0.32" cy="0.28" r="0.8">
 					<stop offset="0" stop-color="#ffffff" stop-opacity="0.16" />
@@ -408,6 +465,7 @@
 			<g mask="url(#l-pre-hole)">
 				<g bind:this={lensEl}>
 					<rect class="l-pre__bg" x="-5000" y="-5000" width="10000" height="10000" />
+					<circle r="420" fill="url(#l-pre-vignette)" />
 
 					<g bind:this={decorEl}>
 						<circle class="l-pre__barrel" r={LENS_OUTER} />
@@ -431,7 +489,7 @@
 						<circle class="l-pre__front" r="113" />
 						<text class="l-pre__engrave" text-anchor="middle">
 							<textPath href="#l-pre-engrave" startOffset="25%">
-								LAKUNA · ARSIP VISUAL NUSANTARA · 35mm 1:1.4 · ⌀58
+								ARSIP VISUAL NUSANTARA · 35mm 1:1.4 · ⌀58
 							</textPath>
 						</text>
 
@@ -446,8 +504,6 @@
 
 					<g bind:this={glassEl} class="l-pre__glass">
 						<circle r={R} fill="url(#l-pre-glass)" />
-						<path class="l-pre__coat l-pre__coat--violet" d="M -76 -40 A 86 86 0 0 1 -18 -84" />
-						<path class="l-pre__coat l-pre__coat--green" d="M 58 44 A 72 72 0 0 1 14 70" />
 					</g>
 				</g>
 			</g>
@@ -478,7 +534,11 @@
 		display: block;
 	}
 
-	.l-pre[data-js="on"] {
+	/* Lewat class directive, bukan atribut `data-js` yang dipasang dari JS: Svelte
+	   membuang selektor yang tidak cocok dengan template, jadi aturan atribut itu
+	   hilang dari CSS dan latar tinta menutupi lubang lensa — halaman tak pernah
+	   terlihat selama bilah membuka. */
+	.l-pre.is-live {
 		background: transparent;
 	}
 
@@ -490,22 +550,32 @@
 		height: 100%;
 	}
 
+	/* HTML hasil SSR tampil sebelum JS hydrate: selama itu lensa belum punya
+	   viewBox/transform dari apply(), jadi pusatnya di (0,0) — pojok kiri atas.
+	   Sembunyikan sampai JS memosisikannya; yang terlihat hanya tinta polos. */
+	.l-pre:not(.is-live) .l-pre__svg {
+		visibility: hidden;
+	}
+
 	.l-pre__bg {
 		fill: var(--pre-ink);
 	}
 
-	/* --- badan lensa --- */
+	/* --- badan lensa (hanya penanda + ukiran yang tersisa) --- */
 
+	.l-pre__bg {
+		fill: #050506;
+	}
 	.l-pre__barrel {
-		fill: #141414;
-		stroke: rgba(var(--pre-paper), 0.08);
-		stroke-width: 0.6;
+		fill: url(#l-pre-barrel);
+		stroke: rgba(var(--pre-paper), 0.16);
+		stroke-width: 0.7;
 	}
 
 	/* pathLength 360: 0.55 + 0.45 = satu gerigi per derajat. */
 	.l-pre__grip {
 		fill: none;
-		stroke: #202020;
+		stroke: #2f2f34;
 		stroke-width: 9;
 		stroke-dasharray: 0.55 0.45;
 	}
@@ -518,8 +588,9 @@
 
 	.l-pre__stop {
 		font-family: var(--font-mono);
-		font-size: 6.2px;
-		fill: rgba(var(--pre-paper), 0.6);
+		font-size: 7.4px;
+		font-weight: 600;
+		fill: rgba(var(--pre-paper), 0.82);
 	}
 
 	.l-pre__index {
@@ -534,9 +605,9 @@
 
 	.l-pre__engrave {
 		font-family: var(--font-mono);
-		font-size: 4.6px;
+		font-size: 4.8px;
 		letter-spacing: 0.18em;
-		fill: rgba(var(--pre-paper), 0.42);
+		fill: rgba(var(--pre-paper), 0.6);
 	}
 
 	.l-pre__housing {
@@ -549,8 +620,8 @@
 
 	.l-pre__blade {
 		fill: url(#l-pre-metal);
-		stroke: rgba(var(--pre-paper), 0.1);
-		stroke-width: 0.45;
+		stroke: rgba(var(--pre-paper), 0.26);
+		stroke-width: 0.55;
 		stroke-linejoin: round;
 	}
 
@@ -559,20 +630,6 @@
 	.l-pre__glass {
 		pointer-events: none;
 		mix-blend-mode: screen;
-	}
-
-	.l-pre__coat {
-		fill: none;
-		stroke-width: 1.4;
-		stroke-linecap: round;
-	}
-
-	.l-pre__coat--violet {
-		stroke: rgba(150, 120, 255, 0.28);
-	}
-
-	.l-pre__coat--green {
-		stroke: rgba(90, 220, 160, 0.18);
 	}
 
 	/* --- petunjuk suara --- */
@@ -600,4 +657,5 @@
 		opacity: 1;
 		transform: translate(-50%, 0);
 	}
+
 </style>

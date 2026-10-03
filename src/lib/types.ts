@@ -17,6 +17,8 @@ export type ApiPhoto = {
   thumbUrl: string;
   watermarkUrl: string | null;
   originalUrl: string | null;
+  /** Klip kartu bersih (VIDEO, 8 dtk tanpa watermark); null bila belum dibuat. */
+  clipUrl?: string | null;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -97,9 +99,11 @@ export type ApiFavorite = {
 };
 
 export type HomepageSection = {
-  key: "hero" | "manifesto" | "anjungan_1" | "mulai" | "journeys" | "orbit";
+  key: "hero" | "manifesto" | "anjungan_1" | "mulai" | "journeys" | "orbit" | "arsip" | "video" | "harga" | "klip" | "banding" | "percaya";
   imageKey: string | null;
   imageUrl: string | null;
+  /** Jenis media latar hero: "video" = klip autoplay bisu. */
+  mediaType: "image" | "video" | null;
   kicker: string | null;
   title: string | null;
   body: string | null;

@@ -30,7 +30,8 @@
 	}: Props = $props();
 
 	let el: HTMLElement | undefined = $state();
-	const words = $derived(text.split(" "));
+	// "\n" = pemisah baris eksplisit (mis. "Limitless access\nto the archives").
+	const lines = $derived(text.split("\n").map((l) => l.split(" ")));
 
 	$effect(() => {
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -38,16 +39,34 @@
 		if (!node) return;
 		const inners = node.querySelectorAll<HTMLElement>(".rt-word > span");
 		if (!inners.length) return;
-		const tween = gsap.to(inners, {
-			y: 0,
-			duration,
-			ease: "power3.out",
-			stagger,
-			scrollTrigger: { trigger: node, start, once: true }
+		// Diputar ULANG tiap kali judul masuk layar (turun maupun naik):
+		// kata naik dari bawah saat datang dari bawah, turun dari atas saat
+		// datang dari atas; disembunyikan lagi hanya setelah benar-benar
+		// keluar layar (tanpa kedip selagi terlihat).
+		const show = (from: string) =>
+			gsap.fromTo(inners, { y: from }, { y: 0, duration, ease: "power3.out", stagger, overwrite: true });
+		const hide = (to: string) => {
+			gsap.killTweensOf(inners);
+			gsap.set(inners, { y: to });
+		};
+		const play = ScrollTrigger.create({
+			trigger: node,
+			start,
+			end: "bottom top",
+			onEnter: () => show("110%"),
+			onEnterBack: () => show("-110%"),
+		});
+		const reset = ScrollTrigger.create({
+			trigger: node,
+			start: "top bottom",
+			end: "bottom top",
+			onLeave: () => hide("-110%"),
+			onLeaveBack: () => hide("110%"),
 		});
 		return () => {
-			tween.scrollTrigger?.kill();
-			tween.kill();
+			play.kill();
+			reset.kill();
+			gsap.killTweensOf(inners);
 		};
 	});
 </script>
@@ -58,5 +77,5 @@
 	menempel: "Arsipnyalewat.Ambil". Di luar topeng, spasinya jadi spasi biasa:
 	lebarnya ikut font dan barisnya boleh patah di situ seperti teks normal. -->
 <svelte:element this={as} bind:this={el} class={className}>
-	{#each words as w, i (i)}<span class="rt-word"><span>{w}</span></span>{" "}{/each}
+	{#each lines as words, li (li)}{#if li > 0}<br />{/if}{#each words as w, i (i)}<span class="rt-word"><span>{w}</span></span>{" "}{/each}{/each}
 </svelte:element>

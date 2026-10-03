@@ -1,32 +1,38 @@
 <script lang="ts">
+	import mlWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 	import gsap from "gsap";
 	import { playShutter, primeShutter } from "$lib/shutter";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
-	// Stylesheet dasar Leaflet. Wajib: tanpa ini pane dan tile tetap
-	// `position: static`, jadi ubinnya menumpuk memanjang ke bawah alih-alih
-	// menyusun peta — petanya tampak hitam dengan satu ubin nyasar di tengah.
-	// Override tampilan ada di app.css (`.im-wrap .leaflet-*`), spesifisitasnya
-	// lebih tinggi jadi tetap menang berapa pun urutan muatnya.
-	import "leaflet/dist/leaflet.css";
+	// Stylesheet dasar MapLibre (kanvas, marker, kontrol atribusi). Override
+	// tampilan ada di app.css (`.im-wrap .maplibregl-*`).
+	import "maplibre-gl/dist/maplibre-gl.css";
+	import type { Snippet } from "svelte";
+	import { polarCapsLayer } from "$lib/polarCaps";
+	import { nightTile, NIGHT_TILE_URL } from "$lib/nightTiles";
 	import { i18n } from "$lib/i18n.svelte";
-	import { catLabel, fetchMapHotspots, imgFor, type MapHotspot } from "$lib/data";
+	import { catLabel, fetchMapHotspots, fetchPhotoOriginal, imgFor, type MapHotspot } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
 
 	const copy = {
 		id: {
-			kicker: "Kartu Nusantara",
-			title: "Dari Sabang ke Merauke",
-			sub: "Tiap titik adalah bingkai dari arsip Lakuna. Geser peta, lalu buka satu titik untuk melihat fotonya.",
+			kicker: "Peta archipelago",
+			title: "Dari Sabang\nsampai Merauke",
+			sub: "Mulai menjelajah Nusantara lewat koleksi kami.\nSetiap provinsi memiliki kisahnya sendiri.",
 			overview: "Ringkasan",
 			points: "titik",
 			frames: "bingkai",
-			explore: "Geser untuk menjelajah · klik titik untuk membuka",
+			explore: "Geser untuk menjelajah . Klik untuk membuka",
 			zoomHint: "Klik untuk perbesar · Gerakkan tetikus untuk menggeser",
 			zoomOutHint: "Klik untuk perkecil · Gerakkan tetikus untuk menggeser",
 			fullscreen: "Layar penuh",
 			exit: "Keluar dari layar penuh",
+			zoomIn: "Perbesar peta",
+			zoomOut: "Perkecil peta",
+			panOn: "Nyalakan geser peta",
+			panOff: "Kunci peta, lanjut gulir",
+			panHint: "Cubit atau geser dengan dua jari untuk menjelajah — ketuk titik untuk membuka",
 			close: "Tutup",
 			prev: "Sebelumnya",
 			next: "Berikutnya",
@@ -40,16 +46,21 @@
 		},
 		en: {
 			kicker: "Archipelago map",
-			title: "From Sabang to Merauke",
-			sub: "Every point is a frame from the Lakuna archive. Drag the map, then open a point to see its photos.",
+			title: "From Sabang\nto Merauke",
+			sub: "Start to explore Nusantara through our collection.\nEach province has the different story.",
 			overview: "Overview",
 			points: "points",
 			frames: "frames",
-			explore: "Drag to explore · click a point to open",
+			explore: "Drag to explore . Click to open",
 			zoomHint: "Tap to zoom in · Move mouse to pan",
 			zoomOutHint: "Tap to zoom out · Move mouse to pan",
 			fullscreen: "Fullscreen",
 			exit: "Exit fullscreen",
+			zoomIn: "Zoom map in",
+			zoomOut: "Zoom map out",
+			panOn: "Enable map panning",
+			panOff: "Lock map, keep scrolling",
+			panHint: "Pinch or drag with two fingers to explore — tap a point to open",
 			close: "Close",
 			prev: "Previous",
 			next: "Next",
@@ -64,6 +75,23 @@
 	};
 
 	type Hotspot = MapHotspot;
+
+	/**
+	 * Mode `bare`: dipakai saat peta ditanam di dalam stage lain (MapDescent)
+	 * yang memiliki koreografi scroll-nya sendiri. Intro/exit scrub di sini
+	 * dimatikan (HUD langsung tampil), blink marker dipicu event
+	 * `lakuna:map-shown` saat pendaratan, bukan ScrollTrigger.
+	 *
+	 * Di mode ini peta MapLibre (proyeksi globe) SEKALIGUS adalah globe hero:
+	 * kamera mulai jauh (bumi utuh, rendah di layar), lalu induk memanggil
+	 * dive()/rise() untuk menukik ke bingkai Nusantara dan kembali. Satu
+	 * kanvas, satu citra — tak ada pergantian komponen.
+	 *
+	 * `backdrop`: isi yang digambar DI BELAKANG kanvas peta (bintang, judul
+	 * besar). Kanvas globe transparan di luar bumi, jadi isi itu terlihat di
+	 * langit dan tertutup bumi di tempat keduanya bertumpuk.
+	 */
+	let { bare = false, backdrop }: { bare?: boolean; backdrop?: Snippet } = $props();
 
 	const FALLBACK_HOTSPOTS: Hotspot[] = [
 		{ name: "Sabang", lat: 5.9, lng: 95.3, cat: "nature",
@@ -168,8 +196,27 @@
 	// Kamera ringkasan memaskan bingkai ini ke ukuran layar, bukan pusat + zoom
 	// tetap — dulu Sumatra terpotong di desktop dan di HP cuma Kalimantan yang tampak.
 	const NUSANTARA: [[number, number], [number, number]] = [[-11.2, 94.6], [6.4, 141.4]];
-	const FOCUS_Z = 7;
+	// Zoom MapLibre = zoom Leaflet − 1 (ubin 512 vs 256 px) untuk skala yang sama.
+	const FOCUS_Z = 6;
+	const CLUSTER_MAX_Z = 10;
 	const FLY_DUR = 0.9;
+
+	// Kamera hero (mode tanam): bumi utuh, pusatnya jauh di bawah layar, jadi
+	// yang terlihat hanya tudung atasnya — Asia menghadap, Indonesia tepat di
+	// bawah tepi layar. Selagi menunggu, bumi MENGGELINDING bawah → atas
+	// (lintang tengah turun dari 30°LU ke 24°LU, melambat). Cukup jauh di
+	// utara supaya putaran ke Indonesia saat membuka peta terasa panjang
+	// (±28°). Kutub yang ikut terlihat aman: citranya asli (lihat polarCaps).
+	const HERO_LNG = 118;
+	const HERO_LAT_FROM = 30;
+	const HERO_LAT_TO = 24;
+	const HERO_ROLL_TAU = 9; // detik
+	// Gestur kursor di hero: bumi berpaling mengikuti kursor sejauh ini (derajat)
+	// di tepi layar, dihaluskan dengan konstanta waktu PTR_TAU.
+	const PTR_LNG = 10;
+	const PTR_LAT = 5;
+	const PTR_TAU = 0.35; // detik
+	const ease3 = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 	const IM_FALLBACK =
 		"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=94,-11.5,142,7.5&bboxSR=4326&imageSR=4326&size=1200,600&format=jpg&f=image";
@@ -195,8 +242,39 @@
 		const narrow = w < 640;
 		const side = Math.round(w * (narrow ? 0.05 : 0.04));
 		return {
-			paddingTopLeft: [side, Math.round(h * (narrow ? 0.3 : 0.26))] as [number, number],
-			paddingBottomRight: [side, Math.round(h * (narrow ? 0.12 : 0.1))] as [number, number],
+			top: Math.round(h * (narrow ? 0.3 : 0.26)),
+			bottom: Math.round(h * (narrow ? 0.12 : 0.1)),
+			left: side,
+			right: side,
+		};
+	}
+
+	const NO_PAD = { top: 0, bottom: 0, left: 0, right: 0 };
+
+
+	/**
+	 * Kamera hero untuk lintang tengah `lat`. Jari-jari cakram = 100vmin
+	 * (maks 1000px), puncak cakram 66vmin di atas dasar layar. MapLibre
+	 * memperbesar planet 1/cos(lintang) (lihat panduan globe), jadi zoom
+	 * dikoreksi dengan cos(lat) supaya ukuran bumi tetap sama saat menggelinding.
+	 * Pusat cakram jatuh di bawah layar lewat padding atas.
+	 */
+	function heroCamera(el: HTMLElement, lat: number, lift = 0) {
+		const w = el.clientWidth;
+		const h = el.clientHeight;
+		const vmin = Math.min(w, h);
+		const R = Math.min(vmin, 1000);
+		const cy = h - 0.66 * vmin + R + lift;
+		// Kursor ke kanan → permukaan ikut ke kanan (pusat bergeser ke barat);
+		// kursor ke bawah → permukaan ikut turun (pusat bergeser ke utara).
+		const cLat = lat + ptrY * PTR_LAT;
+		const zoom = Math.log2((R * 2 * Math.PI * Math.cos((cLat * Math.PI) / 180)) / 512);
+		return {
+			center: [HERO_LNG - ptrX * PTR_LNG, cLat] as [number, number],
+			zoom,
+			bearing: 0,
+			pitch: 0,
+			padding: { top: Math.max(0, 2 * cy - h), bottom: 0, left: 0, right: 0 },
 		};
 	}
 
@@ -228,11 +306,18 @@
 		const h = host.toLowerCase();
 		if ((IMG_HOSTS as string[]).includes(h)) return true;
 		if (h === "localhost" || h === "127.0.0.1") return true;
-		try {
-			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
-			if (h === base.hostname.toLowerCase()) return true;
-		} catch {
-			/* abaikan — allowlist statis di atas tetap berlaku */
+		// Backend asli + MinIO publik (keduanya bisa berupa tunnel saat share).
+		for (const raw of [
+			import.meta.env.VITE_API_URL,
+			import.meta.env.VITE_MINIO_PUBLIC_URL,
+			import.meta.env.MINIO_PUBLIC_URL,
+		]) {
+			try {
+				if (!raw) continue;
+				if (h === new URL(raw).hostname.toLowerCase()) return true;
+			} catch {
+				/* abaikan — allowlist statis di atas tetap berlaku */
+			}
 		}
 		return false;
 	}
@@ -336,18 +421,98 @@
 		return imgs;
 	}
 
-	function timecode(i: number): string {
-		const t = 102 + i * 437;
-		const h = Math.floor(t / 3600);
-		const m = Math.floor((t % 3600) / 60);
-		const s = t % 60;
-		return `T+${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+	const SCRAMBLE_GLYPHS = "!#%^*?/\\<>_-=+$&";
+
+	/**
+	 * Teks "mengetik" dengan satu huruf acak di ujungnya — huruf yang sudah
+	 * pasti muncul dari kiri, huruf berikutnya masih berkedip acak sampai
+	 * gilirannya (PA^OR → PANORA → PANORAMA). Teks asli disimpan di
+	 * data-text supaya pemanggilan ulang tidak mengacak hasil acakan.
+	 */
+	function scrambleIn(el: HTMLElement, delay: number, duration = 0.7) {
+		const text = (el.dataset.text ??= el.textContent ?? "");
+		if (!text || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			el.textContent = text;
+			return;
+		}
+		el.textContent = "";
+		const start = performance.now() + delay * 1000;
+		const tick = (now: number) => {
+			if (!el.isConnected) return;
+			const p = (now - start) / (duration * 1000);
+			if (p < 0) {
+				requestAnimationFrame(tick);
+				return;
+			}
+			if (p >= 1) {
+				el.textContent = text;
+				return;
+			}
+			const shown = Math.floor(p * text.length);
+			const glyph = SCRAMBLE_GLYPHS[Math.floor(Math.random() * SCRAMBLE_GLYPHS.length)];
+			el.textContent = text.slice(0, shown) + glyph;
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
 	}
 
-	function fmtCoord(lat: number, lng: number): string {
-		const la = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}`;
-		const lo = `${Math.abs(lng).toFixed(2)}°${lng >= 0 ? "E" : "W"}`;
-		return `${la} · ${lo}`;
+	/**
+	 * Kemunculan satu plate dengan bahasa kamera — fokus mengunci, rana
+	 * membuka, lokasi berdenyut, lalu label mengetik:
+	 *   1. bingkai sudut mulai 1.7× lalu MENGUNCI ke ukuran plate;
+	 *   2. foto terbuka dari garis tengah ke atas-bawah (seperti rana) dengan
+	 *      kilat terang sesaat;
+	 *   3. cincin safelight melebar dari titiknya lalu padam;
+	 *   4. nama & nomor mengetik (scrambleIn).
+	 */
+	function revealMarker(mk: HTMLElement, delay: number) {
+		const reducedNow = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const labels = mk.querySelectorAll<HTMLElement>(".im-mk-name, .im-mk-num, .im-mk-count");
+		if (reducedNow) {
+			gsap.set(mk, { opacity: 1, scale: 1 });
+			labels.forEach((el) => scrambleIn(el, 0));
+			return;
+		}
+		const br = mk.querySelector<SVGElement>(".im-mk-br");
+		const img = mk.querySelector<HTMLElement>(".im-mk-plate-img");
+		const glyph = mk.querySelector<HTMLElement>(".im-mk-plate-glyph");
+
+		const ping = document.createElement("span");
+		ping.className = "im-mk-ping";
+		ping.setAttribute("aria-hidden", "true");
+		mk.appendChild(ping);
+
+		const tl = gsap.timeline({ delay, onComplete: () => ping.remove() });
+		tl.fromTo(mk, { opacity: 0, scale: 1 }, { opacity: 1, duration: 0.18, ease: "none" }, 0);
+		if (br) {
+			tl.fromTo(
+				br,
+				{ scale: 1.7, opacity: 0, transformOrigin: "50% 50%" },
+				{ scale: 1, opacity: 1, duration: 0.5, ease: "expo.out" },
+				0,
+			);
+		}
+		if (img) {
+			// Transisi CSS pada filter akan melawan tween; dimatikan sementara
+			// lalu dikembalikan ke nilai stylesheet.
+			tl.set(img, { transition: "none" }, 0);
+			tl.fromTo(
+				img,
+				{ clipPath: "inset(50% 0% 50% 0%)", filter: "brightness(2.4) saturate(0.4)" },
+				{ clipPath: "inset(0% 0% 0% 0%)", duration: 0.45, ease: "power3.inOut" },
+				0.14,
+			);
+			tl.to(img, { filter: "brightness(1) saturate(0.85)", duration: 0.55, ease: "power2.out" }, 0.4);
+			tl.set(img, { clearProps: "transition,filter,clipPath" });
+		}
+		if (glyph) tl.fromTo(glyph, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power1.out" }, 0.45);
+		tl.fromTo(
+			ping,
+			{ scale: 0.4, opacity: 0.9 },
+			{ scale: 2.6, opacity: 0, duration: 0.9, ease: "power2.out" },
+			0.12,
+		);
+		labels.forEach((el, k) => scrambleIn(el, delay + 0.5 + k * 0.12));
 	}
 
 	const lang = $derived(i18n.lang);
@@ -361,12 +526,19 @@
 	let dvImgWrap = $state<HTMLDivElement>();
 	let dvStrip = $state<HTMLDivElement>();
 	let dvCloseEl = $state<HTMLButtonElement>();
+	let dvRoot = $state<HTMLDivElement>();
+	let hdLoaded = $state("");
 
 	let ready = $state(false);
-	let isFs = $state(false);
 	let reduced = $state(false);
 	let focus = $state(0);
 	let dragged = $state(false);
+	// Sentuh: peta TIDAK langsung bisa digeser. Kalau bisa, seluruh layar jadi
+	// area geser peta dan halaman tak bisa digulir sama sekali — pengguna
+	// terjebak di section ini. Ketukan (penanda) tetap jalan; geser dinyalakan
+	// lewat tombol.
+	let touchDevice = $state(false);
+	let panOn = $state(false);
 	let viewing = $state<number | null>(null);
 	let frame = $state(0);
 	let hotspots = $state<Hotspot[]>([]);
@@ -375,9 +547,22 @@
 	let focusRef = 0;
 	let viewingRef: number | null = null;
 	let frameRef = 0;
-	let map: import("leaflet").Map | null = null;
-	let markers: import("leaflet").Marker[] = [];
-	let clusterMarkers: import("leaflet").Marker[] = [];
+	let map: import("maplibre-gl").Map | null = null;
+	let markers: import("maplibre-gl").Marker[] = [];
+	let markerOn: boolean[] = [];
+	let clusterMarkers: import("maplibre-gl").Marker[] = [];
+	// Mode tanam: "hero" = kamera globe menunggu; "landed" = peta interaktif.
+	// Nilai sebenarnya dipasang saat peta dibuat (bergantung prop `bare`).
+	let phase: "hero" | "diving" | "landed" | "rising" = "hero";
+	let heroLat = HERO_LAT_FROM;
+	let heroLift = 0;
+	let rollOn = true;
+	let rollT = 0;
+	// Posisi kursor ternormalisasi (−0.5..0.5): target dan nilai yang dihaluskan.
+	let ptrAimX = 0;
+	let ptrAimY = 0;
+	let ptrX = 0;
+	let ptrY = 0;
 	let reclusterRef: (() => void) | null = null;
 	let preloads: HTMLImageElement[] = [];
 	let shotOffset = shotOffsets([]);
@@ -411,64 +596,352 @@
 	$effect(() => {
 		if (!hotspots.length) return;
 		let disposed = false;
-		let m: import("leaflet").Map | null = null;
+		let m: import("maplibre-gl").Map | null = null;
 		let ro: ResizeObserver | null = null;
+		let raf = 0;
 		ready = false;
 		(async () => {
-			const L = await import("leaflet");
+			const ml = await import("maplibre-gl");
+			// MapLibre 6 mencari worker lewat nama berkas dinamis — bundler tak
+			// bisa mengikutkannya, jadi di build produksi peta gagal ("Worker
+			// failed to load"). Worker diimpor eksplisit lewat ?worker&url (Vite
+			// membundel beserta dependensinya), berlaku di dev & produksi.
+			ml.setWorkerUrl(mlWorkerUrl);
+			// Ubin siang-malam (lampu kota di sisi gelap globe) — lihat $lib/nightTiles.
+			try {
+				ml.addProtocol("night", nightTile);
+			} catch {
+				// Sudah terdaftar (remount): abaikan.
+			}
 			const el = mapEl;
 			if (disposed || !el) return;
-			const mm = L.map(el, {
-				zoomControl: false,
-				attributionControl: true,
-				scrollWheelZoom: false,
-				doubleClickZoom: true,
-				dragging: true,
-				inertia: true,
-				inertiaDeceleration: 2400,
-				touchZoom: true,
-				keyboard: true,
-				// Cukup rendah supaya HP tegak tetap bisa memuat Sabang → Merauke utuh.
-				minZoom: 3,
-				maxZoom: 16,
-				zoomSnap: 0,
-				zoomDelta: 0.25,
-				maxBounds: L.latLngBounds([-34, 66], [32, 174]),
-				maxBoundsViscosity: 0.35,
-				worldCopyJump: false,
+			const coarse = window.matchMedia("(pointer: coarse)").matches;
+			touchDevice = coarse;
+			panOn = !coarse;
+
+			const mm = new ml.Map({
+				container: el,
+				style: {
+					version: 8,
+					projection: { type: "globe" },
+					sources: {
+						esri: {
+							type: "raster",
+							tiles: [
+								"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+							],
+							// 256 = ukuran asli ubin Esri. Pernah dicoba 128 (minta satu
+							// level lebih tinggi supaya lebih tajam), tapi ubin jadi ±4×
+							// lebih banyak: sebagian telat/gagal dimuat dan MapLibre
+							// menambalnya dengan ubin level di bawahnya — warnanya beda,
+							// jadi peta BELANG berupa pita tegak, dan tudung kutub tak lagi
+							// cocok dengan sekitarnya.
+							tileSize: 256,
+							maxzoom: 16,
+							attribution: "",
+						},
+						// Siang-malam: citra Esri + lampu kota NASA (lihat $lib/nightTiles).
+						night: {
+							type: "raster",
+							tiles: [NIGHT_TILE_URL],
+							tileSize: 256,
+							maxzoom: 16,
+							attribution: "",
+						},
+					},
+					layers: [
+						{
+							id: "esri",
+							type: "raster",
+							source: "esri",
+							// Transisi antar-level lebih cepat: ubin tajam cepat menggantikan
+							// ubin kasar yang sementara ditampilkan.
+							paint: {
+								"raster-fade-duration": 150,
+								// Di kamera globe (zoom rendah) citra dekat kutub diregang
+								// Mercator dan tampak rata; kontras + saturasi menonjolkan
+								// tekstur yang ada. Memudar ke 0 sebelum bingkai Nusantara
+								// (zoom ±4.4), jadi warna peta mendarat tak berubah.
+								"raster-contrast": ["interpolate", ["linear"], ["zoom"], 2, 0.28, 3.6, 0.2, 4.2, 0],
+								"raster-saturation": ["interpolate", ["linear"], ["zoom"], 2, 0.15, 3.6, 0.1, 4.2, 0],
+							},
+						},
+						{
+							id: "night",
+							type: "raster",
+							source: "night",
+							// Hanya globe hero: memudar ke citra siang saat kamera mendekat
+							// dan hilang sepenuhnya (tak lagi dimuat) sebelum bingkai
+							// Nusantara, jadi peta mendarat tetap siang seperti semula.
+							maxzoom: 4.4,
+							paint: {
+								"raster-fade-duration": 150,
+								"raster-opacity": ["interpolate", ["linear"], ["zoom"], 3.7, 1, 4.3, 0],
+								"raster-contrast": ["interpolate", ["linear"], ["zoom"], 2, 0.2, 3.6, 0.12, 4.2, 0],
+								"raster-saturation": ["interpolate", ["linear"], ["zoom"], 2, 0.15, 3.6, 0.1, 4.2, 0],
+							},
+						},
+					],
+					// Halo atmosfer di tepi bumi saat jauh; hilang begitu mendekat.
+					sky: {
+						"atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 4, 0.9, 6, 0],
+					},
+				},
+				center: [HERO_LNG, HERO_LAT_FROM],
+				zoom: 3,
+			// Kontrol atribusi bawaan disembunyikan.
+			attributionControl: false,
+				renderWorldCopies: false,
+				maxZoom: 15,
+				// Interaksi dinyalakan per fase (lihat setInteractiveRef).
+				// cooperativeGestures: scroll halaman tidak terbajak — zoom
+				// roda-tetikus butuh Ctrl (overlay bawaan yang mengajari),
+				// cubit dua jari di sentuh tetap langsung bisa.
+				cooperativeGestures: true,
+				scrollZoom: false,
+				boxZoom: false,
+				dragRotate: false,
+				pitchWithRotate: false,
+				keyboard: false,
+				doubleClickZoom: false,
+				dragPan: false,
+				touchZoomRotate: false,
+				touchPitch: false,
 			});
 			m = mm;
-			mm.fitBounds(NUSANTARA, overviewFit(el));
+			phase = bare ? "hero" : "landed";
+			// Kutub bercitra asli (lihat $lib/polarCaps): menutup celah di atas
+			// ±85° tempat citra dunia berhenti, jadi bumi bisa dijelajahi utuh.
+			mm.on("load", () => {
+				try {
+					mm.addLayer(polarCapsLayer());
+				} catch (e) {
+					if (import.meta.env.DEV) console.warn("[polar-caps]", e);
+				}
+			});
 
-			L.tileLayer(
-				"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-				{
-					attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-					maxZoom: 16,
-					keepBuffer: 4,
-				},
-			).addTo(mm);
+			const overviewCamera = () => {
+				// cameraForBounds ikut menghitung padding kamera yang AKTIF. Di
+				// kamera hero padding atasnya lebih besar dari layar (pusat bumi di
+				// bawah layar), jadi sisa ruangnya negatif dan hitungannya gagal.
+				// Nol-kan sebentar, hitung, kembalikan — sinkron, tak ada frame
+				// yang tergambar di antaranya.
+				const prevPad = mm.getPadding();
+				const padded = prevPad.top || prevPad.bottom || prevPad.left || prevPad.right;
+				if (padded) mm.setPadding(NO_PAD);
+				const cam = mm.cameraForBounds(
+					[
+						[NUSANTARA[0][1], NUSANTARA[0][0]],
+						[NUSANTARA[1][1], NUSANTARA[1][0]],
+					],
+					{ padding: overviewFit(el) },
+				);
+				if (padded) mm.setPadding(prevPad);
+				return {
+					center: cam?.center ?? ([118, -2.4] as [number, number]),
+					zoom: cam?.zoom ?? 4,
+					bearing: 0,
+					pitch: 0,
+					padding: NO_PAD,
+				};
+			};
 
-			preloads = preloadTiles([[-11, 90], [8, 144]], Math.max(3, Math.floor(mm.getZoom())));
+			if (bare && !pendingLanded) mm.jumpTo(heroCamera(el, heroLat, heroLift));
+			else {
+				mm.jumpTo(overviewCamera());
+				phase = "landed";
+			}
+
+			setInteractiveRef = (on: boolean) => {
+				// Desktop: mengikuti tombol geser (panOn). Layar sentuh: cubit dan
+				// geser DUA jari menyala begitu mendarat, tanpa menekan tombol —
+				// cooperativeGestures menjaga satu jari tetap menggulir halaman,
+				// jadi pengguna tak terjebak di section ini.
+				const pan = on && (panOn || touchDevice);
+				if (pan) {
+					// Mode geser peta: semua gestur zoom yang mulus menyala —
+					// cubit dua jari, Ctrl+roda (tak membajak scroll), seret.
+					// Di luar mode ini peta terkunci penuh: scroll apapun
+					// milik halaman, bukan peta.
+					mm.dragPan.enable();
+					mm.touchZoomRotate.enable();
+					mm.touchZoomRotate.disableRotation();
+					mm.scrollZoom.enable();
+				} else {
+					mm.dragPan.disable();
+					mm.touchZoomRotate.disable();
+					mm.scrollZoom.disable();
+				}
+				if (on) {
+					mm.doubleClickZoom.enable();
+					mm.keyboard.enable();
+				} else {
+					mm.doubleClickZoom.disable();
+					mm.keyboard.disable();
+				}
+			};
+			setInteractiveRef(phase === "landed");
+
+			// Safari (Mac) mengirim cubit trackpad sebagai event `gesture*` khusus
+			// WebKit, bukan roda+Ctrl seperti Chrome/Edge/Firefox — MapLibre tak
+			// menanganinya, jadi cubit memperbesar HALAMAN, bukan peta. Terjemahkan
+			// di sini: skala cubit → zoom peta di sekitar kursor. Hanya di perangkat
+			// penunjuk halus (touch memakai penangan sentuh MapLibre) dan hanya saat
+			// peta sudah mendarat dan geser menyala.
+			const gestureOn = () => phase === "landed" && panOn && !touchDevice;
+			let gestureZoom0 = 0;
+			const onGestureStart = (e: Event) => {
+				if (!gestureOn()) return;
+				e.preventDefault();
+				gestureZoom0 = mm.getZoom();
+			};
+			const onGestureChange = (e: Event) => {
+				if (!gestureOn()) return;
+				e.preventDefault();
+				const g = e as Event & { scale: number; clientX: number; clientY: number };
+				if (!(g.scale > 0)) return;
+				const r = el.getBoundingClientRect();
+				const z = Math.min(15, Math.max(1, gestureZoom0 + Math.log2(g.scale)));
+				mm.easeTo({ zoom: z, duration: 0, around: mm.unproject([g.clientX - r.left, g.clientY - r.top]) });
+			};
+			const onGestureEnd = (e: Event) => {
+				if (gestureOn()) e.preventDefault();
+			};
+			if ("GestureEvent" in window) {
+				el.addEventListener("gesturestart", onGestureStart, { passive: false });
+				el.addEventListener("gesturechange", onGestureChange, { passive: false });
+				el.addEventListener("gestureend", onGestureEnd, { passive: false });
+				gestureCleanup = () => {
+					el.removeEventListener("gesturestart", onGestureStart);
+					el.removeEventListener("gesturechange", onGestureChange);
+					el.removeEventListener("gestureend", onGestureEnd);
+				};
+			}
+
+			// ── Kamera hero: gelinding bawah → atas yang melambat ────────────
+			let last = performance.now();
+			const roll = (now: number) => {
+				raf = requestAnimationFrame(roll);
+				const dt = Math.min(0.1, (now - last) / 1000);
+				last = now;
+				if (phase !== "hero" || document.hidden) return;
+				if (rollOn && !reduced) {
+					rollT += dt;
+					heroLat = HERO_LAT_TO + (HERO_LAT_FROM - HERO_LAT_TO) * Math.exp(-rollT / HERO_ROLL_TAU);
+				}
+				// Bumi mengejar kursor dengan kelembaman — terasa berat, bukan
+				// menempel.
+				const k = 1 - Math.exp(-dt / PTR_TAU);
+				ptrX += (ptrAimX - ptrX) * k;
+				ptrY += (ptrAimY - ptrY) * k;
+				mm.jumpTo(heroCamera(el, heroLat, heroLift));
+			};
+			if (bare) raf = requestAnimationFrame(roll);
+
+			diveRef = (ms: number) => {
+				phase = "diving";
+				mm.stop();
+				setInteractiveRef?.(false);
+				// Padding hero (pusat bumi di bawah layar) mengecil ke nol sambil
+				// zoom naik: bumi TERBIT ke tengah layar dan membesar sampai
+				// Nusantara mengisi bingkai — satu gerak kamera, satu kanvas.
+				const cam = overviewCamera();
+				if (ms <= 0) {
+					mm.jumpTo(cam);
+					phase = "landed";
+					return;
+				}
+				// Membuka = KEBALIKAN WAKTU persis dari menutup (riseRef). easeTo
+				// globe MapLibre mempercepat pusat kamera dengan faktor
+				// k·base^(1−k): saat zoom MASUK base = 2, jadi pusat (putaran)
+				// habis di awal dan sisanya terasa "langsung zoom"; saat zoom
+				// KELUAR base = 0.5, kamera menjauh dulu lalu bumi berputar utuh —
+				// yang terasa bagus. Maka gerak menutup direplikasi (rumus
+				// handleEaseTo globe) dan diputar mundur.
+				const hero = heroCamera(el, heroLat, heroLift);
+				const O = ml.LngLat.convert(cam.center);
+				const H = { lng: hero.center[0], lat: hero.center[1] };
+				const toEq = (lat: number) => Math.log2(1 / Math.cos((lat * Math.PI) / 180));
+				const zO = cam.zoom - toEq(O.lat); // zoom setara-khatulistiwa
+				const zH = hero.zoom - toEq(H.lat);
+				const dLng = ((H.lng - O.lng + 540) % 360) - 180;
+				const dLat = H.lat - O.lat;
+				const padH = hero.padding.top;
+				const t0 = performance.now();
+				const seq = ++diveSeq;
+				const step = (now: number) => {
+					if (seq !== diveSeq || phase !== "diving") return;
+					const u = Math.min(1, (now - t0) / ms);
+					// Waktu menutup yang setara (t = 1 − u), tapi kurvanya bukan
+					// ease3 simetris: menutup berakhir dengan putaran panjang yang
+					// MELAMBAT; dibalik, ease3 membuat putaran mulai pelan lalu
+					// ngebut — terasa "langsung zoom". Di sini awal geraknya rata
+					// (putaran langsung jalan), akhirnya tetap mengendap.
+					// Bumi TERUS berputar sepanjang durasi (sinus, rata) sementara
+					// kamera pelan-pelan mendekat (smoothstep) — "muter, lama-lama
+					// mendekat ke Indonesia". Dulu putaran menumpuk di awal
+					// (faktor base^(1−k) dari rumus easeTo) lalu sisanya tinggal
+					// zoom.
+					const r = (1 - Math.cos(Math.PI * u)) / 2; // 0 → 1
+					const zp = u * u * (3 - 2 * u); // 0 → 1
+					const k = 1 - r; // sisa jarak ke hero (1 = di hero)
+					const lat = O.lat + dLat * k;
+					mm.jumpTo({
+						center: [O.lng + dLng * k, lat],
+						zoom: zO + (zH - zO) * (1 - zp) + toEq(lat),
+						bearing: 0,
+						pitch: 0,
+						padding: { top: padH * k, bottom: 0, left: 0, right: 0 },
+					});
+					if (u < 1) requestAnimationFrame(step);
+					else {
+						mm.jumpTo(cam);
+						phase = "landed";
+					}
+				};
+				requestAnimationFrame(step);
+			};
+			riseRef = (ms: number) => {
+				phase = "rising";
+				diveSeq++;
+				mm.stop();
+				setInteractiveRef?.(false);
+				dragged = false;
+				const cam = heroCamera(el, heroLat, heroLift);
+				if (ms <= 0) {
+					mm.jumpTo(cam);
+					phase = "hero";
+					return;
+				}
+				mm.easeTo({ ...cam, duration: ms, easing: ease3, essential: true });
+				mm.once("moveend", () => {
+					if (phase === "rising") phase = "hero";
+				});
+			};
+
+			// Level ubin bingkai Nusantara: zoom kamera ±4.4 + 1 (tileSize 256).
+			preloads = preloadTiles([[-11, 90], [8, 144]], 5);
 
 			const plateUrls = await Promise.all(hotspots.map(resolvePlateUrl));
 			if (disposed) return;
 
 			const plate = plateSize();
-			const plateIcon = (url: string, glyph: string, label: string, extraClass = "") =>
-				L.divIcon({
-					className: "im-mk-wrap",
-					html: `<span class="im-mk im-mk-plate ${extraClass}">
+			const plateEl = (url: string, glyph: string, label: string, title: string, extraClass = "") => {
+				const d = document.createElement("div");
+				d.className = "im-mk-wrap";
+				d.style.width = `${plate.w}px`;
+				d.style.height = `${plate.h}px`;
+				d.title = title;
+				d.innerHTML = `<span class="im-mk im-mk-plate ${extraClass}">
 						<span class="im-mk-plate-inner">
-							<span class="im-mk-plate-img ${url ? "" : "is-empty"}" style="${url ? `background-image:url('${url}')` : ""}"></span>
+							<span class="im-mk-plate-img ${url ? "" : "is-empty"}">${url ? `<img src="${url}" alt="" decoding="async" draggable="false" />` : ""}</span>
 							<span class="im-mk-plate-glyph">${glyph}</span>
 							${PLATE_BRACKETS}
 						</span>
 						${label}
-					</span>`,
-					iconSize: [plate.w, plate.h],
-					iconAnchor: [plate.w / 2, plate.h / 2],
-				});
+					</span>`;
+				return d;
+			};
 
 			hotspots.forEach((h, i) => {
 				const count = h.photos.length;
@@ -477,24 +950,26 @@
 				const glyph = count >= 4 ? GLYPH_STACK : count >= 2 ? GLYPH_PANO : GLYPH_POINT;
 				const num = String(i + 1).padStart(2, "0");
 				const label = `<span class="im-mk-label"><span class="im-mk-name">${escapeHtml(splitPlace(h.name).place)}</span><span class="im-mk-num">${num}</span></span>`;
-				const mk = L.marker([h.lat, h.lng], {
-					icon: plateIcon(plateUrls[i], glyph, label),
-					title: h.name,
-					riseOnHover: true,
-					keyboard: false,
-				}).addTo(mm);
-				mk.on("click", () => openViewer(i));
-				markers[i] = mk;
+				const node = plateEl(plateUrls[i], glyph, label, h.name);
+				node.addEventListener("click", (e) => {
+					e.stopPropagation();
+					openViewer(i);
+				});
+				// opacityWhenCovered 0: bawaan MapLibre meredupkan (0.2), bukan
+				// menyembunyikan, marker di sisi belakang globe — frame foto tampak
+				// "terbawa" samar di tengah laut saat globe diputar.
+				markers[i] = new ml.Marker({ element: node, anchor: "center", opacityWhenCovered: "0" }).setLngLat([h.lng, h.lat]).addTo(mm);
+				markerOn[i] = true;
 			});
 
 			// Titik yang bertumpuk di layar (mis. sepuluh kota Jawa Barat pada zoom
 			// ringkasan) digabung jadi satu plate bertanda jumlah. Klik → kamera
-			// mendekat ke anggotanya sampai mereka terurai sendiri.
+			// mendekat ke anggotanya sampai mereka terurai sendiri. Hanya dihitung
+			// setelah mendarat — di kamera globe semua titik bertumpuk jadi satu.
 			let lastSig = "";
 			const recluster = () => {
-				if (disposed) return;
-				const z = mm.getZoom();
-				const pts = hotspots.map((h) => mm.project([h.lat, h.lng], z));
+				if (disposed || phase !== "landed") return;
+				const pts = hotspots.map((h) => mm.project([h.lng, h.lat]));
 				const bw = plate.w + 28;
 				const bh = plate.h + 18;
 				const centre = (g: number[]) => ({
@@ -529,40 +1004,62 @@
 				clusterMarkers = [];
 				for (const g of groups) {
 					if (g.length === 1) {
-						if (!mm.hasLayer(markers[g[0]])) markers[g[0]].addTo(mm);
+						if (!markerOn[g[0]]) {
+							markers[g[0]].addTo(mm);
+							markerOn[g[0]] = true;
+						}
 						continue;
 					}
-					g.forEach((k) => markers[k].remove());
+					g.forEach((k) => {
+						markers[k].remove();
+						markerOn[k] = false;
+					});
 					const c = centre(g);
 					const lead = g.find((k) => plateUrls[k]) ?? g[0];
 					const frames = g.reduce((sum, k) => sum + hotspots[k].photos.length, 0);
 					const regions = new Set(g.map((k) => splitPlace(hotspots[k].name).region).filter(Boolean));
 					const name = regions.size === 1 ? [...regions][0] : `${g.length} ${t.points}`;
 					const label = `<span class="im-mk-label"><span class="im-mk-name">${escapeHtml(name)}</span><span class="im-mk-num">${frames} ${escapeHtml(t.frames)}</span></span>`;
-					const cm = L.marker(mm.unproject(L.point(c.x, c.y), z), {
-						icon: plateIcon(plateUrls[lead], `<span class="im-mk-count">${g.length}</span>`, label, "im-mk-cluster"),
-						title: g.map((k) => splitPlace(hotspots[k].name).place).join(", "),
-						riseOnHover: true,
-						keyboard: false,
-					}).addTo(mm);
-					cm.on("click", () => {
-						const bounds = L.latLngBounds(g.map((k) => [hotspots[k].lat, hotspots[k].lng] as [number, number]));
+					const node = plateEl(
+						plateUrls[lead],
+						`<span class="im-mk-count">${g.length}</span>`,
+						label,
+						g.map((k) => splitPlace(hotspots[k].name).place).join(", "),
+						"im-mk-cluster",
+					);
+					node.addEventListener("click", (e) => {
+						e.stopPropagation();
+						const lats = g.map((k) => hotspots[k].lat);
+						const lngs = g.map((k) => hotspots[k].lng);
+						const same = Math.min(...lats) === Math.max(...lats) && Math.min(...lngs) === Math.max(...lngs);
 						// Anggota berkoordinat sama tidak akan pernah terurai oleh zoom —
 						// langsung buka titik pertamanya.
-						if (bounds.getNorthEast().equals(bounds.getSouthWest())) openViewer(g[0]);
+						if (same) openViewer(g[0]);
 						else {
 							// Area aman sama dengan kamera ringkasan (blok judul di kiri-atas,
 							// petunjuk di bawah) + ruang untuk plate dan labelnya.
 							const fit = overviewFit(el);
-							mm.flyToBounds(bounds, {
-								paddingTopLeft: [fit.paddingTopLeft[0] + plate.w, fit.paddingTopLeft[1] + plate.h],
-								paddingBottomRight: [fit.paddingBottomRight[0] + plate.w * 2.5, fit.paddingBottomRight[1] + plate.h],
-								maxZoom: 11,
-								duration: FLY_DUR,
-							});
+							mm.fitBounds(
+								[
+									[Math.min(...lngs), Math.min(...lats)],
+									[Math.max(...lngs), Math.max(...lats)],
+								],
+								{
+									padding: {
+										top: fit.top + plate.h,
+										left: fit.left + plate.w,
+										bottom: fit.bottom + plate.h,
+										right: fit.right + plate.w * 2.5,
+									},
+									maxZoom: CLUSTER_MAX_Z,
+									duration: FLY_DUR * 1000,
+								},
+							);
 						}
 					});
-					clusterMarkers.push(cm);
+					clusterMarkers.push(
+						new ml.Marker({ element: node, anchor: "center", opacityWhenCovered: "0" }).setLngLat(mm.unproject([c.x, c.y])).addTo(mm),
+					);
 				}
 				applyFocusClasses();
 			};
@@ -591,57 +1088,121 @@
 					focus = best;
 				}
 			};
-			mm.on("move", syncFocus);
-			mm.on("zoom", syncFocus);
+			mm.on("move", () => {
+				if (phase === "landed") syncFocus();
+			});
 			mm.on("dragstart", () => (dragged = true));
-			syncFocus();
+			// Kotak foto memudar selama kamera bergerak (drag/fly/zoom),
+			// muncul lagi saat berhenti — seperti marker di referensi.
+			mm.on("movestart", () => {
+				if (phase === "landed") el.classList.add("is-moving");
+			});
+			mm.on("moveend", () => {
+				el.classList.remove("is-moving");
+				if (phase === "landed") syncFocus();
+			});
 
-			// Rotasi HP / jendela diubah ukurannya: selama pengunjung belum menggeser
-			// sendiri, kamera ikut dipaskan ulang ke bingkai Nusantara.
+			// Rotasi HP / jendela diubah ukurannya: kamera ikut dipaskan ulang —
+			// hero ke posisi bumi, peta ke bingkai Nusantara (selama pengunjung
+			// belum menggeser sendiri).
 			let lastW = el.clientWidth;
 			let lastH = el.clientHeight;
 			ro = new ResizeObserver(() => {
 				if (disposed || (el.clientWidth === lastW && el.clientHeight === lastH)) return;
 				lastW = el.clientWidth;
 				lastH = el.clientHeight;
-				mm.invalidateSize();
-				if (!dragged) mm.fitBounds(NUSANTARA, overviewFit(el));
+				mm.resize();
+				if (phase === "hero") mm.jumpTo(heroCamera(el, heroLat, heroLift));
+				else if (phase === "landed" && !dragged) mm.jumpTo(overviewCamera());
 			});
 			ro.observe(el);
 
+			resetRef = () => mm.easeTo({ ...overviewCamera(), duration: 1100, easing: ease3 });
+			// Pendaratan selesai (dipanggil induk): hitung penggabungan titik
+			// di bingkai akhir.
+			landedRef = () => {
+				phase = "landed";
+				syncFocus();
+				reclusterRef?.();
+			};
+
 			map = mm;
 			ready = true;
-			setTimeout(() => {
-				mm?.invalidateSize();
-				syncFocus();
-			}, 60);
+			if (import.meta.env.DEV) {
+				(window as unknown as { __im?: unknown }).__im = {
+					map: mm,
+					state: () => ({ phase, zoom: mm.getZoom(), center: mm.getCenter() }),
+					dive: (ms: number) => diveRef?.(ms),
+				};
+			}
 		})();
 
 		return () => {
 			disposed = true;
+			cancelAnimationFrame(raf);
 			ro?.disconnect();
 			reclusterRef = null;
+			diveRef = null;
+			riseRef = null;
+			setInteractiveRef = null;
+			resetRef = null;
+			landedRef = null;
+			gestureCleanup?.();
+			gestureCleanup = null;
 			if (m) m.remove();
 			map = null;
 			markers = [];
+			markerOn = [];
 			clusterMarkers = [];
 			preloads = [];
 		};
 	});
 
-	$effect(() => {
-		const onFs = () => {
-			const el = document as Document & { webkitFullscreenElement?: Element | null };
-			isFs = !!(document.fullscreenElement || el.webkitFullscreenElement);
-			setTimeout(() => map?.invalidateSize(), 80);
-		};
-		document.addEventListener("fullscreenchange", onFs);
-		document.addEventListener("webkitfullscreenchange", onFs);
-		return () => {
-			document.removeEventListener("fullscreenchange", onFs);
-			document.removeEventListener("webkitfullscreenchange", onFs);
-		};
-	});
+	// ── API untuk induk (MapDescent) ─────────────────────────────────────────
+	let diveRef: ((ms: number) => void) | null = null;
+	// Penanda urutan animasi menukik: gerak baru membatalkan yang lama.
+	let diveSeq = 0;
+	let riseRef: ((ms: number) => void) | null = null;
+	let setInteractiveRef: ((on: boolean) => void) | null = null;
+	let resetRef: (() => void) | null = null;
+	let landedRef: (() => void) | null = null;
+	let gestureCleanup: (() => void) | null = null;
+
+	// Panggilan yang datang sebelum peta selesai dibuat (mis. reduced-motion
+	// langsung mendarat) disimpan dan diterapkan begitu peta siap.
+	let pendingLanded = false;
+
+	/** Menukik dari kamera globe ke bingkai Nusantara dalam `ms` milidetik. */
+	export function dive(ms: number) {
+		if (diveRef) diveRef(ms);
+		else pendingLanded = true;
+	}
+	/** Kembali ke kamera globe hero dalam `ms` milidetik. */
+	export function rise(ms: number) {
+		riseRef?.(ms);
+	}
+	/** Pendaratan selesai: peta interaktif, titik digabung di bingkai akhir. */
+	export function landed() {
+		if (!landedRef) {
+			pendingLanded = true;
+			return;
+		}
+		landedRef();
+		setInteractiveRef?.(true);
+	}
+	/** Jeda/lanjutkan gelinding bumi di kamera hero. */
+	export function setSpin(on: boolean) {
+		rollOn = on;
+	}
+	/** Posisi kursor di hero, ternormalisasi −0.5..0.5 (0 = tengah layar). */
+	export function setPointer(nx: number, ny: number) {
+		ptrAimX = reduced ? 0 : nx;
+		ptrAimY = reduced ? 0 : ny;
+	}
+	/** Turunkan bumi hero (px, positif = lebih rendah) untuk animasi masuk. */
+	export function setHeroLift(px: number) {
+		heroLift = px;
+	}
 
 	$effect(() => {
 		const el = sectionEl;
@@ -690,6 +1251,17 @@
 		const ctx = sectionEl;
 		if (!ctx) return;
 		const q = (sel: string) => ctx.querySelectorAll(sel);
+		if (bare) {
+			// Koreografi milik induk (MapDescent): semua elemen HUD langsung
+			// dalam keadaan akhir, tanpa tween scrub yang berebut stage.
+			const stage = stageEl;
+			if (stage) gsap.set(stage, { scale: 1, filter: "blur(0px)", opacity: 1 });
+			gsap.set(q(".im-cluster,.im-slate,.im-hint,.im-coord"), {
+				opacity: 1,
+				y: 0,
+			});
+			return;
+		}
 		if (reduced) {
 			q(".im-reveal").forEach((el) => gsap.set(el, { opacity: 1, y: 0 }));
 			return;
@@ -729,7 +1301,6 @@
 				{ scale: 1, filter: "blur(0px)", duration: 100, ease: "power3.out" },
 				0,
 			);
-		tl.fromTo(q(".im-bracket"), { opacity: 0 }, { opacity: 1, duration: 40, ease: "power2.out" }, 30);
 		tl.fromTo(q(".im-cluster"), { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 35 }, 41);
 		tl.fromTo(q(".im-slate"), { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 35 }, 44);
 		tl.fromTo(q(".im-hint"), { opacity: 0 }, { opacity: 1, duration: 35 }, 47);
@@ -756,6 +1327,34 @@
 		if (!ctx || !ready) return;
 		const mks = gsap.utils.toArray<HTMLElement>(".im-mk", ctx);
 		if (!mks.length) return;
+		if (bare) {
+			// Mode tanam: marker muncul satu-satu saat kamera mendarat, lalu
+			// labelnya MENGETIK dengan huruf acak di ujung (seperti referensi
+			// "21hrs on the Moon"). Anti-race: status dibaca dari flag
+			// (pendaratan bisa terjadi sebelum peta siap), bukan cuma
+			// mengandalkan event sesaat.
+			gsap.set(mks, { opacity: 0, scale: 0.85 });
+			let shown = false;
+			const maybeShow = () => {
+				const landedNow = document.documentElement.dataset.maplanded === "1";
+				if (landedNow && !shown) {
+					shown = true;
+					// Marker yang ADA sekarang (termasuk plate gabungan hasil
+					// penggabungan di bingkai akhir), urut barat → timur: terbaca
+					// seperti pindaian dari Sabang ke Merauke.
+					const live = gsap.utils
+						.toArray<HTMLElement>(".im-mk", ctx)
+						.filter((el) => el.isConnected)
+						.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+					live.forEach((mk, i) => revealMarker(mk, i * 0.14));
+				} else if (!landedNow) {
+					shown = false;
+				}
+			};
+			maybeShow();
+			window.addEventListener("lakuna:map-shown", maybeShow);
+			return () => window.removeEventListener("lakuna:map-shown", maybeShow);
+		}
 		if (reduced) {
 			gsap.set(mks, { opacity: 1, scale: 1 });
 			return;
@@ -781,23 +1380,154 @@
 		};
 	});
 
+	// Induk (MapDescent) memberi tahu saat lapisan peta selesai dinampakkan —
+	// Leaflet menghitung ulang ukuran agar ubinnya pas bingkai.
+	$effect(() => {
+		const inv = () => map?.resize();
+		window.addEventListener("lakuna:map-shown", inv);
+		return () => window.removeEventListener("lakuna:map-shown", inv);
+	});
+
+	function togglePan() {
+		if (!map) return;
+		panOn = !panOn;
+		setInteractiveRef?.(phase === "landed");
+	}
+
+	/** Geser zoom satu tingkat, dijepit ke batas peta (1–15). */
+	function zoomStep(d: number) {
+		const m = map;
+		if (!m) return;
+		m.zoomTo(Math.min(15, Math.max(1, Math.round(m.getZoom() + d))), { duration: 350 });
+	}
+
 	function flyTo(i: number, zoom = FOCUS_Z) {
 		const h = hotspots[i];
 		if (!h) return;
-		map?.flyTo([h.lat, h.lng], zoom, { duration: FLY_DUR });
+		map?.flyTo({ center: [h.lng, h.lat], zoom, duration: FLY_DUR * 1000, essential: true });
 	}
+	// ── Transisi "terbakar" ────────────────────────────────────────────
+	// Dari rekaman rujukan: dalam ±0,25 dtk gambar lama OVEREXPOSE — terang
+	// meledak putih, gelap jadi hitam pekat, semuanya ter-smear horizontal
+	// (seperti film yang terbakar di proyektor) — lalu CUT ke gambar baru
+	// yang pulih dari keadaan terbakar ke normal. Dipakai dua arah:
+	// peta → foto (buka) dan foto → peta (tutup).
+	let smearEl = $state<SVGFEGaussianBlurElement>();
+	let splitREl = $state<SVGFEOffsetElement>();
+	let splitBEl = $state<SVGFEOffsetElement>();
+	let linesEl = $state<HTMLDivElement>();
+	/**
+	 * Tulis keadaan terbakar ke elemen. k 0 = normal, 1 = puncak.
+	 * t = waktu berjalan (dtk) — dipakai untuk kedip negatif yang selang-
+	 * seling seperti frame film yang meloncat.
+	 */
+	function paintBurn(el: HTMLElement | null | undefined, k: number, t = 0) {
+		if (!el) return;
+		if (k <= 0.001) {
+			el.style.filter = "";
+			el.style.scale = "";
+			if (linesEl) linesEl.style.opacity = "0";
+			return;
+		}
+		// Versi tenang: kilasan terang lembut dengan smear tipis. Kedip
+		// negatif, hentakan zoom & garis scan dilepas (terlalu heboh).
+		const e = k * k;
+		smearEl?.setAttribute("stdDeviation", `${(e * 7).toFixed(2)} ${(e * 0.6).toFixed(2)}`);
+		splitREl?.setAttribute("dx", (e * 2.5).toFixed(2));
+		splitBEl?.setAttribute("dx", (-e * 2.5).toFixed(2));
+		el.style.filter =
+			`url(#im-burn-smear) grayscale(${(k * 0.55).toFixed(3)}) ` +
+			`contrast(${(1 + e * 0.9).toFixed(3)}) brightness(${(1 + e * 1.1).toFixed(3)})`;
+		el.style.scale = "";
+		if (linesEl) linesEl.style.opacity = "0";
+	}
+	/**
+	 * Tween k pada elemen: from → to, dengan jam untuk kedip negatif.
+	 * hold = lama bertahan di puncak (k = 1) sebelum selesai — di sini
+	 * negatif & positif berkedip selang-seling, seperti rujukan.
+	 */
+	function burn(el: HTMLElement | null | undefined, from: number, to: number, duration: number, ease: string, hold = 0) {
+		const st = { k: from, t: 0 };
+		paintBurn(el, from, 0);
+		const tl = gsap.timeline();
+		tl.to(st, { k: to, duration, ease, onUpdate: () => paintBurn(el, st.k, st.t) }, 0);
+		tl.to(st, { t: duration + hold, duration: duration + hold, ease: "none", onUpdate: () => paintBurn(el, st.k, st.t) }, 0);
+		tl.call(() => paintBurn(el, to, st.t));
+		return tl;
+	}
+	const BURN_OUT_S = 0.4;
+	/** Tahan di puncak: kedip negatif/positif sebelum cut. */
+	const BURN_HOLD_S = 0;
+	const BURN_IN_S = 0.8;
+	/** Foto yang baru dibuka mulai dari keadaan terbakar (dibaca efek buka). */
+	let openFromBurn = false;
+	let opening = false;
+
 	function openViewer(i: number) {
+		if (opening || viewing != null) return;
 		// Membuka bingkai = menekan tombol rana. Dipasang di sini, bukan di
 		// handler marker, supaya jalur lain menuju bukaan yang sama juga berbunyi.
 		playShutter();
-		viewing = i;
-		frame = 0;
-		viewingRef = i;
-		frameRef = 0;
+		const show = () => {
+			opening = false;
+			openFromBurn = !reduced;
+			viewing = i;
+			frame = 0;
+			viewingRef = i;
+			frameRef = 0;
+		};
+		if (reduced || !stageEl) {
+			show();
+			return;
+		}
+		opening = true;
+		// Peta terbakar dulu, lalu CUT ke foto (peta dipulihkan di balik layar).
+		burn(stageEl, 0, 1, BURN_OUT_S, "power2.in", BURN_HOLD_S).then(() => {
+			show();
+			// Pulihkan peta di balik foto — filter saja, garis scan tetap
+			// milik foto yang sedang pulih.
+			requestAnimationFrame(() => {
+				if (stageEl) {
+					stageEl.style.filter = "";
+					stageEl.style.scale = "";
+				}
+			});
+		});
 	}
+	/** Kotak berkeliling panggung foto (keterangan, tombol, petunjuk). */
+	const DV_CHROME = ".im-dv-meta, .im-dv-caption, .im-dv-hint, .im-dv-close, .im-dv-veil, .im-dv-strip-wrap";
+	// Tutup: keterangan pergi, foto terbakar (±0,25 dtk), CUT ke peta yang
+	// pulih dari terbakar ke normal.
+	let closing = false;
 	function closeViewer() {
+		const root = dvRoot;
+		if (closing) return;
+		if (!root || reduced) {
+			finishClose();
+			return;
+		}
+		closing = true;
+		const stage = root.querySelector<HTMLElement>(".im-dv-stage");
+		const chrome = root.querySelectorAll<HTMLElement>(DV_CHROME);
+		gsap.killTweensOf([stage, dvImgWrap, root].filter(Boolean));
+		gsap.to(chrome, { opacity: 0, duration: 0.18, ease: "power2.in" });
+		burn(stage, 0, 1, BURN_OUT_S, "power2.in", BURN_HOLD_S).then(() => {
+			closing = false;
+			finishClose();
+			if (stageEl) burn(stageEl, 1, 0, BURN_IN_S, "power2.out");
+		});
+	}
+	function finishClose() {
 		viewing = null;
 		viewingRef = null;
+		wrapEl?.classList.remove("is-viewing");
+		// Label marker kembali "mengetik" setelah peta muncul lagi.
+		if (!reduced) {
+			requestAnimationFrame(() => {
+				const labels = wrapEl?.querySelectorAll<HTMLElement>(".im-mk-name, .im-mk-num, .im-mk-count") ?? [];
+				labels.forEach((el, k) => scrambleIn(el, 0.05 + Math.min(k, 12) * 0.05, 0.6));
+			});
+		}
 		// Tutup selalu dari keadaan pas. Dulu zoom yang tertinggal dari sesi
 		// sebelumnya nyasar ke bukaan berikutnya — petunjuknya bilang "perkecil"
 		// padahal gambarnya belum diperbesar.
@@ -821,23 +1551,7 @@
 		flyTo(v);
 	}
 	function resetOverview() {
-		if (map && mapEl) map.flyToBounds(NUSANTARA, { ...overviewFit(mapEl), duration: 1.1 });
-	}
-	function toggleFullscreen() {
-		const el = wrapEl as
-			| (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> })
-			| null;
-		if (!el) return;
-		const doc = document as Document & {
-			webkitExitFullscreen?: () => Promise<void>;
-			webkitFullscreenElement?: Element | null;
-		};
-		const active = document.fullscreenElement || doc.webkitFullscreenElement;
-		if (!active) {
-			(el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el))?.();
-		} else {
-			(document.exitFullscreen?.bind(document) ?? doc.webkitExitFullscreen?.bind(document))?.();
-		}
+		resetRef?.();
 	}
 
 	$effect(() => {
@@ -867,6 +1581,33 @@
 		dvCloseEl?.focus();
 		return () => {
 			if (prev?.isConnected) prev.focus();
+		};
+	});
+
+	// Buka: foto muncul dalam keadaan terbakar (lanjutan dari peta yang
+	// terbakar) lalu eksposurnya pulih ke normal; keterangan menyusul.
+	$effect(() => {
+		const root = dvRoot;
+		if (!root) return;
+		wrapEl?.classList.add("is-viewing");
+		if (reduced) return;
+		const stage = root.querySelector<HTMLElement>(".im-dv-stage");
+		const img = dvImgWrap;
+		const chrome = root.querySelectorAll<HTMLElement>(DV_CHROME);
+		gsap.set(root, { backgroundColor: "#07090a" });
+		gsap.set(chrome, { opacity: 0 });
+		const fromBurn = openFromBurn;
+		openFromBurn = false;
+		const recover = fromBurn ? burn(stage, 1, 0, BURN_IN_S, "power2.out") : null;
+		const tl = gsap.timeline();
+		tl.fromTo(img ?? [], { scale: 1.14 }, { scale: 1.08, duration: 1.2, ease: "expo.out" }, 0).to(
+			chrome,
+			{ opacity: 1, duration: 0.45, ease: "power1.out", stagger: 0.04 },
+			0.35,
+		);
+		return () => {
+			tl.kill();
+			recover?.kill();
 		};
 	});
 
@@ -923,25 +1664,61 @@
 		points: hotspots.length,
 		frames: hotspots.reduce((sum, h) => sum + h.photos.length, 0),
 	});
-	const focused = $derived(hotspots[focus] ?? null);
 	const hot = $derived(viewing != null ? hotspots[viewing] : null);
 	const shot = $derived(hot ? hot.photos[Math.min(frame, hot.photos.length - 1)] : null);
-	const globalFrame = $derived(
-		viewing != null && hot ? shotOffset[viewing] + Math.min(frame, hot.photos.length - 1) : 0,
-	);
+	// Viewer layar penuh memakai file ASLI (tanpa watermark), diminta per foto
+	// saat dibuka; selagi menunggu / bila gagal, pratinjau ber-watermark.
+	// "" = sudah dicoba tapi tak tersedia.
+	let originals = $state<Record<string, string>>({});
+	$effect(() => {
+		const id = viewing != null ? shot?.id : undefined;
+		if (!id || id in originals) return;
+		void fetchPhotoOriginal(id).then((url) => {
+			originals[id] = url ?? "";
+		});
+	});
+	// Tunggu jawaban file asli dulu (jangan kedipkan versi watermark di
+	// antaranya); baru jatuh ke pratinjau bila memang tak tersedia.
+	const shotHd = $derived.by(() => {
+		if (!shot) return undefined;
+		if (!shot.id) return shot.hdUrl;
+		const o = originals[shot.id];
+		return o === undefined ? undefined : o || shot.hdUrl;
+	});
 </script>
 
-<section bind:this={sectionEl} class="on-darkroom relative">
+<!-- Smear horizontal untuk transisi "terbakar" (lihat paintBurn). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+	<filter id="im-burn-smear" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
+		<!-- Smear horizontal, lalu kanal merah & biru digeser berlawanan
+			(pecahan warna di tepi objek, seperti film yang meloncat). -->
+		<feGaussianBlur bind:this={smearEl} in="SourceGraphic" stdDeviation="0 0" result="blur" />
+		<feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r" />
+		<feOffset bind:this={splitREl} in="r" dx="0" dy="0" result="ro" />
+		<feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g" />
+		<feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b" />
+		<feOffset bind:this={splitBEl} in="b" dx="0" dy="0" result="bo" />
+		<feBlend in="ro" in2="g" mode="screen" result="rg" />
+		<feBlend in="rg" in2="bo" mode="screen" />
+	</filter>
+</svg>
+<!-- Garis scan vertikal di atas segalanya selama transisi terbakar. -->
+<div bind:this={linesEl} class="im-burn-lines" aria-hidden="true"></div>
+<section bind:this={sectionEl} id="peta" class="on-darkroom relative">
 	<div
 		bind:this={wrapEl}
 		class="im-wrap relative h-[100svh] min-h-[560px] w-full overflow-hidden"
 	>
 		<div bind:this={stageEl} class="im-stage">
-			<div
-				aria-hidden="true"
-				class="im-fallback"
-				style="background-image: url('{IM_FALLBACK}');"
-			></div>
+			{#if bare}
+				{@render backdrop?.()}
+			{:else}
+				<div
+					aria-hidden="true"
+					class="im-fallback"
+					style="background-image: url('{IM_FALLBACK}');"
+				></div>
+			{/if}
 			<div bind:this={mapEl} class="im-canvas"></div>
 		</div>
 
@@ -949,45 +1726,58 @@
 		<div class="im-grain" aria-hidden="true"></div>
 
 		<div class="im-hud">
-			<div class="im-bracket im-reveal" aria-hidden="true">
-				<span class="im-bracket-tl"></span>
-				<span class="im-bracket-tr"></span>
-				<span class="im-bracket-bl"></span>
-				<span class="im-bracket-br"></span>
-				<span class="im-bracket-rail-l"></span>
-				<span class="im-bracket-rail-r"></span>
-			</div>
 
 			<div class="im-cluster im-reveal">
-				<button
-					type="button"
-					onclick={resetOverview}
-					aria-label={t.overview}
-					title={t.overview}
-					class="im-round"
-				>
+				{#if touchDevice}
+					<button
+						type="button"
+						onclick={togglePan}
+						aria-pressed={panOn}
+						aria-label={panOn ? t.panOff : t.panOn}
+						title={panOn ? t.panOff : t.panOn}
+						class="im-round {panOn ? "is-on" : ""}"
+					>
+						{#if panOn}
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+							</svg>
+						{:else}
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+							</svg>
+						{/if}
+					</button>
+				{/if}
+			<button
+				type="button"
+				onclick={() => zoomStep(1)}
+				aria-label={t.zoomIn}
+				title={t.zoomIn}
+				class="im-round"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+			</button>
+			<button
+				type="button"
+				onclick={() => zoomStep(-1)}
+				aria-label={t.zoomOut}
+				title={t.zoomOut}
+				class="im-round"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14" /></svg>
+			</button>
+			<button
+				type="button"
+				onclick={resetOverview}
+				aria-label={t.overview}
+				title={t.overview}
+				class="im-round"
+			>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<path d="M3 6h18M3 12h18M3 18h18" />
+						<circle cx="12" cy="12" r="9" /><path d="M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18M3 12h18" />
 					</svg>
-				</button>
-				<button
-					type="button"
-					onclick={toggleFullscreen}
-					aria-label={isFs ? t.exit : t.fullscreen}
-					title={isFs ? t.exit : t.fullscreen}
-					class="im-round"
-				>
-					{#if isFs}
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-							<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-						</svg>
-					{:else}
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-							<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-						</svg>
-					{/if}
-				</button>
-			</div>
+			</button>
+		</div>
 
 			<div class="im-slate im-reveal">
 				<p class="im-mono im-slate-kicker"><span class="im-live-dot"></span>{t.kicker}</p>
@@ -998,15 +1788,13 @@
 				{/if}
 			</div>
 
-			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">{t.explore}</p>
-
-			<p class="im-coord im-mono im-reveal">
-				{focused ? fmtCoord(focused.lat, focused.lng) : ""}
+			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">
+				{touchDevice && !panOn ? t.panHint : t.explore}
 			</p>
 		</div>
 
 		{#if viewing != null && hot && shot}
-			<div class="im-dv" role="dialog" aria-modal="true" aria-label={hot.name}>
+			<div bind:this={dvRoot} class="im-dv" role="dialog" aria-modal="true" aria-label={hot.name}>
 				<div
 					bind:this={dvStage}
 					class="im-dv-stage {zoomed ? "is-zoomed" : ""}"
@@ -1014,6 +1802,8 @@
 					onclick={() => (zoomed = !zoomed)}
 				>
 					<div bind:this={dvImgWrap} class="im-dv-imgwrap">
+						<!-- Thumbnail tampil seketika; file HD menyusul di atasnya
+							begitu termuat (memudar masuk). -->
 						<ApiImage
 							src={imgFor(shot.seed, 2000, 1400, shot.thumbUrl)}
 							alt={shot.caption[lang]}
@@ -1021,17 +1811,23 @@
 							eager
 							class="object-cover"
 						/>
+						{#if shotHd}
+							{#key shotHd}
+								<img
+									src={shotHd}
+									alt=""
+									aria-hidden="true"
+									decoding="async"
+									class="im-dv-hd"
+									class:is-ready={hdLoaded === shotHd}
+									onload={() => (hdLoaded = shotHd ?? "")}
+								/>
+							{/key}
+						{/if}
 					</div>
 				</div>
 
 				<div class="im-dv-veil" aria-hidden="true"></div>
-
-				<div class="im-bracket" aria-hidden="true">
-					<span class="im-bracket-tl"></span>
-					<span class="im-bracket-tr"></span>
-					<span class="im-bracket-rail-l"></span>
-					<span class="im-bracket-rail-r"></span>
-				</div>
 
 				<p class="im-hint im-mono im-dv-hint">{zoomed ? t.zoomOutHint : t.zoomHint}</p>
 
@@ -1039,6 +1835,7 @@
 					type="button"
 					bind:this={dvCloseEl}
 					onclick={closeViewer}
+					data-no-hover-sound
 					class="im-round im-dv-close"
 					aria-label={t.close}
 				>
@@ -1047,10 +1844,6 @@
 					</svg>
 				</button>
 
-				<svg class="im-dv-reticle" viewBox="0 0 80 80" fill="none" aria-hidden="true">
-					<path d="M40 4v22M40 54v22M4 40h22M54 40h22" stroke="currentColor" stroke-width="1" />
-					<path d="M31 40h18" stroke="currentColor" stroke-width="1" opacity="0.5" />
-				</svg>
 
 				<div class="im-dv-meta im-mono">
 					<span class="im-dv-meta-name">{splitPlace(hot.name).place}</span>
@@ -1065,35 +1858,11 @@
 					</span>
 					<span class="im-dv-meta-sep">/</span>
 					<span>{catLabel[hot.cat][lang]}</span>
-					<span class="im-dv-meta-sep">/</span>
-					<span>{fmtCoord(hot.lat, hot.lng)}</span>
-					<span class="im-dv-meta-clock">{timecode(globalFrame)}</span>
 				</div>
 
 				<p class="im-dv-caption">{shot.caption[lang]}</p>
 
-				<div class="im-dv-strip-wrap">
-					<div class="im-dv-compass" aria-hidden="true">
-						<svg viewBox="0 0 100 100" fill="none">
-							<path d="M50 6v88M6 50h88" stroke="currentColor" stroke-width="0.75" opacity="0.45" />
-							<path d="M50 14 55 50 50 86 45 50Z" fill="currentColor" opacity="0.16" />
-							<path d="M50 14 55 50 45 50Z" fill="#ff4d12" />
-							<circle cx="50" cy="50" r="3" fill="currentColor" opacity="0.6" />
-							<path d="M22 22l8 8M78 22l-8 8M22 78l8-8M78 78l-8-8" stroke="currentColor" stroke-width="0.75" opacity="0.3" />
-						</svg>
-						<span class="im-dv-compass-n">N</span>
-						<span class="im-dv-compass-e">E</span>
-						<span class="im-dv-compass-s">S</span>
-						<span class="im-dv-compass-w">W</span>
-					</div>
-					<button
-						type="button"
-						class="im-dv-step im-dv-step-prev"
-						onclick={() => viewStep(-1)}
-						aria-label={t.prev}
-					>
-						←
-					</button>
+				<div class="im-dv-strip-wrap" data-no-hover-sound data-no-click-sound>
 					<div bind:this={dvStrip} class="im-dv-strip">
 						{#if hot}
 							<div class="im-dv-group">
@@ -1114,14 +1883,6 @@
 							</div>
 						{/if}
 					</div>
-					<button
-						type="button"
-						class="im-dv-step im-dv-step-next"
-						onclick={() => viewStep(1)}
-						aria-label={t.next}
-					>
-						→
-					</button>
 				</div>
 			</div>
 		{/if}

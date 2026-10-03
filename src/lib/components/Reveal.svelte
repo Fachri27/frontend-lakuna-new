@@ -47,6 +47,14 @@
 		 * pertama, tanpa perlu refresh. `MutationObserver` memantau anak yang ditambah
 		 * async (hasil fetch API) agar mereka ikut ter-reveal.
 		 */
+		// Diputar ULANG tiap kali masuk layar (turun maupun naik), bukan
+		// sekali seumur halaman:
+		//  • `io`   — masuk area pemicu → muncul (dari bawah bila datang dari
+		//             bawah, dari atas bila datang dari atas);
+		//  • `away` — benar-benar keluar layar → disembunyikan lagi, siap
+		//             diputar di kunjungan berikutnya. Tidak menyembunyikan
+		//             selagi masih terlihat (tanpa kedip).
+		const reduce = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		const io = new IntersectionObserver(
 			(entries) => {
 				const visible = entries
@@ -54,26 +62,49 @@
 					.map((e) => e.target as HTMLElement)
 					.filter((it) => !it.hasAttribute("data-revealed"));
 				if (!visible.length) return;
-				visible.forEach((it) => io.unobserve(it));
 				visible.forEach((it) => it.setAttribute("data-revealed", "1"));
+				if (reduce()) {
+					gsap.set(visible, { opacity: 1, y: 0 });
+					return;
+				}
 				gsap.to(visible, {
 					opacity: 1,
 					y: 0,
 					duration,
 					ease: "power3.out",
-					stagger
+					stagger,
+					overwrite: true
 				});
 			},
 			{ rootMargin: `0px 0px -${bottomMargin} 0px`, threshold: 0 }
 		);
+		const away = new IntersectionObserver(
+			(entries) => {
+				for (const e of entries) {
+					if (e.isIntersecting) continue;
+					const it = e.target as HTMLElement;
+					if (!it.hasAttribute("data-revealed")) continue;
+					it.removeAttribute("data-revealed");
+					// Keluar lewat atas → masuk lagi dari atas (turun), dan sebaliknya.
+					const above = e.boundingClientRect.bottom <= 0;
+					gsap.killTweensOf(it);
+					gsap.set(it, { opacity: 0, y: above ? -y : y });
+				}
+			},
+			{ threshold: 0 }
+		);
 		const observeAll = () => {
-			root.querySelectorAll<HTMLElement>("[data-reveal]:not([data-revealed])").forEach((it) => io.observe(it));
+			root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((it) => {
+				io.observe(it);
+				away.observe(it);
+			});
 		};
 		observeAll();
 		const mo = new MutationObserver(observeAll);
 		mo.observe(root, { childList: true, subtree: true });
 		return () => {
 			io.disconnect();
+			away.disconnect();
 			mo.disconnect();
 		};
 	});

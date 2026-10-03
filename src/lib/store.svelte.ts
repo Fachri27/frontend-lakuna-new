@@ -1,4 +1,5 @@
 import { api, apiGet, apiPost, apiDelete, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken, ApiError } from "./api";
+import { authModal } from "./authModal.svelte";
 import type { ApiResponse, ApiCartItem, ApiFavorite, ApiUser } from "./types";
 
 export type CartItem = {
@@ -7,6 +8,8 @@ export type CartItem = {
 	title: string;
 	price: number;
 	meta?: string;
+	/** Thumbnail untuk daftar keranjang (foto/video). */
+	thumbUrl?: string;
 };
 
 type User = { name: string; email: string; id: string; role: string } | null;
@@ -18,6 +21,7 @@ type User = { name: string; email: string; id: string; role: string } | null;
 class AppStore {
 	cart = $state<CartItem[]>([]);
 	favorites = $state<string[]>([]);
+	#favPending = new Set<string>();
 	user = $state<User>(null);
 	loading = $state(true);
 
@@ -69,6 +73,7 @@ class AppStore {
 					title: item.photo.title,
 					price: item.price,
 					meta: item.photoId,
+					thumbUrl: item.thumbUrl,
 				}));
 			}
 		} catch {
@@ -95,32 +100,43 @@ class AppStore {
 	}
 
 	/**
-	 * Aksi keranjang & favorit butuh login. Bila belum login, arahkan ke halaman
-	 * login dengan ?redirect kembali ke halaman saat ini (untuk foto/video detail).
+	 * Aksi keranjang & favorit butuh login. Bila belum login, buka popup auth
+	 * global dengan redirect kembali ke halaman saat ini — tanpa pindah halaman,
+	 * jadi konteks (posisi gulir, isi form) tidak hilang.
 	 */
 	#requireAuth(): boolean {
 		if (this.user) return true;
 		if (typeof window !== "undefined") {
 			const path = window.location.pathname + window.location.search;
-			window.location.href = `/login?redirect=${encodeURIComponent(path)}`;
+			authModal.open(path);
 		}
 		return false;
 	}
 
 	async addToCart(item: CartItem) {
 		if (!this.#requireAuth()) return;
-		try {
-			if (item.kind === "photo" && item.meta) {
+		// Foto: wajib lolos backend dulu baru tampil di cart. Jangan
+		// optimistic-push saat API gagal: item yang tidak dikenal backend
+		// (mis. foto dummy) membuat cart lokal ≠ cart server dan berujung
+		// EMPTY_CART saat bayar.
+		if (item.kind === "photo" && item.meta) {
+			try {
 				await apiPost<ApiResponse<ApiCartItem>>("/api/cart", {
 					photoId: item.meta,
 					license: "STANDAR",
 				});
+			} catch {
+				// Backend menolak (mis. foto dummy tak dikenal): jangan tampilkan
+				// item palsu di cart. Pemanggil fire-and-forget jadi tidak throw.
+				// Hanya berisik di dev — console produksi dibersihkan (layout).
+				if (import.meta.env.DEV) console.warn("[cart] addToCart ditolak backend untuk", item.meta);
+				return;
 			}
 			this.#pushCart(item);
-		} catch {
-			// Optimistic update if API fails
-			this.#pushCart(item);
+			await this.#fetchCart();
+			return;
 		}
+		this.#pushCart(item);
 	}
 
 	#pushCart(item: CartItem) {
@@ -142,21 +158,26 @@ class AppStore {
 
 	async toggleFavorite(id: string) {
 		if (!this.#requireAuth()) return;
+		// Kunci per id selama request berjalan: tap ganda (tap-expand di HP)
+		// tanpa ini mengirim unlike+like beruntun dan hati kembali menyala.
+		if (this.#favPending.has(id)) return;
+		this.#favPending.add(id);
 		const isFav = this.favorites.includes(id);
 		// Optimistic update
 		this.favorites = isFav ? this.favorites.filter((f) => f !== id) : [...this.favorites, id];
 		try {
 			if (isFav) {
-				// Find the favorite ID to delete — need to fetch it
-				const res = await apiGet<ApiResponse<ApiFavorite[]>>("/api/favorite");
-				const fav = res.data.find((f) => f.photoId === id);
-				if (fav) await apiDelete(`/api/favorite/${fav.id}`);
+				// Hapus langsung berdasar photoId — satu request idempoten,
+				// tanpa GET list dulu (setengah jendela race hilang).
+				await apiDelete(`/api/favorite/by-photo/${id}`);
 			} else {
 				await apiPost<ApiResponse<unknown>>("/api/favorite", { photoId: id });
 			}
 		} catch {
 			// Revert on error
 			this.favorites = isFav ? [...this.favorites, id] : this.favorites.filter((f) => f !== id);
+		} finally {
+			this.#favPending.delete(id);
 		}
 	}
 

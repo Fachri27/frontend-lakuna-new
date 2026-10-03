@@ -15,6 +15,13 @@ export function GET(): Response {
 		{ url: BASE, lastModified: now, changeFrequency: "weekly", priority: 1 },
 		{ url: `${BASE}/photos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
 		{ url: `${BASE}/videos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+		{ url: `${BASE}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+		{ url: `${BASE}/contributor`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+		{ url: `${BASE}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+		{ url: `${BASE}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+		{ url: `${BASE}/customer-service`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+		{ url: `${BASE}/reviews`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+		{ url: `${BASE}/privacy`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
 		{ url: `${BASE}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
 		{ url: `${BASE}/rubrik`, lastModified: now, changeFrequency: "weekly", priority: 0.8 }
 	];

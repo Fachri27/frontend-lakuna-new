@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Aset publik ber-pita kredit ───────────────────────────────────────
+   Thumbnail & pratinjau dari API membawa pita putih "lakunastock · ID" di
+   dasarnya (seperti Shutterstock) — terlihat hanya bila berkasnya dibuka
+   langsung. Di situs pita dipotong oleh $lib/creditCrop.ts; rata-atas ini
+   hanya jaring pengaman sebelum gambar selesai dimuat.
+   Path storage: …/thumb/… dan …/watermark/… */
+img[src*="/thumb/"],
+img[src*="/watermark/"] {
+  object-position: center top;
+}
+
 /* ── Theme tokens (flip on .dark) ─────────────────────────────── */
 /**
  * TANGGA NADA KERTAS
@@ -79,8 +90,19 @@
   --surface-2: var(--wash);
   --plate: var(--paper);
   --shadow: 0 30px 80px -40px rgba(22, 23, 26, 0.32);
+
+  /* Tinggi navbar: satu sumber kebenaran. Bar mobile dirampingkan ke 4rem
+     (pola app-bar), desktop tetap 4.6rem. Dipakai tinggi bar, sticky filter,
+     dan padding atas halaman — satu tempat ubah, semua ikut. */
+  --nav-h: 4rem;
+}
+@media (min-width: 768px) {
+  :root {
+    --nav-h: 4.6rem;
+  }
 }
 .dark {
+  color-scheme: dark; /* scrollbar, form, dan UI bawaan browser ikut gelap */
   --paper: #16181c;
   --bg: #0c0d0f;            /* neutral near-black — no blue cast so photos read true */
   --wash: #0a0b0d;
@@ -97,8 +119,97 @@
   --shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.7);
 }
 
+/* ── Wajah "ungu": Poppins + aksen ungu ──────────────────────────────
+   Hanya keluarga huruf dan warna aksen yang ditukar. Nada netral (kertas,
+   arang, abu) dibiarkan: halaman ini isinya foto, dan latar berona akan
+   menempelkan warna ke setiap bingkai.
+
+   Dua nilai ungu, bukan satu: #6f43d6 dapat kontras 5.15 di atas kertas
+   terang tapi cuma 3.19 di atas near-black — tak cukup untuk teks. Latar
+   gelap memakai #9a6bff (5.48). Pembagian yang sama dengan safelight. */
+:root[data-skin="ungu"] {
+  --font-display: "Poppins", var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Poppins", var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+
+  --safelight: #6f43d6;
+  --safelight-lamp: #9a6bff;
+}
+:root[data-skin="ungu"].dark {
+  --safelight: var(--safelight-lamp);
+}
+/* ── Wajah "merah": Archivo + aksen merah #BC0202 ─────────────────────
+   Merah putih, bukan lampu kamar gelap: aksen yang lebih pekat dan lebih
+   dingin daripada safelight oranye. Satu keluarga huruf, dua lebar —
+   judul memakai Archivo yang DILEBARKAN (seperti huruf poster), teks
+   memakai lebar normal supaya tetap nyaman dibaca panjang.
+
+   Dua nilai merah, pola yang sama dengan ungu: #BC0202 dapat 5.6 di atas
+   kertas terang, tapi cuma ~2.9 di atas near-black. Latar gelap memakai
+   #f22b2b (hue sama, lebih terang; ~4.8). */
+:root[data-skin="merah"] {
+  --font-display: "Archivo", var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Archivo", var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+
+  --safelight: #bc0202;
+  --safelight-lamp: #f22b2b;
+}
+:root[data-skin="merah"].dark {
+  --safelight: var(--safelight-lamp);
+}
+:root[data-skin="merah"] body,
+:root[data-skin="merah"] .font-body {
+  font-family: var(--font-body);
+  font-stretch: 100%;
+}
+:root[data-skin="merah"] .font-display,
+:root[data-skin="merah"] .hero-title,
+:root[data-skin="merah"] .im-title,
+:root[data-skin="merah"] .md-title,
+:root[data-skin="merah"] .md-meta-num,
+:root[data-skin="merah"] .cg-phrase,
+:root[data-skin="merah"] .rate-price,
+:root[data-skin="merah"] .rate-wordmark-text {
+  font-family: var(--font-display);
+  font-stretch: 115%;
+}
+/* Judul raksasa: Archivo sudah lebar, jadi pemampatan Postoni dilepas dan
+   hurufnya dirapatkan sedikit supaya tetap satu blok. */
+:root[data-skin="merah"] .hero-title,
+:root[data-skin="merah"] .md-title {
+  transform: none;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* Tailwind memakai `@theme inline`: nilai font DISALIN ke dalam kelasnya saat
+   build, jadi menimpa --font-display/--font-body saja tidak mengubah apa pun
+   di .font-display / .font-body. Utilitasnya ikut ditimpa di sini.
+   Judul hero & peta menuliskan "Postoni Wide" langsung di depan var, jadi
+   keduanya juga disebut eksplisit. */
+:root[data-skin="ungu"] body,
+:root[data-skin="ungu"] .font-body,
+:root[data-skin="ungu"] .font-display,
+:root[data-skin="ungu"] .hero-title,
+:root[data-skin="ungu"] .im-title,
+:root[data-skin="ungu"] .md-title,
+:root[data-skin="ungu"] .md-meta-num,
+:root[data-skin="ungu"] .cg-phrase,
+:root[data-skin="ungu"] .rate-price,
+:root[data-skin="ungu"] .rate-wordmark-text {
+  font-family: var(--font-display);
+}
+/* Postoni hanya punya potongan Wide Bold, jadi judul hero dimampatkan 10%.
+   Poppins punya lebar normal — pemampatan itu dilepas agar tidak gepeng. */
+:root[data-skin="ungu"] .hero-title {
+  transform: none;
+  letter-spacing: -0.015em;
+  /* Hanya kata sorotan (.serif-em, 700) yang tebal; sisa judul Light supaya
+     kontrasnya tegas. Poppins 300 sudah dimuat di app.html. */
+  font-weight: 300;
+}
+
 @theme inline {
-  --font-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+  --font-display: "Postoni Wide", var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
   --font-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 
@@ -186,7 +297,7 @@
     transition: background 0.5s ease, color 0.5s ease;
   }
   ::selection {
-    background: #ff4d12;
+    background: #9a6bff;
     color: #fff;
   }
   :focus-visible {
@@ -202,18 +313,24 @@
      SELURUH lebar jatuh di bagian gelapnya (70% di x=0, masih 52% di 179px),
      sehingga fotonya mati sepenuhnya. Versi mobile karena itu hanya vertikal,
      berbobot ke bawah tempat teksnya berada; bagian atas foto dibiarkan hidup. */
+  /* Scrim ditipiskan supaya fotonya terbaca sebagai foto; keterbacaan teks
+     dijaga bayangan halus di teksnya sendiri, bukan dengan menggelapkan
+     seluruh bingkai. */
+  .hero-content {
+    text-shadow: 0 1px 14px color-mix(in srgb, var(--color-ocean-deep) 72%, transparent);
+  }
   .hero-scrim {
     /* Mobile: layarnya potret, jadi fotonya harus tetap foto di dua pertiga
        atas — gelapnya baru datang di 34% ke bawah, tepat sebelum judul, bukan
        merata dari tengah. Stop 48%/62% adalah alas judul dan paragraf. */
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--color-ocean-deep) 76%, transparent),
-      color-mix(in srgb, var(--color-ocean-deep) 14%, transparent) 22%,
-      color-mix(in srgb, var(--color-ocean-deep) 12%, transparent) 34%,
-      color-mix(in srgb, var(--color-ocean-deep) 58%, transparent) 48%,
-      color-mix(in srgb, var(--color-ocean-deep) 86%, transparent) 62%,
-      color-mix(in srgb, var(--color-ocean-deep) 94%, transparent)
+      color-mix(in srgb, var(--color-ocean-deep) 62%, transparent),
+      color-mix(in srgb, var(--color-ocean-deep) 10%, transparent) 22%,
+      color-mix(in srgb, var(--color-ocean-deep) 8%, transparent) 34%,
+      color-mix(in srgb, var(--color-ocean-deep) 38%, transparent) 48%,
+      color-mix(in srgb, var(--color-ocean-deep) 62%, transparent) 62%,
+      color-mix(in srgb, var(--color-ocean-deep) 74%, transparent)
     );
   }
   @media (min-width: 640px) {
@@ -221,8 +338,8 @@
        kiri, vertikal hanya untuk navbar dan rel bawah. */
     .hero-scrim {
       background:
-        linear-gradient(to right, color-mix(in srgb, var(--color-ocean-deep) 70%, transparent), color-mix(in srgb, var(--color-ocean-deep) 52%, transparent) 46%, transparent 82%),
-        linear-gradient(to bottom, color-mix(in srgb, var(--color-ocean-deep) 70%, transparent), color-mix(in srgb, var(--color-ocean-deep) 18%, transparent) 30%, color-mix(in srgb, var(--color-ocean-deep) 18%, transparent) 58%, color-mix(in srgb, var(--color-ocean-deep) 88%, transparent));
+        linear-gradient(to right, color-mix(in srgb, var(--color-ocean-deep) 52%, transparent), color-mix(in srgb, var(--color-ocean-deep) 32%, transparent) 46%, transparent 78%),
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-ocean-deep) 52%, transparent), color-mix(in srgb, var(--color-ocean-deep) 10%, transparent) 30%, color-mix(in srgb, var(--color-ocean-deep) 12%, transparent) 58%, color-mix(in srgb, var(--color-ocean-deep) 66%, transparent));
     }
   }
 
@@ -258,6 +375,12 @@
   }
   .arrow-link:hover .arr {
     transform: translateX(7px);
+  }
+  /* Semua panah teks "→" dimatikan situs-wide (di luar layer agar menang
+     dari utilitas): markup <span class="arr"> dibiarkan apa adanya supaya
+     mudah dikembalikan — cukup hapus aturan ini. */
+  .arr {
+    display: none;
   }
   /* CVD strength slider — matches apps/web ColorVisionToggle */
   .cvd-range {
@@ -519,7 +642,9 @@
      memutus empat section gelap beruntun yang membuat tema terang tak pernah
      benar-benar terang. */
   background: var(--wash);
-  padding: clamp(4rem, 10vh, 7rem) 0 clamp(4.5rem, 11vh, 8rem);
+  /* Bawahnya rapat: di bawah strip langsung ada sambungan ke peta, dan jarak
+     besar di sini membuat dua baris poster terlepas dari section berikutnya. */
+  padding: clamp(4rem, 10vh, 7rem) 0 clamp(1.5rem, 3vh, 2.5rem);
   overflow: hidden;
 }
 .as-inner {
@@ -532,73 +657,81 @@
   .as-inner { padding: 0 2.5rem; }
 }
 .as-head {
-  max-width: min(34rem, 92%);
+  max-width: min(62rem, 94%);
   margin-bottom: clamp(2rem, 5vh, 3.25rem);
 }
 .as-title {
   margin-top: 1rem;
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(1.7rem, 3.6vw, 2.9rem);
+  font-size: clamp(1.05rem, 4.5vw, 2.4rem);
   line-height: 1.12;
   letter-spacing: -0.02em;
   color: var(--fg);
-  text-wrap: balance;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Tepi memudar supaya strip masuk dan keluar dari latar, bukan terpotong. */
+/* Dua baris poster yang berjalan berlawanan arah (lihat ImageAutoSlider). Kartu
+   potret seragam dengan sudut membulat, rapat, dan terpotong tegas di tepi
+   layar — bukan memudar. Jarak antarkartu dan antarbaris sama, supaya kisinya
+   terbaca sebagai satu dinding poster. */
+.as {
+  --ias-gap: clamp(0.5rem, 0.9vw, 0.875rem);
+}
+.as-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ias-gap);
+  /* Sejajar dengan teks heading di .as-inner: batas yang sama, padding sama. */
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+@media (min-width: 1024px) {
+  .as-rows { padding: 0 2.5rem; }
+}
 .as .ias-mask {
-  /* overflow + no-repeat wajib: track jauh lebih lebar dari kotaknya, dan
-     mask bawaan `repeat` akan menge-tile gradiennya ke bagian yang meluber. */
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-size: 100% 100%;
-  mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-  mask-repeat: no-repeat;
-  mask-size: 100% 100%;
 }
 .ias-track {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
   width: max-content;
   will-change: transform;
 }
 .ias-card {
   display: block;
   flex: 0 0 auto;
-  /* Tinggi tetap, lebar bebas — bingkai potret dan lanskap tetap utuh. */
-  height: clamp(190px, 26vw, 320px);
+  /* Margin, bukan gap di track: lebar track harus tepat dua kali separuhnya. */
+  margin-right: var(--ias-gap);
+  width: clamp(120px, 12.5vw, 240px);
+  aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: 3px;
-  border: 1px solid var(--hair);
+  border-radius: clamp(6px, 0.7vw, 12px);
   background: var(--surface-2);
 }
 .ias-card img {
   display: block;
+  width: 100%;
   height: 100%;
-  width: auto;
   max-width: none;
   object-fit: cover;
-  transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* Yang lain meredup saat satu kartu disentuh — perhatian tertuju ke satu
-   bingkai, bukan seluruh baris menyala sekaligus. */
-.ias-track:hover img { opacity: 0.45; }
 .ias-card:hover img,
 .ias-card:focus-visible img {
-  opacity: 1;
-  transform: scale(1.03);
+  transform: scale(1.04);
 }
 a.ias-card:focus-visible {
-  outline: 1px solid var(--color-safelight);
+  outline: 2px solid var(--color-safelight);
   outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ias-card img { transition: none; }
-  /* Tanpa gerak, strip jadi baris yang bisa digeser sendiri. */
+  /* Tanpa gerak, tiap baris jadi deret yang bisa digeser sendiri. */
   .as .ias-mask { overflow-x: auto; }
 }
 
@@ -869,12 +1002,10 @@ a.ias-card:focus-visible {
   background-position: center;
   background-repeat: no-repeat;
 }
-/* Permukaan satelit diredam supaya tetap bernuansa kamar gelap, tapi daratan,
-   laut, dan garis pantai masih terbaca. Hanya tile-pane — marker dan overlay
-   lain tidak ikut terfilter. */
-.im-fallback,
-.im-wrap .leaflet-tile-pane {
-  filter: grayscale(0.55) brightness(0.82) contrast(1.08) sepia(0.12);
+/* Warna citra tampil natural (seperti Google Earth): tanpa peredam grayscale /
+   brightness di tile. Keterbacaan HUD dijaga vignette + alas judul. */
+.im-fallback {
+  filter: none;
 }
 .im-vignette {
   position: absolute;
@@ -891,8 +1022,11 @@ a.ias-card:focus-visible {
       color-mix(in srgb, var(--darkroom) 40%, transparent) 6%,
       transparent 16%,
       transparent 74%,
-      color-mix(in srgb, var(--darkroom) 50%, transparent) 90%,
-      var(--darkroom) 100%
+      /* Ujung bawah memudar ke latar HALAMAN (--bg), bukan --darkroom:
+         section tarif di bawahnya beralas --bg, jadi sambungannya tak
+         berbelang. */
+      color-mix(in srgb, var(--bg) 50%, transparent) 90%,
+      var(--bg) 100%
     );
 }
 .im-grain {
@@ -1046,20 +1180,21 @@ a.ias-card:focus-visible {
 }
 .im-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 300;
+  font-family: "Postoni Wide", var(--font-display);
   font-size: clamp(1.9rem, 3.4vw, 3.3rem);
   line-height: 1.02;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  white-space: pre-line;
   color: var(--im-ink);
   text-shadow: 0 2px 24px rgba(4, 6, 7, 0.6);
 }
 .im-lede {
   margin: 0;
-  max-width: 38ch;
+  max-width: 52ch;
   font-family: var(--font-body);
   font-size: clamp(0.85rem, 1vw, 0.98rem);
   line-height: 1.5;
+  white-space: pre-line;
   color: rgba(239, 231, 220, 0.8);
 }
 .im-slate-stats {
@@ -1149,14 +1284,37 @@ a.ias-card:focus-visible {
   position: absolute;
   inset: 4px;
   border-radius: 3px;
-  background-size: cover;
-  background-position: center;
+  overflow: hidden;
   filter: saturate(0.85) contrast(1.05);
   transition: filter 0.4s, transform 0.4s;
+}
+/* <img> (bukan background) supaya pita kredit ikut dipotong creditCrop.ts. */
+.im-mk-plate-img > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  pointer-events: none;
+  user-select: none;
 }
 .im-mk-br {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+/* Denyut lokasi saat plate muncul (dibuat & dihapus oleh revealMarker). */
+.im-mk-ping {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  border: 1px solid var(--safelight-lamp);
+  box-shadow: 0 0 18px -4px var(--safelight-lamp);
   pointer-events: none;
 }
 .im-mk-plate-glyph {
@@ -1228,6 +1386,20 @@ a.ias-card:focus-visible {
 
 /* ── index bar bawah ─────────────────────────────────────────────────────── */
 /* ── readout koordinat kanan-bawah ───────────────────────────────────────── */
+/* Kredit citra — kecil dan samar di dasar tengah, di bawah baris petunjuk. */
+.im-credit {
+  position: absolute;
+  z-index: 1001;
+  left: 50%;
+  bottom: 6px;
+  margin: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.45rem;
+  letter-spacing: 0.08em;
+  color: rgba(239, 231, 220, 0.32);
+  pointer-events: none;
+}
 .im-coord {
   position: absolute;
   right: clamp(18px, 3.2vw, 46px);
@@ -1266,7 +1438,6 @@ a.ias-card:focus-visible {
   z-index: 2000;
   background: #07090a;
   color: var(--im-ink, #efe7dc);
-  animation: im-dv-in 0.45s ease both;
   --im-ink: #efe7dc;
   --im-ink-dim: rgba(239, 231, 220, 0.55);
   --im-amber: rgba(201, 154, 106, 0.75);
@@ -1283,6 +1454,33 @@ a.ias-card:focus-visible {
 }
 .im-dv-stage.is-zoomed {
   cursor: zoom-out;
+}
+/* Garis scan vertikal transisi "terbakar" peta ↔ foto (opacity diatur
+   paintBurn). Di atas viewer, tak pernah menangkap klik. */
+.im-burn-lines {
+  position: fixed;
+  inset: 0;
+  z-index: 2001;
+  pointer-events: none;
+  opacity: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.22) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: multiply;
+}
+/* Selama viewer terbuka, marker & HUD peta disembunyikan — peta di
+   belakangnya menggelap bersih, lalu muncul lagi tanpa marker; marker
+   kembali paling akhir (kelas dilepas di finishClose). */
+.im-wrap.is-viewing .im-mk-wrap,
+.im-wrap.is-viewing .im-cluster,
+.im-wrap.is-viewing .im-slate,
+.im-wrap.is-viewing .im-hint,
+.im-wrap.is-viewing .im-coord {
+  opacity: 0 !important;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
 }
 .im-dv-imgwrap {
   position: absolute;
@@ -1381,6 +1579,19 @@ a.ias-card:focus-visible {
 }
 
 /* filmstrip */
+/* File HD di atas thumbnail; memudar masuk begitu termuat. */
+.im-dv-hd {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.im-dv-hd.is-ready {
+  opacity: 1;
+}
 .im-dv-strip-wrap {
   position: absolute;
   left: 0;
@@ -1492,7 +1703,22 @@ a.ias-card:focus-visible {
   }
 }
 
+/* Kotak foto memudar saat kamera bergerak, muncul lagi saat berhenti —
+   seperti marker di referensi. Class `is-moving` dipasang dari event
+   movestart/moveend MapLibre di IndonesiaMap. */
+.im-wrap .maplibregl-marker {
+  transition: opacity 0.45s ease;
+}
+.im-wrap .maplibregl-marker:hover {
+  z-index: 5;
+}
+.im-canvas.is-moving .maplibregl-marker {
+  opacity: 0.12;
+}
 @media (prefers-reduced-motion: reduce) {
+  .im-wrap .maplibregl-marker {
+    transition: none;
+  }
   .im-live-dot {
     animation: none;
   }
@@ -1504,26 +1730,41 @@ a.ias-card:focus-visible {
   }
 }
 
-/* Leaflet chrome — minimal dark */
-.im-wrap .leaflet-container {
-  /* sama dengan alas section, supaya tepi ubin yang belum termuat tidak jadi pita hitam */
-  background: var(--darkroom);
+/* MapLibre chrome — minimal dark. Kanvas TRANSPARAN di luar bumi (proyeksi
+   globe), jadi langit/bintang/judul di belakangnya terlihat. */
+.im-wrap .maplibregl-map {
+  /* maplibre-gl.css memasang `position: relative` pada kontainer — itu
+     menimpa `.im-canvas { position: absolute; inset: 0 }` dan tinggi
+     kontainernya jadi 0 (kanvas kosong). Spesifisitas lebih tinggi di sini. */
+  position: absolute;
+  inset: 0;
+  background: transparent;
   outline: none;
   font-family: var(--font-mono);
 }
-.im-wrap .leaflet-control-attribution {
+.im-wrap .maplibregl-canvas {
+  outline: none;
+}
+.im-wrap .maplibregl-ctrl-attrib {
   background: color-mix(in srgb, var(--darkroom) 70%, transparent) !important;
   color: rgba(239, 231, 220, 0.35) !important;
   font-size: 0.5rem !important;
   letter-spacing: 0.05em;
-  padding: 1px 6px;
-  border-radius: 4px 0 0 0;
 }
-.im-wrap .leaflet-control-attribution a {
+.im-wrap .maplibregl-ctrl-attrib a {
   color: rgba(239, 231, 220, 0.55) !important;
 }
-.im-wrap .leaflet-bar {
-  display: none;
+.im-wrap .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+  opacity: 0.5;
+}
+/* Overlay ajakan Ctrl+scroll (cooperative gestures): samakan dengan HUD peta. */
+.im-wrap .maplibregl-cooperative-gesture-screen {
+  background: color-mix(in srgb, var(--darkroom) 72%, transparent);
+  color: rgba(239, 231, 220, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
 }
 
 /* Sembunyikan bar atas (navbar + banner voucher) selama section peta memenuhi
@@ -1537,7 +1778,10 @@ a.ias-card:focus-visible {
     height 500ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 html[data-map-pinned="true"] [data-topbar] {
-  transform: translateY(-130%);
+  /* -130% saja tak cukup bila bilah voucher aktif: navbar duduk di
+     top: var(--banner-h), jadi tepi bawah tombolnya masih mengintip ±7px
+     di atas peta (terutama di HP). Geser ekstra setinggi bilah itu. */
+  transform: translateY(calc(-100% - var(--banner-h, 0px) - 12px));
 }
 @media (prefers-contrast: more) {
   :root {
@@ -1636,4 +1880,239 @@ html[data-map-pinned="true"] [data-topbar] {
 }
 @media (prefers-reduced-motion: reduce) {
   .film-seam-strip { transform: translateY(-50%) !important; }
+}
+
+/* ── Wajah display situs ────────────────────────────────────────────────
+   Postoni Wide Bold, dilayani dari static/fonts. Dipakai judul hero,
+   judul globe, judul peta, dan angka meta — teks lain tetap Fraunces,
+   Hanken Grotesk, dan mono. */
+@font-face {
+  font-family: "Postoni Wide";
+  src: url("/fonts/PostoniWide-Bold.woff2") format("woff2");
+  /*font-weight: 100;*/
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Adelia";
+  src: url("/fonts/Adelia.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+.hero-title {
+  font-family: "Postoni Wide", var(--font-display);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  /* Dimampatkan 10% ke samping supaya hurufnya lebih ramping dan garis tegaknya
+     menipis — berkasnya hanya punya potongan Wide Bold, jadi tidak ada lebar
+     atau ketebalan lain yang bisa dipanggil. Transform dipasang di h1, bukan di
+     baris-barisnya: baris .hero-anim sudah digerakkan GSAP lewat transform. */
+  transform: scaleX(0.9);
+  transform-origin: left center;
+  /* Bayangan teks ala rujukan: jatuh ke kanan-bawah, tegas dengan
+     blur tipis — bukan glow menyebar. */
+  text-shadow: 3px 4px 3px rgba(28, 17, 4, 0.65);
+}
+/* Berkasnya hanya punya potongan tegak. Kata sorotan tetap oranye tapi tidak
+   dimiringkan: miring palsu hasil sintesis browser merusak kontras garis Didone. */
+.hero-title .serif-em {
+  font-family: inherit;
+  font-weight: 700;
+  font-style: normal;
+  font-synthesis: none;
+  /* Kata sorotan hero selalu ungu — identitas, bukan aksen skin. */
+  color: #9a6bff;
+}
+
+/* ── FONDASI SENTUH MOBILE ──────────────────────────────────────────────
+   Satu tempat untuk semua fisika jari, supaya tiap tombol di tiap halaman
+   terasa seperti tombol aplikasi: tanpa kilau tap abu-abu, tanpa jeda
+   double-tap-zoom, ada umpan tekan, dan rel chip bisa digeser jempol. */
+
+/* Hilangkan kilau tap bawaan browser (abu-abu di Android, sorotan di iOS). */
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* Kunci geser horizontal halaman: elemen konten yang lebih lebar dari
+     viewport (mis. baris pin max-content) tak boleh menyeret seluruh
+     halaman. `clip` (bukan hidden) supaya position: sticky tetap jalan. */
+  overflow-x: clip;
+}
+
+body {
+  overflow-x: clip;
+}
+
+/* Matikan jeda ~300ms double-tap-zoom di semua kontrol. */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* iOS memperbesar otomatis (auto-zoom) tiap input berfont < 16px — halaman
+   melompat dan pengguna harus mencubit kembali. Di layar sempit, paksa 16px
+   untuk semua kolom isian teks. Selektor atribut (0,1,1) mengalahkan kelas
+   `text-sm` Tailwind (0,1,0) tanpa !important, dan cakupannya dibatasi
+   max-width 640px agar desktop tidak berubah. */
+@media (max-width: 639px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Umpan tekan: tombol utama menyusut 2% saat jari menekan — padanan
+   `hover:scale` untuk layar yang tidak punya hover. Dipasang manual di
+   tombolnya (`.press`), bukan global, supaya tautan teks tidak ikut
+   bergoyang. Hormati reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .press {
+    transition: transform 0.15s ease-out;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Rel geser jempol (chip filter dkk): bisa di-swipe, tanpa scrollbar,
+   item berhenti pas di awal (snap) dan tepi berdarah ke layar. */
+.rail-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Tanpa ini snap menempelkan chip pertama ke tepi wadah dan "memakan"
+     padding kiri rel — chip jadi tidak sebaris dengan judul & kartu di
+     bawahnya. Nilainya mengikuti padding rel (px-6, lg:px-10). */
+  scroll-padding-inline: 1.5rem;
+  /* Konten rel bertambah setelah kategori tiba; tanpa ini Chrome menggeser
+     posisi scroll untuk menahan konten lama. */
+  overflow-anchor: none;
+}
+@media (min-width: 1024px) {
+  .rail-scroll {
+    scroll-padding-inline: 2.5rem;
+  }
+}
+.rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+.rail-scroll > * {
+  scroll-snap-align: start;
+}
+
+/* Chip filter: ramping di HP (30px + teks kecil) supaya tidak mendominasi
+   layar, 44px penuh di sm+. Class sendiri (bukan utility Tailwind) karena
+   .kicker yang tak ber-layer mengalahkan utility ber-layer untuk font-size —
+   di sini urutan file yang menentukan, dan .chip ditulis setelah .kicker. */
+.chip {
+  min-height: 30px;
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+}
+@media (min-width: 640px) {
+  .chip {
+    min-height: 44px;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.22em;
+  }
+}
+
+/* Perluas area sentuh tanpa mengubah visual: pasang di tombol ikon kecil
+   (hati, tutup, putar) supaya jempol mudah kena walau lingkarannya tetap.
+   `before` tak terlihat, 12px di tiap sisi → total ≥ 44px.
+   WAJIB di dalam @layer components: CSS tak ber-layer selalu mengalahkan
+   utility Tailwind yang ber-layer (terlepas dari spesifisitas — :where() pun
+   tidak menolong), sehingga `position: relative` ini menimpa `absolute` pada
+   tombol yang memakai keduanya dan melemparnya ke kiri. Di dalam layer
+   components, `absolute` dari layer utilities yang menang bila dipasang
+   bersama, sementara tombol tanpa utility posisi tetap dapat relative. */
+@layer components {
+  :where(.tap-expand) {
+    position: relative;
+  }
+}
+.tap-expand::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+/* Grain film: lapisan mix-blend di atas foto. Di layar kecil teksturnya tak
+   terbaca tapi blending-nya membebani GPU tiap frame saat gulir — matikan di
+   HP, hidup di sm+. */
+@media (max-width: 639px) {
+  .grain {
+    display: none;
+  }
+}
+
+/* Perlindungan unduhan santai: gambar/video tidak bisa diseret keluar dan
+   tidak bisa diseleksi. Klik-kanan ditangani di layout (hanya di atas media,
+   supaya menu konteks form/input tetap normal). Ini bukan DRM — screenshot
+   dan devtools tetap bisa; nilai aslinya dilindungi watermark + file penuh
+   yang hanya keluar setelah bayar. */
+img,
+video {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Fokus search hero: latar blur + teks meredup, formulir tetap tajam.
+   Pemicunya hanya form search yang sedang fokus — tombol suara hero juga
+   fokusable, jadi :focus-within polos pada section ikut memburamkan saat diklik. Transisi filter tidak berkelahi dengan
+   transform GSAP karena hanya menyentuh filter/opacity. */
+.hero-focus-dim {
+  transition: opacity 0.6s ease, filter 0.6s ease;
+}
+.group\/hero:has(form[role="search"]:focus-within) .hero-focus-dim {
+  opacity: 0.25;
+  filter: blur(3px);
+}
+
+/* Ken-burns pelan untuk bingkai thesis halaman login: zoom 26 detik bolak-balik.
+   Satu-satunya gerak ambient di halaman utilitas ini — mati total saat
+   reduced-motion. */
+@keyframes login-kenburns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+.login-kenburns {
+  animation: login-kenburns 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-kenburns {
+    animation: none;
+  }
+}
+
+/* Marker peta di sisi belakang globe: MapLibre menandainya dengan kelas ini.
+   Pengaman selain opacityWhenCovered "0" — animasi GSAP pada marker bisa
+   menimpa opacity inline, jadi sembunyikan juga lewat visibility dan jangan
+   biarkan menangkap klik. */
+.maplibregl-marker-covered {
+  visibility: hidden !important;
+  pointer-events: none !important;
 }

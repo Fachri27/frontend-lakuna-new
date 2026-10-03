@@ -26,7 +26,7 @@ export type Copy = {
   feature1: { kicker: string; title: string; body: string; link: string };
   feature2: { kicker: string; title: string; body: string; link: string };
   stats: { kicker: string; items: { v: number; suffix: string; l: string }[] };
-  cats: { kicker: string; title: string; sub: string; items: string[]; explore: string; seeMore: string; seeLess: string; sheetRest: string; sheetEnd: string };
+  cats: { kicker: string; title: string; sub: string; items: string[]; explore: string; seeMore: string; seeLess: string; sheetRest: string; sheetEnd: string; unit: string; frame: string };
   pricing: { kicker: string; title: string; body: string; cta: string };
   closing: { kicker: string; title: string; titleEm: string; body: string; cta: string };
   access: {
@@ -49,22 +49,22 @@ export type Copy = {
        yang dipecah runtime pada kata harfiah "across" — begitu diterjemahkan,
        split-nya gagal dan bagian keduanya tercetak sebagai "undefined". */
     taglineA: string; taglineEm: string; taglineB: string;
-    about: string; aboutItems: string[];
-    services: string; servicesItems: string[];
-    contact: string; contactItems: string[];
+    company: string; companyItems: string[];
+    legal: string; legalItems: string[];
+    support: string; supportItems: string[];
     rights: string; made: string;
   };
 };
 
 export const dict: Record<Lang, Copy> = {
   id: {
-    nav: { tagline: "Nusantara Visual", photos: "Foto", videos: "Video", categories: "Kategori", pricing: "Harga", signin: "Masuk", langLabel: "ID", searchPlaceholder: "Cari bingkai, tempat, perajangga…" },
+    nav: { tagline: "Jelajahi Nusantara", photos: "Foto", videos: "Video", categories: "Kategori", pricing: "Harga", signin: "Masuk", langLabel: "ID", searchPlaceholder: "Cari gambar dan video" },
     hero: {
       kicker: "Lakuna — Arsip Visual Nusantara",
       titleA: "Perjalanan visual",
       titleEm: "menembus",
       titleB: "Nusantara",
-      sub: "Ribuan bingkai foto dan video dari ujung Sabang hingga Merauke — ditangkap para perajangga, dirawat seperti karya.",
+      sub: "Ribuan koleksi foto dan video dari Sabang sampai Merauke. Menangkap realita melalui bermacam perspektif.",
       cta: "Jelajahi koleksi",
       scroll: "Gulir",
       searchLabel: "Cari di arsip",
@@ -97,8 +97,8 @@ export const dict: Record<Lang, Copy> = {
       seeAll: "Buka arsip",
     },
     journeys: {
-      kicker: "Arsip",
-      title: "Arsipnya lewat. Ambil yang menahanmu.",
+      kicker: "Koleksi foto",
+      title: "Jelajah khatulistiwa melalui lensa",
       cta: "Lihat semua bingkai",
       open: "Lihat bingkai",
       close: "Tutup",
@@ -133,18 +133,20 @@ export const dict: Record<Lang, Copy> = {
     },
     cats: {
       sheetRest: "{n} lagi di lembar ini", sheetEnd: "Ujung lembar",
-      kicker: "Kategori",
-      title: "Telusuri semesta Lakuna",
-      sub: "Enam pintu masuk ke arsip — dari alam liar hingga detak kota.",
+      kicker: "Koleksi video",
+      title: "Setiap\nvisual\nmemiliki\ncerita",
+      sub: "Cuplikan sinematik dari database — arahkan kursor untuk pratinjau gerak, klik untuk halaman detail.",
       items: ["Alam", "Kota", "Orang", "Travel", "Bisnis", "Sinema"],
-      explore: "Jelajahi",
-      seeMore: "Lihat {n} kategori lain",
+      explore: "Tonton",
+      seeMore: "Lihat {n} video lain",
       seeLess: "Lihat lebih sedikit",
+      unit: "klip",
+      frame: "Klip",
     },
     pricing: {
-      kicker: "Langganan",
-      title: "Akses tanpa batas ke arsip",
-      body: "Satu langganan, ribuan bingkai berkualitas sinema. Unduh sesuai kebutuhan, bayar sesuai ritme.",
+      kicker: "Berlangganan",
+      title: "Akses tanpa batas\npada seluruh koleksi",
+      body: "Dapatkan ribuan aset dengan kualitas terbaik.",
       cta: "Lihat paket",
     },
     closing: {
@@ -192,22 +194,22 @@ export const dict: Record<Lang, Copy> = {
       previewLabel: "Pratinjau",
     },
     footer: {
-      taglineA: "Setiap bingkai ", taglineEm: "pulang", taglineB: " ke satu arsip",
-      about: "Tentang", aboutItems: ["Tentang Kami", "Karier", "Pers"],
-      services: "Layanan", servicesItems: ["Langganan", "Pembayaran", "Lisensi"],
-      contact: "Kontak", contactItems: ["Marketing", "Dukungan", "Pers"],
+      taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
+      company: "Perusahaan", companyItems: ["Tentang kami", "Ulasan", "Kontributor"],
+      legal: "Legal", legalItems: ["Ketentuan penggunaan", "Kebijakan privasi", "Preferensi cookie"],
+      support: "Dukungan", supportItems: ["Bantuan", "FAQ", "Layanan pelanggan"],
       rights: "© 2026 Lakuna Nusantara Media. Hak cipta dilindungi.",
       made: "Dirajut di Nusantara",
     },
   },
   en: {
-    nav: { tagline: "Nusantara Visual", photos: "Photos", videos: "Videos", categories: "Categories", pricing: "Pricing", signin: "Sign in", langLabel: "EN", searchPlaceholder: "Search frames, places, image-makers…" },
+    nav: { tagline: "Explore Nusantara", photos: "Photos", videos: "Videos", categories: "Categories", pricing: "Pricing", signin: "Sign in", langLabel: "EN", searchPlaceholder: "Search images and videos" },
     hero: {
       kicker: "Lakuna — The Visual Archive of Nusantara",
-      titleA: "Visual journeys",
+      titleA: "A visual journey",
       titleEm: "across",
       titleB: "Nusantara",
-      sub: "Thousands of photo and video frames from Sabang to Merauke — captured by image-makers, kept like works of art.",
+      sub: "Thousands of collections of photo and video from Sabang to Merauke. Capture a reality through the variety of perspective.",
       cta: "Explore the collection",
       scroll: "Scroll",
       searchLabel: "Search the archive",
@@ -240,8 +242,8 @@ export const dict: Record<Lang, Copy> = {
       seeAll: "Open the archive",
     },
     journeys: {
-      kicker: "The archive",
-      title: "The archive drifts past. Take what stops you.",
+      kicker: "Collection of photos",
+      title: "Portraits that speak without words",
       cta: "See all frames",
       open: "View frame",
       close: "Close",
@@ -276,18 +278,20 @@ export const dict: Record<Lang, Copy> = {
     },
     cats: {
       sheetRest: "{n} more on the sheet", sheetEnd: "End of sheet",
-      kicker: "Categories",
-      title: "Browse the Lakuna universe",
-      sub: "Six gateways into the archive — from wild nature to the pulse of the city.",
+      kicker: "Collection of videos",
+      title: "A moment\nin time,\na memory\nfor life",
+      sub: "Cinematic clips from the database — hover for a motion preview, click for the detail page.",
       items: ["Nature", "Urban", "People", "Travel", "Business", "Cinema"],
-      explore: "Explore",
+      explore: "Watch",
       seeMore: "Show {n} more",
       seeLess: "Show fewer",
+      unit: "clips",
+      frame: "Clip",
     },
     pricing: {
-      kicker: "Membership",
-      title: "Limitless access to the archive",
-      body: "One membership, thousands of cinema-grade frames. Download as you need, pay to your rhythm.",
+      kicker: "Subscription",
+      title: "Limitless access\nto the archives",
+      body: "Get a thousand of best quality frames from our archives.",
       cta: "See plans",
     },
     closing: {
@@ -336,9 +340,9 @@ export const dict: Record<Lang, Copy> = {
     },
     footer: {
       taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
-      about: "About", aboutItems: ["About Us", "Careers", "Press"],
-      services: "Services", servicesItems: ["Membership", "Payments", "Licensing"],
-      contact: "Contact", contactItems: ["Marketing", "Support", "Press"],
+      company: "Company", companyItems: ["About us", "Reviews", "Contributor"],
+      legal: "Legal", legalItems: ["Terms of use", "Privacy policy", "Cookie preferences"],
+      support: "Support", supportItems: ["Help", "FAQ", "Customer service"],
       rights: "© 2026 Lakuna Nusantara Media. All rights reserved.",
       made: "Crafted in Nusantara",
     },

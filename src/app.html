@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="id">
+<html lang="en" class="dark" data-skin="ungu">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/logo1.png" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<!-- PWA: manifest (installability → hak autoplay bersuara di app ter-install)
 		     + warna bar judul + ikon iOS (iOS tidak membaca manifest). -->
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
@@ -16,16 +16,21 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
-			href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Hanken+Grotesk:wght@300..700&display=swap"
+			href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Hanken+Grotesk:wght@300..700&family=Poppins:wght@300;400;500;600&family=Archivo:wdth,wght@62..125,300..800&display=swap"
 			rel="stylesheet"
 		/>
 		<script>
 			(function () {
 				try {
 					document.documentElement.classList.add('js');
-					var t = localStorage.getItem('lakuna-theme');
-					var d = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
-					if (d) document.documentElement.classList.add('dark');
+					// Situs ini HANYA bertema gelap: tak ada pilihan tema, dan preferensi
+					// sistem/pilihan lama ('lakuna-theme') sengaja diabaikan.
+					document.documentElement.classList.add('dark');
+					// Wajah situs (lihat $lib/skin.svelte.ts). Dipasang sebelum
+					// halaman dilukis supaya font & aksennya tidak berkedip.
+					// Bawaan: Ungu. Pilihan yang pernah disimpan (termasuk Arsip) tetap dihormati.
+					var sk = localStorage.getItem('lakuna-skin');
+					document.documentElement.dataset.skin = sk === 'arsip' || sk === 'merah' ? sk : 'ungu';
 				} catch (e) {}
 			})();
 		</script>

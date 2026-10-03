@@ -3,6 +3,8 @@
 	import Lenis from "lenis";
 	import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
+	import { setLenis } from "$lib/lenis";
+	import { markScroll, calmRefresh } from "$lib/scrollCalm";
 
 	gsap.registerPlugin(ScrollTrigger);
 
@@ -18,10 +20,21 @@
 	 */
 	const isHome = (p: string) => p === "/";
 
+	// HP: jangan ukur ulang ScrollTrigger setiap URL-bar browser muncul/hilang
+	// (resize viewport). Itulah sumber utama scroll terasa berat/patah-patah di
+	// mobile — refresh bertubi-tubi di tengah gulir. Tinggi pin memakai svh yang
+	// stabil, jadi aman diabaikan. Global, dipasang sekali.
+	ScrollTrigger.config({ ignoreMobileResize: true });
 	const pathname = $derived(page.url.pathname);
 	const home = $derived(isHome(pathname));
 
 	let lenis: Lenis | null = null;
+
+	// Penanda gulir global untuk scrollCalm (sekali untuk semua route).
+	$effect(() => {
+		window.addEventListener("scroll", markScroll, { passive: true });
+		return () => window.removeEventListener("scroll", markScroll);
+	});
 
 	// Setup / teardown Lenis saat masuk/keluar home
 	$effect(() => {
@@ -40,6 +53,7 @@
 			wheelMultiplier: 1.1
 		});
 		lenis = l;
+		setLenis(l);
 		l.on("scroll", ScrollTrigger.update);
 
 		const tick = (time: number) => l.raf(time * 1000);
@@ -61,10 +75,11 @@
 
 		// Refresh diikat ke event nyata (bukan timer buta) supaya tidak ada lompatan
 		// terlambat: rAF untuk flush awal, `load` setelah semua aset (gambar) selesai,
-		// `fonts.ready` setelah font swap.
-		const r = requestAnimationFrame(() => ScrollTrigger.refresh());
-		const onLoad = () => ScrollTrigger.refresh();
-		const onFonts = () => ScrollTrigger.refresh();
+		// `fonts.ready` setelah font swap. Semuanya lewat calmRefresh agar tidak
+		// menendang pin di tengah gulir.
+		const r = requestAnimationFrame(() => calmRefresh());
+		const onLoad = () => calmRefresh();
+		const onFonts = () => calmRefresh();
 		window.addEventListener("load", onLoad);
 		if (document.fonts?.ready) document.fonts.ready.then(onFonts).catch(() => {});
 
@@ -75,6 +90,7 @@
 			window.removeEventListener("load", onLoad);
 			l.destroy();
 			lenis = null;
+			setLenis(null);
 		};
 	});
 
@@ -104,10 +120,10 @@
 		});
 
 		// Refresh bertahap: raf untuk flush segera, 100ms untuk layout awal,
-		// 600ms mengejar konten async.
-		const r = requestAnimationFrame(() => ScrollTrigger.refresh());
-		const t1 = setTimeout(() => ScrollTrigger.refresh(), 100);
-		const t2 = setTimeout(() => ScrollTrigger.refresh(), 600);
+		// 600ms mengejar konten async. Lewat calmRefresh (sopan saat digulir).
+		const r = requestAnimationFrame(() => calmRefresh());
+		const t1 = setTimeout(() => calmRefresh(), 100);
+		const t2 = setTimeout(() => calmRefresh(), 600);
 		return () => {
 			cancelAnimationFrame(r);
 			clearTimeout(t1);

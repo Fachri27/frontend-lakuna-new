@@ -13,6 +13,9 @@
 		style?: string;
 		width?: number | string;
 		height?: number | string;
+		/** Dipanggil saat gambar selesai dimuat ATAU gagal (agar pemanggil tidak menunggu selamanya). */
+		onload?: () => void;
+		onerror?: () => void;
 	};
 
 	let {
@@ -23,17 +26,32 @@
 		class: cls = "",
 		style = "",
 		width,
-		height
+		height,
+		onload,
+		onerror
 	}: ApiImageProps = $props();
+
+	let imgEl = $state<HTMLImageElement>();
+
+	// Gambar dari cache bisa sudah complete sebelum handler onload terpasang
+	// (tidak ada event load kedua) — laporkan langsung supaya tidak digantung.
+	$effect(() => {
+		const el = imgEl;
+		if (el && el.complete && el.naturalWidth > 0) onload?.();
+	});
 </script>
 
 <img
+	bind:this={imgEl}
 	{src}
 	{alt}
 	loading={eager ? "eager" : "lazy"}
 	decoding="async"
+	draggable={false}
 	{width}
 	{height}
+	onload={() => onload?.()}
+	onerror={() => onerror?.()}
 	class={fill ? `absolute inset-0 h-full w-full ${cls}` : cls}
 	style={fill ? `object-fit: cover;${style}` : style}
 />

@@ -1,21 +1,21 @@
 <script lang="ts">
 	/**
 	 * Navbar — port 1:1 dari components/Navbar.tsx. Header fixed di bawah
-	 * banner voucher (--banner-h), mega-menu kategori dari API, search, dan
-	 * sheet mobile dengan focus trap.
+	 * banner voucher (--banner-h), mega-menu kategori dari API, dan sheet
+	 * mobile dengan focus trap. Tanpa kolom search — pencarian hanya hidup
+	 * di hero beranda.
 	 */
-	import { goto } from "$app/navigation";
-	import { i18n } from "$lib/i18n.svelte";
+import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { announcer } from "$lib/stores/announce.svelte";
 	import { fetchCategories, type ApiCatItem } from "$lib/data";
-	import ThemeToggle from "./ThemeToggle.svelte";
+	import { authModal } from "$lib/authModal.svelte";
 	import ApiImage from "./ApiImage.svelte";
+	import { scrambleMute, toggleScramble } from "$lib/sound.svelte";
 
 	let scrolled = $state(false);
 	let mega = $state(false);
 	let open = $state(false);
-	let q = $state("");
 	let categories = $state<ApiCatItem[]>([]);
 	let megaRef = $state<HTMLDivElement>();
 	let megaBtnRef = $state<HTMLButtonElement>();
@@ -89,7 +89,6 @@
 
 	const solid = $derived(scrolled || mega || open);
 	const over = $derived(!solid);
-	const main = $derived(over ? "text-ivory" : "text-fg");
 	const muted = $derived(over ? "text-ivory/80" : "text-fg/85");
 	const icon = $derived(over ? "text-ivory/85" : "text-fg/80");
 	const line = $derived(over ? "border-ivory/25" : "border-hair");
@@ -99,14 +98,6 @@
 			? "[filter:brightness(0)_invert(1)]"
 			: "[filter:brightness(0)] dark:[filter:brightness(0)_invert(1)]"
 	);
-
-	function onSearch(e: SubmitEvent) {
-		e.preventDefault();
-		const v = q.trim();
-		if (!v) return;
-		goto(`/photos?q=${encodeURIComponent(v)}`);
-		open = false;
-	}
 </script>
 
 {#snippet NavLink(href: string, mainCls: string, label: string)}
@@ -131,36 +122,39 @@
 	></div>
 	<div
 		class={`relative transition-colors duration-500 ${
-			solid ? "bg-bg/85 backdrop-blur-xl border-b border-hair" : "bg-transparent"
+			solid ? "bg-bg/85 backdrop-blur-md sm:backdrop-blur-xl" : "bg-transparent"
 		}`}
 	>
-		<nav class="relative mx-auto flex h-[4.6rem] max-w-[1500px] items-center justify-between px-6 lg:px-10">
+		<nav class="relative mx-auto flex h-[var(--nav-h)] max-w-[1500px] items-center justify-between px-6 lg:px-10">
 			<a
 				href="/"
+				data-no-hover-sound
+				data-no-click-sound
 				class="group relative z-10 md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
 				aria-label="Lakuna"
 			>
+				<!-- logo1.png sudah di-crop ke glyph (simetris), jadi tidak perlu
+					koreksi optik margin/translate lagi. -->
 				<ApiImage
 					src="/logo1.png"
 					alt="Lakuna"
-					width={220}
-					height={116}
+					width={200}
+					height={36}
 					eager
-					class={`no-cvd h-14 w-auto transition-[filter] duration-500 sm:h-16 md:h-[4.5rem] lg:h-[5.5rem] ${logoFilter}`}
+					class={`no-cvd h-6 w-auto max-w-[44vw] transition-[filter] duration-500 sm:h-7 sm:max-w-none md:h-8 lg:h-8 ${logoFilter}`}
 				/>
 			</a>
 
 			<!-- Left: nav links (desktop) -->
-			<div class="hidden items-center gap-9 md:flex">
+			<div data-no-hover-sound data-no-click-sound class="hidden items-center gap-9 md:flex">
 				{@render NavLink("/photos", muted, i18n.c.nav.photos)}
 				{@render NavLink("/videos", muted, i18n.c.nav.videos)}
 
-				<!-- Categories w/ mega-menu -->
+				<!-- Categories: mega-menu dibuka via KLIK (bukan hover) — hover
+					tak sengaja membuka di desktop dan mustahil di sentuh. -->
 				<div
 					class="relative"
 					bind:this={megaRef}
-					onmouseenter={() => (mega = true)}
-					onmouseleave={() => (mega = false)}
 				>
 					<button
 						bind:this={megaBtnRef}
@@ -168,7 +162,7 @@
 						aria-expanded={mega}
 						aria-haspopup="true"
 						aria-controls="mega-menu-categories"
-						class={`group inline-flex items-center gap-1.5 py-2 text-[0.82rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight ${muted}`}
+						class={`group relative z-50 inline-flex items-center gap-1.5 py-2 text-[0.82rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight ${muted}`}
 						onclick={() => (mega = !mega)}
 					>
 						{i18n.c.nav.categories}
@@ -178,17 +172,25 @@
 					</button>
 
 					{#if mega}
+						<!-- Klik di luar menu menutupnya. -->
+						<button
+							type="button"
+							tabindex="-1"
+							aria-hidden="true"
+							onclick={() => (mega = false)}
+							class="fixed inset-0 z-40 cursor-default bg-transparent"
+						></button>
 						<div
 							id="mega-menu-categories"
 							role="menu"
-							class="absolute left-1/2 top-full w-[34rem] -translate-x-1/2 pt-4"
-							onmouseenter={() => (mega = true)}
+							class="absolute left-1/2 top-full z-50 w-[34rem] -translate-x-1/2 pt-4"
 						>
 							<div class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-hair bg-surface shadow-[0_30px_70px_-30px_rgba(11,31,42,0.4)]">
 								{#each categories as cat, i (cat.id)}
 									<a
 										role="menuitem"
 										href={`/photos?cat=${encodeURIComponent(cat.name)}`}
+										onclick={() => (mega = false)}
 										class="group flex flex-col gap-1 bg-bg p-5 transition-colors hover:bg-surface-2"
 									>
 										<span class="kicker text-safelight/80">0{i + 1}</span>
@@ -208,38 +210,50 @@
 				{@render NavLink("/pricing", muted, i18n.c.nav.pricing)}
 			</div>
 
-			<!-- Right cluster -->
-			<div class="flex items-center gap-2 sm:gap-3">
-				<!-- Search (desktop, underline style) -->
-				<form role="search" onsubmit={onSearch} class="hidden lg:block">
-					<div class="relative w-52">
-						<svg
-							class={`pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 ${icon}`}
-							width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-						>
-							<circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-						</svg>
-						<input
-							type="text"
-							bind:value={q}
-							placeholder={i18n.c.nav.searchPlaceholder}
-							aria-label={i18n.c.nav.searchPlaceholder}
-							class={`w-full border-b bg-transparent py-1.5 pl-6 pr-1 text-[0.78rem] outline-none transition-colors duration-500 placeholder:text-current placeholder:opacity-50 focus:border-safelight ${line} ${main}`}
-						/>
-					</div>
-				</form>
+			<!-- Right cluster: di bawah md hanya DUA tombol jempol 44px
+				(keranjang + burger). Ikon akun dilepas — aksinya sudah punya
+				baris sendiri di lembar menu, dan tiga lingkaran + wordmark
+				membuat logo berdempetan tanpa jarak di layar 390px. -->
+			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-3">
+				<div data-no-hover-sound data-no-click-sound class="contents">
+					<button
+						type="button"
+						onclick={() => i18n.setLang(i18n.lang === "id" ? "en" : "id")}
+						class={`kicker hidden h-9 rounded-full border px-3 transition-colors duration-500 hover:text-safelight md:block ${line} ${icon}`}
+						aria-label="Switch language"
+					>
+						{i18n.lang.toUpperCase()}
+					</button>
+				</div>
+				<!-- Saklar wajah (Arsip/Ungu/Merah) dilepas dari navbar — situs
+					menetap di wajah arsip. Modul $lib/skin.svelte.ts dibiarkan. -->
+				<!-- Saklar suara UI scramble: kotak bersudut cekung (bentuk rujukan) dengan
+					gelombang yang bergerak saat bersuara, rebah jadi garis datar saat
+					dibisukan. HANYA membisukan suara UI (hover/klik tombol) — suara
+					lain seperti audio video hero punya saklarnya sendiri. -->
 				<button
 					type="button"
-					onclick={() => i18n.setLang(i18n.lang === "id" ? "en" : "id")}
-					class={`kicker hidden h-9 rounded-full border px-3 transition-colors duration-500 hover:text-safelight sm:block ${line} ${icon}`}
-					aria-label="Switch language"
+					data-no-hover-sound
+					class={`nav-sound press grid h-11 w-11 place-items-center rounded-full border transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:h-9 md:w-9 ${line} ${icon}`}
+					class:is-muted={scrambleMute.muted}
+					onclick={toggleScramble}
+					aria-pressed={!scrambleMute.muted}
+					aria-label={scrambleMute.muted
+						? (i18n.lang === "id" ? "Nyalakan suara tombol" : "Turn button sound on")
+						: (i18n.lang === "id" ? "Bisukan suara tombol" : "Mute button sound")}
+					title={scrambleMute.muted
+						? (i18n.lang === "id" ? "Suara tombol mati" : "Button sound off")
+						: (i18n.lang === "id" ? "Suara tombol nyala" : "Button sound on")}
 				>
-					{i18n.lang.toUpperCase()}
+					<svg width="22" height="12" viewBox="0 0 44 24" fill="none" aria-hidden="true">
+						<path class="nav-sound-wave" d="M2 12 C 8 12, 8 3, 14 3 S 20 21, 26 21 S 32 3, 38 3 S 42 12, 42 12" />
+						<path class="nav-sound-flat" d="M2 12 H 42" />
+					</svg>
 				</button>
-				<div class="hidden sm:block"><ThemeToggle {line} {icon} /></div>
-				<a
-					href="/checkout"
-					class={`relative grid h-9 w-9 place-items-center rounded-full border transition-colors duration-500 hover:text-safelight ${line} ${icon}`}
+				<div data-no-hover-sound data-no-click-sound class="contents">
+					<a
+						href="/checkout"
+					class={`press relative grid h-11 w-11 place-items-center rounded-full border transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:h-9 md:w-9 ${line} ${icon}`}
 					aria-label={`Cart, ${store.cartCount} items`}
 				>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -252,78 +266,95 @@
 						</span>
 					{/if}
 				</a>
-				<a
-					href={store.user ? "/profile" : "/login"}
-					class={`arrow-link hidden text-[0.82rem] font-medium transition-colors duration-500 hover:text-safelight sm:inline-flex ${muted}`}
-				>
-					{store.user ? store.user.name.split(" ")[0] : i18n.c.nav.signin}
-					<span class="arr text-safelight">→</span>
-				</a>
+				{#if store.user}
+					<a
+						href="/profile"
+						class={`press hidden! h-9 items-center rounded-full border px-4 text-[0.82rem] font-medium transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:inline-flex! ${line} ${icon}`}
+					>
+						{store.user.name.split(" ")[0]}
+					</a>
+				{:else}
+					<button
+						type="button"
+						onclick={() => authModal.open("/profile")}
+						class={`press hidden! h-9 cursor-pointer items-center rounded-full border px-4 text-[0.82rem] font-medium transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:inline-flex! ${line} ${icon}`}
+					>
+						{i18n.c.nav.signin}
+					</button>
+				{/if}
 
-				<!-- Mobile burger -->
+				<!-- Burger 44px sejajar trio: ring yang sama dengan tombol
+					sebelahnya, garis dipertegas. -->
 				<button
 					bind:this={mobileBtnRef}
 					type="button"
-					class="grid h-9 w-9 place-items-center md:hidden"
+					class={`grid h-11 w-11 place-items-center rounded-full border transition-colors active:border-safelight md:hidden ${line}`}
 					aria-label={open ? "Close menu" : "Menu"}
 					aria-expanded={open}
 					aria-controls="mobile-menu"
 					onclick={() => (open = !open)}
 				>
-					<span class="relative block h-3 w-5">
-						<span class={`absolute left-0 block h-px w-5 transition-all ${bar} ${open ? "top-1.5 rotate-45" : "top-0"}`}></span>
-						<span class={`absolute left-0 top-1.5 block h-px w-5 transition-all ${bar} ${open ? "opacity-0" : "opacity-100"}`}></span>
-						<span class={`absolute left-0 block h-px w-5 transition-all ${bar} ${open ? "top-1.5 -rotate-45" : "top-3"}`}></span>
+					<span class="relative block h-3 w-[18px]">
+						<span class={`absolute left-0 block h-[1.5px] w-[18px] rounded-full transition-all ${bar} ${open ? "top-1.5 rotate-45" : "top-0"}`}></span>
+						<span class={`absolute left-0 top-1.5 block h-[1.5px] w-[18px] rounded-full transition-all ${bar} ${open ? "opacity-0" : "opacity-100"}`}></span>
+						<span class={`absolute left-0 block h-[1.5px] w-[18px] rounded-full transition-all ${bar} ${open ? "top-1.5 -rotate-45" : "top-3"}`}></span>
 					</span>
 				</button>
+				</div>
 			</div>
 
 		</nav>
 
-		<!-- Mobile sheet -->
+		<!-- Lembar mobile: tiap baris setinggi jempol (48px), aksi masuk
+			jadi tombol penuh selebar layar — pola yang sama dengan rel
+			lisensi di halaman detail. -->
 		{#if open}
 			<div
 				id="mobile-menu"
+				data-no-hover-sound
+				data-no-click-sound
 				bind:this={mobileMenuRef}
 				role="dialog"
 				aria-label="Navigation menu"
 				onkeydown={onMobileKeyDown}
-				class="border-t border-hair bg-bg px-6 py-6 md:hidden"
+				class="border-t border-hair bg-bg px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)] md:hidden"
 			>
-				<div class="flex flex-col gap-5">
-					<form role="search" onsubmit={onSearch} class="mb-1">
-						<div class="relative">
-							<svg class="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-fg-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-							</svg>
-							<input
-								type="text"
-								bind:value={q}
-								placeholder={i18n.c.nav.searchPlaceholder}
-								aria-label={i18n.c.nav.searchPlaceholder}
-								class="w-full border-b border-hair bg-transparent py-2.5 pl-7 pr-1 text-[0.95rem] outline-none focus:border-safelight"
-							/>
-						</div>
-					</form>
-					<a href="/photos" class="font-display text-[1.4rem] text-fg transition-colors hover:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.photos}</a>
-					<a href="/videos" class="font-display text-[1.4rem] text-fg transition-colors hover:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.videos}</a>
-					<a href="/photos" class="font-display text-[1.4rem] text-fg transition-colors hover:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.categories}</a>
-					<a href="/pricing" class="font-display text-[1.4rem] text-fg transition-colors hover:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.pricing}</a>
-					<div class="my-1 border-t border-hair"></div>
+				<div class="flex flex-col gap-1">
+					<a href="/photos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.photos}</a>
+					<a href="/videos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.videos}</a>
+					<a href="/photos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.categories}</a>
+					<a href="/pricing" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.pricing}</a>
+					<div class="my-3 border-t border-hair"></div>
 					<div class="flex items-center gap-3">
 						<button
 							type="button"
 							onclick={() => i18n.setLang(i18n.lang === "id" ? "en" : "id")}
-							class="kicker h-9 rounded-full border border-hair px-3 text-fg/80 transition-colors hover:text-safelight"
+							class="kicker min-h-[44px] rounded-full border border-hair px-4 text-fg/80 transition-colors active:text-safelight"
 							aria-label="Switch language"
 						>
 							{i18n.lang.toUpperCase()}
 						</button>
-						<ThemeToggle line="border-hair" icon="text-fg/80" />
 					</div>
-					<a href="/login" class="arrow-link text-safelight" onclick={() => (open = false)}>
-						{i18n.c.nav.signin} <span class="arr">→</span>
-					</a>
+					{#if store.user}
+						<a
+							href="/profile"
+							class="press mt-4 flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-hair text-sm font-medium text-fg/80 transition-colors active:text-safelight"
+							onclick={() => (open = false)}
+						>
+							{store.user.name.split(" ")[0]}
+						</a>
+					{:else}
+						<button
+							type="button"
+							onclick={() => {
+								open = false;
+								authModal.open("/profile");
+							}}
+							class="press mt-4 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full border border-hair text-sm font-medium text-fg/80 transition-colors active:text-safelight"
+						>
+							{i18n.c.nav.signin}
+						</button>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -331,3 +362,48 @@
 	</div>
 </header>
 
+
+<style>
+	/* Saklar suara: lingkaran bergaris sama dengan tombol EN & keranjang;
+	   warna/garis dari kelas utilitas yang sama. */
+	.nav-sound {
+		padding: 0;
+		background: transparent;
+		cursor: pointer;
+	}
+	.nav-sound:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: 3px;
+	}
+	.nav-sound svg path {
+		stroke: currentColor;
+		stroke-width: 3.2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		transition: opacity 0.3s ease;
+	}
+	/* Bersuara: gelombang mengalir pelan. Dibisukan: rebah jadi garis datar. */
+	.nav-sound-wave {
+		stroke-dasharray: 60 12;
+		animation: ns-flow 1.6s linear infinite;
+	}
+	.nav-sound-flat {
+		opacity: 0;
+	}
+	.nav-sound.is-muted {
+		opacity: 0.6;
+	}
+	.nav-sound.is-muted .nav-sound-wave {
+		opacity: 0;
+		animation: none;
+	}
+	.nav-sound.is-muted .nav-sound-flat {
+		opacity: 1;
+	}
+	@keyframes ns-flow {
+		to { stroke-dashoffset: -72; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.nav-sound-wave { animation: none; stroke-dasharray: none; }
+	}
+</style>

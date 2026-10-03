@@ -88,7 +88,7 @@
 				type="button"
 				onclick={() => requestClose(false)}
 				aria-label="Tutup"
-				class="group absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-fg/40 transition-colors hover:bg-hair/40 hover:text-fg"
+				class="tap-expand group absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-fg/40 transition-colors hover:bg-hair/40 hover:text-fg active:bg-hair/40 active:text-fg"
 			>
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
 					<path d="M6 6l12 12M18 6L6 18" />
@@ -124,7 +124,7 @@
 						<button
 							type="button"
 							onclick={() => requestClose(false)}
-							class="flex-1 rounded-full border border-hair px-6 py-3 text-sm font-medium text-fg transition-colors hover:border-fg-muted hover:bg-hair/20 sm:flex-none"
+							class="press flex-1 rounded-full border border-hair px-6 py-3.5 text-sm font-medium text-fg transition-colors hover:border-fg-muted hover:bg-hair/20 active:bg-hair/20 sm:flex-none"
 						>
 							{data.cancelLabel}
 						</button>
@@ -133,7 +133,7 @@
 						bind:this={confirmRef}
 						type="button"
 						onclick={() => requestClose(true)}
-						class="flex-1 rounded-full bg-safelight px-8 py-3 text-sm font-semibold tracking-wide text-ivory shadow-[0_16px_40px_-10px_var(--safelight-glow)] transition-all duration-300 hover:shadow-[0_20px_50px_-10px_var(--safelight-glow)] hover:brightness-110 sm:flex-none"
+						class="press flex-1 rounded-full bg-safelight px-8 py-3.5 text-sm font-semibold tracking-wide text-ivory shadow-[0_16px_40px_-10px_var(--safelight-glow)] transition-all duration-300 hover:shadow-[0_20px_50px_-10px_var(--safelight-glow)] hover:brightness-110 active:brightness-110 sm:flex-none"
 					>
 						{data.confirmLabel || "OK"}
 					</button>

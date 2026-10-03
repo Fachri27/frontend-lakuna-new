@@ -1,6 +1,7 @@
 <script lang="ts">
 	import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
+	import { sinceScroll } from "$lib/scrollCalm";
 	import ApiImage from "./ApiImage.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
@@ -58,7 +59,10 @@
 			cancelAnimationFrame(raf);
 			clearTimeout(tid);
 			raf = requestAnimationFrame(() => {
-				tid = window.setTimeout(() => (layoutVer += 1), 120);
+				// Tunda rebuild bila sedang digulir — revert+rebuild trigger di
+				// tengah gulir menggeser gambar (glitch).
+				const wait = sinceScroll() < 800 ? 900 : 120;
+				tid = window.setTimeout(() => (layoutVer += 1), wait);
 			});
 		});
 		ro.observe(document.documentElement);
