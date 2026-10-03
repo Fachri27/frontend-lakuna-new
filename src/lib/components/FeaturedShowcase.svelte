@@ -338,7 +338,7 @@
 					}}
 					onkeydown={onKey}
 				>
-					{#each items as p, i (p.id)}
+					{#each items as p, i (p.id + "-" + i)}
 						<a
 							href={`/photos/${p.id}`}
 							class="fs-card"

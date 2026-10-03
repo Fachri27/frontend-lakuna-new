@@ -33,7 +33,7 @@
 </div>
 <div class="mt-12 flex flex-wrap items-center justify-center gap-x-14 gap-y-10 sm:gap-x-20">
 	{#if items?.length}
-		{#each items as logo (logo.src)}
+		{#each items as logo, li (logo.src + "-" + li)}
 			<span data-reveal>
 				<img
 					src={logo.src}
@@ -46,7 +46,7 @@
 			</span>
 		{/each}
 	{:else}
-		{#each logos as logo (logo.name)}
+		{#each logos as logo, li (logo.name + "-" + li)}
 		<span data-reveal>
 			<span
 				class={`whitespace-nowrap text-3xl text-fg-muted opacity-50 transition-all duration-200 hover:opacity-100 sm:text-5xl ${logo.cls}`}

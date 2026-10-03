@@ -224,7 +224,7 @@
 
 		<div bind:this={viewport} class="rc-viewport">
 			<div bind:this={track} class="rc-track">
-				{#each loop as entry, k (entry.key)}
+				{#each loop as entry, k (entry.key + "-" + k)}
 					<button
 						type="button"
 						bind:this={itemEls[k]}

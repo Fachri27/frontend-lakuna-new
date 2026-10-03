@@ -1291,7 +1291,7 @@
 		{#if droneItems.length > 0}
 			<div bind:this={dragViewEl} class="dg-view" role="region" aria-label="Contact sheet">
 				<div bind:this={reelLgEl} class="dg-track">
-					{#each droneItems as v, i (v.id)}
+					{#each droneItems as v, i (v.id + "-" + i)}
 								<a
 								href={`/videos/${v.id}`}
 								class="dg-card group"
@@ -1418,7 +1418,7 @@
 				</div>
 				{#if rateFrames.length}
 					<span class="rate-strip" aria-label={s.standarStrip}>
-						{#each rateFrames as f (f.id)}
+						{#each rateFrames as f, fi (f.id + "-" + fi)}
 							<span class="rate-frame"><ApiImage src={f.thumbUrl ?? ""} alt="" fill eager={warmBelow} class="object-cover" /></span>
 						{/each}
 					</span>
@@ -1450,7 +1450,7 @@
 				</div>
 				{#if quotaLadder.length}
 					<span class="rate-ladder">
-						{#each quotaLadder as q (q)}
+						{#each quotaLadder as q, qi (q + "-" + qi)}
 							<span class="rate-chip">{q}</span>
 						{/each}
 						<span class="rate-chip-unit">{s.quotaUnit}</span>
@@ -1555,7 +1555,7 @@
 							{/if}
 						</p>
 						<ul class="ben-list">
-							{#each (benefitPlan === "PREMIUM" ? s.subscribeBenefits : s.standarBenefits) as b (b)}
+							{#each (benefitPlan === "PREMIUM" ? s.subscribeBenefits : s.standarBenefits) as b, bi (b + "-" + bi)}
 								<li>{b}</li>
 							{/each}
 						</ul>
