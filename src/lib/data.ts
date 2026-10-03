@@ -1,6 +1,6 @@
 import type { ApiPhoto, ApiPlan, ApiCategory, ApiEvent, ApiResponse, HomepageSection } from "./types";
 export type { HomepageSection, ApiEvent };
-import { apiGet } from "./api";
+import { apiGet, cleanApiBase } from "./api";
 import { DUMMY_API_PHOTOS, DUMMY_CATEGORIES } from "./dummy";
 
 export type Cat = "nature" | "urban" | "people" | "travel" | "business" | "cinema";
@@ -628,7 +628,7 @@ let snapMem: HomeSnapshot | null = null;
 
 function snapshotApiBase(): string {
 	try {
-		return import.meta.env.VITE_API_URL || "http://localhost:3000";
+		return cleanApiBase(import.meta.env.VITE_API_URL) || "http://localhost:3000";
 	} catch {
 		return "";
 	}

@@ -9,7 +9,17 @@ function resolveBase(): string {
 		const h = window.location.hostname;
 		if (h === "localhost" || h === "127.0.0.1") return "http://localhost:3100";
 	}
-	return import.meta.env.VITE_API_URL || "http://localhost:3000";
+	return cleanApiBase(import.meta.env.VITE_API_URL) || "http://localhost:3000";
+}
+
+/**
+ * VITE_API_URL harus alamat saja ("https://host"); setiap panggilan sudah
+ * memakai awalan "/api/…". Bila terisi "https://host/api" (mudah tertukar dengan
+ * PUBLIC_API_URL milik CMS) hasilnya "/api/api/…" → 404 & diblokir CSP.
+ * Garis miring dan akhiran "/api" dibuang di sini.
+ */
+export function cleanApiBase(v: string | undefined): string {
+	return (v ?? "").trim().replace(/\/+$/, "").replace(/\/api$/i, "").replace(/\/+$/, "");
 }
 
 const BASE = resolveBase();

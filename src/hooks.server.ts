@@ -31,8 +31,17 @@ import type { Handle } from "@sveltejs/kit";
  */
 // Baca dari import.meta.env dulu (file .env Vite) lalu process.env (shell/Vercel),
 // supaya tunnel publik (cloudflared/ngrok) ikut diizinkan CSP saat dev share.
-const API_ORIGIN =
+// Hanya ORIGIN (tanpa path): sumber CSP berpath "/api" hanya cocok persis dengan
+// "/api", sehingga "/api/photos" ikut diblokir.
+const rawApi =
 	import.meta.env.VITE_API_URL || process.env.VITE_API_URL || "http://localhost:3100";
+const API_ORIGIN = (() => {
+	try {
+		return new URL(rawApi.trim()).origin;
+	} catch {
+		return rawApi.trim().replace(/\/+$/, "").replace(/\/api$/i, "");
+	}
+})();
 const MINIO_ORIGIN =
 	import.meta.env.VITE_MINIO_PUBLIC_URL ||
 	import.meta.env.MINIO_PUBLIC_URL ||
