@@ -12,6 +12,7 @@
 	import AccessPanel from "$lib/components/AccessPanel.svelte";
 	import VoucherBar from "$lib/components/VoucherBar.svelte";
 	import ScrollToTop from "$lib/components/ScrollToTop.svelte";
+	import ChatBot from "$lib/components/ChatBot.svelte";
 	import LiveAnnouncer from "$lib/components/LiveAnnouncer.svelte";
 	import SkipLink from "$lib/components/SkipLink.svelte";
 	import Popup from "$lib/components/Popup.svelte";
@@ -161,6 +162,7 @@
 <Footer />
 <AccessPanel />
 <ScrollToTop />
+<ChatBot />
 <Popup />
 <AuthModal />
 <SubscribeModal />
