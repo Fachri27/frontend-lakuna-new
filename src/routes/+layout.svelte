@@ -11,7 +11,6 @@
 	import ColorVisionFilter from "$lib/components/ColorVisionFilter.svelte";
 	import AccessPanel from "$lib/components/AccessPanel.svelte";
 	import VoucherBar from "$lib/components/VoucherBar.svelte";
-	import FloatingAccessBtn from "$lib/components/FloatingAccessBtn.svelte";
 	import ScrollToTop from "$lib/components/ScrollToTop.svelte";
 	import LiveAnnouncer from "$lib/components/LiveAnnouncer.svelte";
 	import SkipLink from "$lib/components/SkipLink.svelte";
@@ -161,7 +160,6 @@
 </main>
 <Footer />
 <AccessPanel />
-<FloatingAccessBtn />
 <ScrollToTop />
 <Popup />
 <AuthModal />

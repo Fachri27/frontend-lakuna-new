@@ -12,6 +12,7 @@ import { i18n } from "$lib/i18n.svelte";
 	import { authModal } from "$lib/authModal.svelte";
 	import ApiImage from "./ApiImage.svelte";
 	import { scrambleMute, toggleScramble } from "$lib/sound.svelte";
+	import { access } from "$lib/access.svelte";
 
 	let scrolled = $state(false);
 	let mega = $state(false);
@@ -250,6 +251,26 @@ import { i18n } from "$lib/i18n.svelte";
 						<path class="nav-sound-flat" d="M2 12 H 42" />
 					</svg>
 				</button>
+				<!-- Aksesibilitas (dulu tombol mengambang di pojok kanan-bawah): lingkaran
+					yang sama dengan tombol suara & keranjang. Di bawah md navbar sudah
+					penuh, jadi aksinya ada di lembar menu. -->
+				<button
+					type="button"
+					data-no-hover-sound
+					data-no-click-sound
+					onclick={() => access.setPanelOpen(true)}
+					aria-label={i18n.c.access.panelTitle}
+					aria-haspopup="dialog"
+					title={i18n.c.access.panelTitle}
+					class={`press hidden h-9 w-9 cursor-pointer place-items-center rounded-full border bg-transparent p-0 transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:grid ${line} ${icon}`}
+				>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<circle cx="12" cy="4.2" r="1.6" />
+						<path d="M4.5 8.2c2.4 1.1 5 1.7 7.5 1.7s5.1-.6 7.5-1.7" />
+						<path d="M12 9.9v6" />
+						<path d="M12 15.9l-3.6 5.1M12 15.9l3.6 5.1" />
+					</svg>
+				</button>
 				<div data-no-hover-sound data-no-click-sound class="contents">
 					<a
 						href="/checkout"
@@ -333,6 +354,22 @@ import { i18n } from "$lib/i18n.svelte";
 							aria-label="Switch language"
 						>
 							{i18n.lang.toUpperCase()}
+						</button>
+						<button
+							type="button"
+							onclick={() => {
+								open = false;
+								access.setPanelOpen(true);
+							}}
+							class="press inline-flex min-h-[44px] items-center gap-2 rounded-full border border-hair px-4 text-[0.9rem] text-fg/80 transition-colors active:text-safelight"
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<circle cx="12" cy="4.2" r="1.6" />
+						<path d="M4.5 8.2c2.4 1.1 5 1.7 7.5 1.7s5.1-.6 7.5-1.7" />
+						<path d="M12 9.9v6" />
+						<path d="M12 15.9l-3.6 5.1M12 15.9l3.6 5.1" />
+					</svg>
+							{i18n.c.access.panelTitle}
 						</button>
 					</div>
 					{#if store.user}
