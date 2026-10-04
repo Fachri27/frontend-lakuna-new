@@ -1910,7 +1910,27 @@
 		font-size: 1rem;
 		font-weight: 500;
 	}
-	.dg-card:hover,
+	/* Hover = satu garis ungu di tepi bawah yang memanjang dari kiri — sama dengan
+	   kartu foto di /photos (Masonry), bukan bingkai penuh. Fokus keyboard tetap
+	   mendapat kontur supaya terlihat jelas. */
+	.dg-card::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		z-index: 3;
+		width: 100%;
+		height: 2px;
+		background: var(--safelight);
+		transform: scaleX(0);
+		transform-origin: left;
+		transition: transform 0.5s ease-out;
+		pointer-events: none;
+	}
+	.dg-card:hover::after,
+	.dg-card:focus-visible::after {
+		transform: scaleX(1);
+	}
 	.dg-card:focus-visible {
 		outline: 2px solid var(--safelight);
 		outline-offset: -2px;
@@ -1965,7 +1985,8 @@
 		.dg-track {
 			transform: none !important;
 		}
-		.dg-cap {
+		.dg-cap,
+		.dg-card::after {
 			transition: none;
 		}
 		.dg-hint {
