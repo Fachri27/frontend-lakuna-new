@@ -615,6 +615,64 @@
 		return () => io.disconnect();
 	});
 
+	// ── Performa video hero ────────────────────────────────────────────
+	// Video latar 1440p/50fps bisa melampaui kemampuan dekoder laptop lemah. Dua
+	// pengaman, tanpa mengubah kualitas di perangkat yang sanggup:
+	//  1) Hero sudah di luar layar → video dijeda (dekoder & kompositor istirahat).
+	//  2) Frame terbuang (getVideoPlaybackQuality) tinggi terus-menerus → video
+	//     dibekukan di frame terakhir (tetap tampil sebagai gambar diam) — lebih
+	//     baik diam mulus daripada patah-patah, juga untuk bagian halaman lain
+	//     yang berbagi GPU/CPU yang sama.
+	let heroFrozen = false;
+	let heroOnScreen = true;
+	function syncHeroPlayback() {
+		const v = heroVideoEl;
+		if (!v || heroFrozen) return;
+		if (heroOnScreen && v.paused && v.readyState >= 2) void v.play().catch(() => {});
+		else if (!heroOnScreen && !v.paused) v.pause();
+	}
+	$effect(() => {
+		const v = heroVideoEl;
+		const cover = heroSection?.parentElement;
+		if (!v || !cover || !heroVideoOk) return;
+		heroFrozen = false;
+		const io = new IntersectionObserver(
+			([e]) => {
+				heroOnScreen = !!e?.isIntersecting;
+				syncHeroPlayback();
+			},
+			{ threshold: 0 },
+		);
+		io.observe(cover);
+		// Pantau kualitas pemutaran per detik; jendela 4 detik, dua jendela buruk berturut-turut.
+		let prevDropped = 0;
+		let prevTotal = 0;
+		let bad = 0;
+		const win: { d: number; t: number }[] = [];
+		const timer = window.setInterval(() => {
+			if (heroFrozen || v.paused || document.hidden || !v.getVideoPlaybackQuality) return;
+			const q = v.getVideoPlaybackQuality();
+			win.push({ d: q.droppedVideoFrames - prevDropped, t: q.totalVideoFrames - prevTotal });
+			prevDropped = q.droppedVideoFrames;
+			prevTotal = q.totalVideoFrames;
+			if (win.length > 4) win.shift();
+			if (win.length < 4) return;
+			const d = win.reduce((n, x) => n + x.d, 0);
+			const t = win.reduce((n, x) => n + x.t, 0);
+			bad = t >= 60 && d / t > 0.15 ? bad + 1 : 0;
+			if (bad >= 2) {
+				heroFrozen = true;
+				v.pause();
+				v.muted = true;
+				heroMuted = true;
+			}
+		}, 1000);
+		return () => {
+			io.disconnect();
+			window.clearInterval(timer);
+		};
+	});
+
 	// URL video baru (ganti CMS) = mulai lagi dari belum-siap.
 	$effect(() => {
 		void heroVideoUrl;
