@@ -98,7 +98,7 @@
 	// Halaman arsip & transaksional senyap total — sapuan melintasi
 	// grid/kartu/form di sana terdengar berisik. Pola mencakup sub-rute
 	// (/photos/:id, /videos/:id, ...).
-	const SILENT_SOUND = /^\/(photos|videos|pricing|profile|license|checkout)(\/|$)/;
+	const SILENT_SOUND = /^\/(photos|videos|pricing|profile|license|checkout|ecotourism)(\/|$)/;
 	function soundMuted(): boolean {
 		try {
 			return SILENT_SOUND.test(page.url.pathname);

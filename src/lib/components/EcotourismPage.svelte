@@ -143,6 +143,11 @@
 	// berganti per zona: pesawat → jip → motor → perahu → kapal → kapal selam →
 	// pesawat. Geometri dihitung dari posisi nyata tiap zona (ikut ukuran layar dan
 	// isi yang baru termuat), bukan angka tetap.
+	//
+	// Halus: garis baca TEREDAM (dikejar eksponensial, berhenti sendiri saat gulir
+	// diam) dan semua pembaruan per-frame ditulis langsung ke DOM — kendaraan
+	// adalah elemen HTML yang hanya digeser lewat transform (jalur GPU), bukan
+	// render ulang Svelte di dalam SVG setinggi seluruh halaman.
 	type Kind = "plane" | "jeep" | "bike" | "canoe" | "ferry" | "sub";
 	const LANE_KIND: Kind[] = ["plane", "jeep", "bike", "canoe", "ferry", "sub", "plane"];
 	type Seg =
@@ -152,26 +157,42 @@
 	let pageEl: HTMLElement;
 	let heroEl: HTMLElement;
 	let closeEl: HTMLElement;
+	let vehEl: HTMLElement | undefined = $state();
+	let vehIconEl: HTMLElement | undefined = $state();
+	let doneEl: SVGPathElement | undefined = $state();
+	let readEl: HTMLElement | undefined = $state();
+	let readNumEl: HTMLElement | undefined = $state();
+	let readUnitEl: HTMLElement | undefined = $state();
+	let chipEl: HTMLElement | undefined = $state();
+	let chipNumEl: HTMLElement | undefined = $state();
 	let bandEls: HTMLElement[] = $state([]);
-	let elevation = $state(BANDS[0]!.from);
-	let activeIdx = $state(0);
-	let altOn = $state(true);
 
-	// Geometri rute (state hanya untuk yang dirender).
+	// State reaktif hanya untuk yang JARANG berubah (jenis kendaraan, zona aktif).
+	let vehKind = $state<Kind>("plane");
+	let activeIdx = $state(0);
 	let routeD = $state("");
 	let routeLen = $state(1);
 	let routeW = $state(0);
 	let routeH = $state(0);
 	/** Layar sempit: kendaraan lebih kecil supaya muat di lajur kiri. */
 	let compact = $state(false);
-	let travelled = $state(0); // panjang rute yang sudah dilalui
-	let veh = $state({ x: 0, y: 0, a: 180, kind: "plane" as Kind, left: false });
 
 	let segs: Seg[] = [];
 	let wins: { Y: number; sA: number; sB: number }[] = [];
 	let yStart = 0;
 	let dividers: number[] = [];
 	let winW = 200;
+	let pageTop = 0; // posisi atas halaman ini dari puncak dokumen
+	let pageBottom = 0;
+	let cur = 0; // garis baca yang sudah diredam (koordinat halaman)
+	let rafId = 0;
+	let lastT = 0;
+	let reduced = false;
+	let lastKind: Kind = "plane";
+	let lastNum = "";
+	let lastBg = "";
+	let lastSide: boolean | null = null;
+	let lastOn: boolean | null = null;
 
 	const fmtM = (m: number) => `${m < 0 ? "−" : ""}${Math.abs(Math.round(m)).toLocaleString(lang === "id" ? "id-ID" : "en-US")}`;
 	const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -189,12 +210,14 @@
 		const xR = narrow ? xL : W0 - edge;
 		const lanes = [xL, xR, xL, xR, xL, xR, xL];
 		const R = 26;
+		pageTop = pageEl.getBoundingClientRect().top + scrollY;
+		pageBottom = pageTop + H0;
 		dividers = [...bandEls.map((e) => e.offsetTop), closeEl.offsetTop];
 		yStart = Math.max(110, heroEl.offsetTop + 120);
 		const yEnd = Math.max(yStart + 200, closeEl.offsetTop + closeEl.offsetHeight - 110);
 		let gap = Infinity;
 		for (let i = 0; i < dividers.length - 1; i++) gap = Math.min(gap, dividers[i + 1]! - dividers[i]!);
-		winW = clamp(Math.min(220, gap * 0.36, dividers[0]! - yStart - 6), R + 4, 220);
+		winW = clamp(Math.min(320, gap * 0.4, dividers[0]! - yStart - 6), R + 4, 320);
 
 		segs = [];
 		wins = [];
@@ -238,7 +261,6 @@
 		routeW = W0;
 		routeH = H0;
 		compact = narrow;
-		placeVehicle();
 	}
 
 	/** Panjang rute yang ditempuh kendaraan bila garis baca ada di y (koordinat halaman). */
@@ -272,96 +294,140 @@
 		if (!seg) return { x: 0, y: 0, a: 180 };
 		const t = seg.len > 0 ? clamp((sc - seg.s0) / seg.len, 0, 1) : 0;
 		if (seg.k === "line") {
-			const x = lerp(seg.x0, seg.x1, t);
-			const y = lerp(seg.y0, seg.y1, t);
-			return { x, y, a: (Math.atan2(seg.x1 - seg.x0, -(seg.y1 - seg.y0)) * 180) / Math.PI };
+			return {
+				x: lerp(seg.x0, seg.x1, t),
+				y: lerp(seg.y0, seg.y1, t),
+				a: (Math.atan2(seg.x1 - seg.x0, -(seg.y1 - seg.y0)) * 180) / Math.PI,
+			};
 		}
 		const th = lerp(seg.th0, seg.th1, t);
 		const R = Math.abs(seg.len / (seg.th1 - seg.th0));
 		const dth = seg.th1 - seg.th0;
-		const tx = -Math.sin(th) * dth;
-		const ty = Math.cos(th) * dth;
 		return {
 			x: seg.cx + R * Math.cos(th),
 			y: seg.cy + R * Math.sin(th),
-			a: (Math.atan2(tx, -ty) * 180) / Math.PI,
+			a: (Math.atan2(-Math.sin(th) * dth, -(Math.cos(th) * dth)) * 180) / Math.PI,
 		};
 	}
 
-	/** Letakkan kendaraan sesuai posisi gulir sekarang. */
-	function placeVehicle() {
-		if (!pageEl || !segs.length) return;
-		const pageTop = pageEl.getBoundingClientRect().top;
-		const lineY = -pageTop + innerHeight * 0.45;
-		const s = sOf(lineY);
+	/** Tulis semua yang tampak untuk garis baca `ly` — langsung ke DOM, tanpa render ulang. */
+	function apply(ly: number) {
+		if (!segs.length || !vehEl) return;
+		// ── zona aktif, ketinggian, warna latar (dari posisi nyata zona; tanpa baca layout)
+		let i = 0;
+		let u = 0;
+		const top0 = dividers[0]!;
+		const bottomN = dividers[BANDS.length]!;
+		if (ly <= top0) {
+			i = 0;
+			u = 0;
+		} else if (ly >= bottomN) {
+			i = BANDS.length - 1;
+			u = 1;
+		} else {
+			for (let k = 0; k < BANDS.length; k++) {
+				if (ly >= dividers[k]! && ly < dividers[k + 1]!) {
+					i = k;
+					u = (ly - dividers[k]!) / (dividers[k + 1]! - dividers[k]!);
+					break;
+				}
+			}
+		}
+		const b = BANDS[i]!;
+		const elev = lerp(b.from, b.to, u);
+		if (i !== activeIdx) activeIdx = i;
+		const nx = BANDS[Math.min(i + 1, BANDS.length - 1)]!;
+		const kk = reduced ? 0 : ease(u);
+		const bg = `rgb(${[0, 1, 2].map((j) => Math.round(lerp(b.tone[j]!, nx.tone[j]!, kk))).join(", ")})`;
+		if (bg !== lastBg) {
+			lastBg = bg;
+			pageEl.style.setProperty("--eco-bg", bg);
+		}
+		const num = fmtM(elev);
+		if (num !== lastNum) {
+			lastNum = num;
+			if (readNumEl) readNumEl.textContent = num;
+			if (chipNumEl) chipNumEl.textContent = num;
+			if (readUnitEl) readUnitEl.textContent = elev < 0 ? "m" : "m dpl";
+		}
+
+		// ── kendaraan di rute
+		const s = sOf(ly);
 		const p = pointAt(s);
+		vehEl.style.transform = `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0)`;
+		if (vehIconEl) vehIconEl.style.transform = `rotate(${p.a.toFixed(1)}deg)`;
+		doneEl?.setAttribute("stroke-dashoffset", (routeLen - s).toFixed(1));
 		let lane = 0;
-		for (const Y of dividers) if (lineY >= Y) lane++;
-		travelled = s;
-		veh = { x: p.x, y: p.y, a: p.a, kind: LANE_KIND[lane] ?? "plane", left: p.x > routeW / 2 };
+		for (const Y of dividers) if (ly >= Y) lane++;
+		const kind = LANE_KIND[lane] ?? "plane";
+		if (kind !== lastKind) {
+			lastKind = kind;
+			vehKind = kind;
+		}
+		if (readEl) {
+			const left = p.x > routeW / 2;
+			readEl.style.transform = `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0)`;
+			if (left !== lastSide) {
+				lastSide = left;
+				readEl.classList.toggle("is-left", left);
+			}
+		}
+		// Pembacaan & chip disembunyikan begitu halaman ini tak lagi mengisi layar.
+		const on = scrollY + innerHeight * 0.92 < pageBottom;
+		if (on !== lastOn) {
+			lastOn = on;
+			readEl?.classList.toggle("is-off", !on);
+			chipEl?.classList.toggle("is-off", !on);
+		}
+	}
+
+	/** Garis baca TARGET (koordinat halaman): 45% tinggi layar dari atas. */
+	const targetLine = () => scrollY + innerHeight * 0.45 - pageTop;
+
+	function frame(now: number) {
+		rafId = 0;
+		const dt = Math.min(64, now - lastT || 16);
+		lastT = now;
+		const t = targetLine();
+		// Eksponensial, tak bergantung laju frame: ±95 ms konstanta waktu.
+		cur += (t - cur) * (reduced ? 1 : 1 - Math.exp(-dt / 95));
+		if (Math.abs(t - cur) < 0.3) cur = t;
+		apply(cur);
+		if (cur !== t) rafId = requestAnimationFrame(frame);
+	}
+	/** Mulai (atau lanjutkan) loop; berhenti sendiri saat posisi sudah menyusul. */
+	function kick() {
+		if (rafId) return;
+		lastT = performance.now();
+		rafId = requestAnimationFrame(frame);
 	}
 
 	onMount(() => {
-		const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		let raf = 0;
-		const update = () => {
-			raf = 0;
-			if (!bandEls.length || !pageEl) return;
-			const line = innerHeight * 0.45;
-			altOn = pageEl.getBoundingClientRect().bottom > innerHeight * 0.92;
-			const first = bandEls[0]!.getBoundingClientRect();
-			const last = bandEls[bandEls.length - 1]!.getBoundingClientRect();
-			// Di atas zona pertama: tetap di puncak; di bawah zona terakhir: tetap di dasar.
-			let i = 0;
-			let u = 0;
-			if (line <= first.top) {
-				i = 0;
-				u = 0;
-			} else if (line >= last.bottom) {
-				i = BANDS.length - 1;
-				u = 1;
-			} else {
-				for (let k = 0; k < bandEls.length; k++) {
-					const r = bandEls[k]!.getBoundingClientRect();
-					if (line >= r.top && line < r.bottom) {
-						i = k;
-						u = (line - r.top) / r.height;
-						break;
-					}
-				}
-			}
-			const b = BANDS[i]!;
-			elevation = lerp(b.from, b.to, u);
-			activeIdx = i;
-			// Warna latar: berpindah halus ke zona berikutnya sepanjang zona ini.
-			const nx = BANDS[Math.min(i + 1, BANDS.length - 1)]!;
-			const k = reduced ? 0 : ease(u);
-			const c = [0, 1, 2].map((j) => Math.round(lerp(b.tone[j]!, nx.tone[j]!, k)));
-			pageEl.style.setProperty("--eco-bg", `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
-			placeVehicle();
-		};
-		const onScroll = () => {
-			if (!raf) raf = requestAnimationFrame(update);
-		};
+		reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		// Susun ulang rute bila ukuran halaman berubah (resize, foto selesai dimuat).
 		let rebuild = 0;
 		const ro = new ResizeObserver(() => {
 			cancelAnimationFrame(rebuild);
 			rebuild = requestAnimationFrame(() => {
 				buildRoute();
-				update();
+				cur = targetLine();
+				apply(cur);
+				kick();
 			});
 		});
 		ro.observe(pageEl);
 		buildRoute();
-		update();
+		cur = targetLine();
+		// Elemen kendaraan baru ada setelah routeD terisi dan DOM diperbarui.
+		requestAnimationFrame(() => apply(cur));
+		const onScroll = () => kick();
 		addEventListener("scroll", onScroll, { passive: true });
 		addEventListener("resize", onScroll, { passive: true });
 		return () => {
 			removeEventListener("scroll", onScroll);
 			removeEventListener("resize", onScroll);
 			ro.disconnect();
-			if (raf) cancelAnimationFrame(raf);
+			cancelAnimationFrame(rafId);
 			cancelAnimationFrame(rebuild);
 		};
 	});
@@ -438,31 +504,25 @@
 	{#if routeD}
 		<svg class="eco-route" width={routeW} height={routeH} viewBox={`0 0 ${routeW} ${routeH}`} aria-hidden="true">
 			<path d={routeD} class="eco-route-base" />
-			<path d={routeD} class="eco-route-done" stroke-dasharray={routeLen} stroke-dashoffset={routeLen - travelled} />
-			<g class="eco-veh" transform={`translate(${veh.x.toFixed(1)} ${veh.y.toFixed(1)})`}>
-				<circle r={compact ? 19 : 27} class="eco-veh-halo" />
-				<g transform={`rotate(${veh.a.toFixed(1)})`}>
-					{#key veh.kind}
-						<g transform={compact ? "translate(-13.2 -13.2) scale(1.1)" : "translate(-19.2 -19.2) scale(1.6)"}>
-							<g class="eco-veh-icon">{@render vehicle(veh.kind)}</g>
-						</g>
-					{/key}
-				</g>
-			</g>
+			<path bind:this={doneEl} d={routeD} class="eco-route-done" stroke-dasharray={routeLen} stroke-dashoffset={routeLen} />
 		</svg>
-		<p
-			class="eco-read"
-			class:is-left={veh.left}
-			class:is-off={!altOn}
-			style={`left: ${veh.x.toFixed(1)}px; top: ${veh.y.toFixed(1)}px`}
-			aria-hidden="true"
-		>
-			<span class="eco-alt-num">{fmtM(elevation)}</span>
-			<span class="eco-alt-unit">{elevation < 0 ? "m" : "m dpl"}</span>
+		<div bind:this={vehEl} class="eco-veh" class:is-compact={compact} aria-hidden="true">
+			<span class="eco-veh-halo"></span>
+			<div bind:this={vehIconEl} class="eco-veh-rot">
+				{#key vehKind}
+					<svg class="eco-veh-icon" viewBox="0 0 24 24">{@render vehicle(vehKind)}</svg>
+				{/key}
+			</div>
+		</div>
+		<p bind:this={readEl} class="eco-read" aria-hidden="true">
+			<span class="eco-read-in">
+				<span bind:this={readNumEl} class="eco-alt-num">3,200</span>
+				<span bind:this={readUnitEl} class="eco-alt-unit">m dpl</span>
+			</span>
 		</p>
 	{/if}
-	<p class="eco-chip" class:is-off={!altOn} aria-hidden="true">
-		<span class="eco-alt-num">{fmtM(elevation)}</span> <span class="eco-alt-unit">m</span>
+	<p bind:this={chipEl} class="eco-chip" aria-hidden="true">
+		<span bind:this={chipNumEl} class="eco-alt-num">3,200</span> <span class="eco-alt-unit">m</span>
 		<span class="eco-chip-band">{BANDS[activeIdx]!.name[lang]}</span>
 	</p>
 
@@ -831,12 +891,51 @@
 		stroke-width: 2.4;
 		stroke-linecap: round;
 	}
+	/* Kendaraan = elemen HTML yang hanya digeser (translate3d) — jalur compositor. */
+	.eco-veh {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 0;
+		height: 0;
+		z-index: 3;
+		pointer-events: none;
+		will-change: transform;
+	}
 	.eco-veh-halo {
-		fill: color-mix(in srgb, var(--safelight) 26%, transparent);
+		position: absolute;
+		left: -27px;
+		top: -27px;
+		width: 54px;
+		height: 54px;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--safelight) 26%, transparent);
+	}
+	.eco-veh-rot {
+		position: absolute;
+		left: -19.2px;
+		top: -19.2px;
+		width: 38.4px;
+		height: 38.4px;
+		will-change: transform;
+	}
+	.eco-veh.is-compact .eco-veh-halo {
+		left: -19px;
+		top: -19px;
+		width: 38px;
+		height: 38px;
+	}
+	.eco-veh.is-compact .eco-veh-rot {
+		left: -13.2px;
+		top: -13.2px;
+		width: 26.4px;
+		height: 26.4px;
 	}
 	.eco-veh-icon {
+		display: block;
+		width: 100%;
+		height: 100%;
 		fill: var(--fg, #f1efe9);
-		transform-box: fill-box;
 		transform-origin: center;
 		animation: eco-pop 0.28s ease-out both;
 	}
@@ -868,21 +967,34 @@
 	/* Pembacaan ketinggian menempel di kendaraan (desktop); layar sempit memakai chip. */
 	.eco-read {
 		position: absolute;
+		left: 0;
+		top: 0;
+		width: 0;
+		height: 0;
 		z-index: 3;
 		display: none;
-		flex-direction: column;
-		line-height: 1.12;
-		transform: translate(40px, -50%);
 		pointer-events: none;
+		will-change: transform;
 		transition: opacity 0.25s ease;
 	}
-	.eco-read.is-left {
-		transform: translate(calc(-100% - 40px), -50%);
+	.eco-read-in {
+		position: absolute;
+		left: 40px;
+		top: 0;
+		display: flex;
+		flex-direction: column;
+		line-height: 1.12;
+		white-space: nowrap;
+		transform: translateY(-50%);
+	}
+	.eco-read:global(.is-left) .eco-read-in {
+		left: auto;
+		right: 40px;
 		align-items: flex-end;
 		text-align: right;
 	}
-	.eco-read.is-off,
-	.eco-chip.is-off {
+	.eco-read:global(.is-off),
+	.eco-chip:global(.is-off) {
 		opacity: 0;
 	}
 	.eco-alt-num {
@@ -925,7 +1037,7 @@
 	}
 	@media (min-width: 1100px) {
 		.eco-read {
-			display: flex;
+			display: block;
 		}
 		.eco-chip {
 			display: none;
