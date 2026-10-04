@@ -16,6 +16,7 @@ export function GET(): Response {
 		{ url: `${BASE}/photos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
 		{ url: `${BASE}/videos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
 		{ url: `${BASE}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+		{ url: `${BASE}/ecotourism`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
 		{ url: `${BASE}/contributor`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
 		{ url: `${BASE}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
 		{ url: `${BASE}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },

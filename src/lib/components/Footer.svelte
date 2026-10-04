@@ -20,6 +20,8 @@
 	// halaman ketentuan yang ada. Sisanya belum punya halaman (tetap "#").
 	const LINKS: Record<string, string> = {
 		"About us": "/about",
+		Ecotourism: "/ecotourism",
+		Ekowisata: "/ecotourism",
 		"Tentang kami": "/about",
 		Contributor: "/contributor",
 		Kontributor: "/contributor",
@@ -58,8 +60,9 @@
 	});
 </script>
 
-<!-- Tanpa garis atas: section di atas (etalase) larut ke --bg yang sama. -->
-<footer class="bg-bg">
+<!-- Tanpa garis atas: section di atas (etalase) larut ke --bg yang sama.
+	Seluruh footer zona senyap: tak ada bunyi hover/klik di tautan mana pun. -->
+<footer class="bg-bg" data-no-hover-sound data-no-click-sound>
 	<div class="mx-auto max-w-[1500px] px-6 pb-6 pt-20 lg:px-10">
 		<!-- Tagline besar di tengah koridor foto (khusus landing): dua rel foto
 			arsip melaju dari titik hilang ke arah penonton, tagline (animasi
@@ -140,9 +143,8 @@
 
 		<div class="rule mt-16"></div>
 
-		<div class="mt-6 flex flex-col items-start justify-between gap-3 text-xs text-fg-muted sm:flex-row sm:items-center">
-			<p class="kicker">{c.footer.rights}</p>
-			<p class="kicker text-safelight/80">{c.footer.made}</p>
+		<div class="mt-6 flex flex-col items-center justify-center gap-3 text-xs text-fg-muted">
+			<p class="kicker text-center">{c.footer.rights}</p>
 		</div>
 	</div>
 </footer>
@@ -167,7 +169,9 @@
 		align-items: center;
 		justify-content: flex-start;
 		text-align: center;
-		padding: clamp(0.25rem, 1.5vh, 1rem) 1.5rem 0;
+		/* Atas ditekan melewati zona fade topeng koridor (12%): kicker tidak
+		   lagi redup/ketiban bayangan. */
+		padding: clamp(3.5rem, 13svh, 7rem) 1.5rem 0;
 	}
 	/* Tagline di koridor lebih kecil dari ukuran bawaan SliceHeadline
 	   (9,4vw) supaya kartu di kiri-kanan tetap terbaca sebagai koridor. */

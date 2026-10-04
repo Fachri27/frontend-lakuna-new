@@ -195,7 +195,7 @@ export const dict: Record<Lang, Copy> = {
     },
     footer: {
       taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
-      company: "Perusahaan", companyItems: ["Tentang kami", "Ulasan", "Kontributor"],
+      company: "Perusahaan", companyItems: ["Tentang kami", "Ekowisata", "Ulasan", "Kontributor"],
       legal: "Legal", legalItems: ["Ketentuan penggunaan", "Kebijakan privasi", "Preferensi cookie"],
       support: "Dukungan", supportItems: ["Bantuan", "FAQ", "Layanan pelanggan"],
       rights: "© 2026 Lakuna Nusantara Media. Hak cipta dilindungi.",
@@ -340,7 +340,7 @@ export const dict: Record<Lang, Copy> = {
     },
     footer: {
       taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
-      company: "Company", companyItems: ["About us", "Reviews", "Contributor"],
+      company: "Company", companyItems: ["About us", "Ecotourism", "Reviews", "Contributor"],
       legal: "Legal", legalItems: ["Terms of use", "Privacy policy", "Cookie preferences"],
       support: "Support", supportItems: ["Help", "FAQ", "Customer service"],
       rights: "© 2026 Lakuna Nusantara Media. All rights reserved.",
