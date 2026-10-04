@@ -11,7 +11,11 @@
 	 * mekar ke atas jadi daftar. Pola dari rujukan "Featured" (lxl creative),
 	 * diterjemahkan ke kamar gelap Lakuna: aksen safelight, kartu kertas foto.
 	 */
-	let { photos }: { photos: Photo[] } = $props();
+	let { photos, copy: copyOverride }: {
+		photos: Photo[];
+		/** Kurasi CMS (section `etalase`) menang bila diisi — kosong = default. */
+		copy?: { kicker?: string | null; title?: string | null; cta?: string | null } | null;
+	} = $props();
 
 	const MAX = 4;
 	const HOLD_MS = 6500;
@@ -284,11 +288,17 @@
 		if (e.key === "Escape") open = false;
 	}
 
-	const copy = $derived(
+	const fallback = $derived(
 		lang === "id"
 			? { kicker: "Ekowisata", title: "Muali berlibur\nbersama keluarga,\nmenyatu dengan alam", cta: "Cek lokasi", label: "Ekowisata" }
 			: { kicker: "Ecotourism", title: "Travel to natural areas\nthat conserves\nthe environment", cta: "Check all destination", label: "Ecotourism" },
 	);
+	const copy = $derived({
+		kicker: copyOverride?.kicker?.trim() || fallback.kicker,
+		title: copyOverride?.title?.trim() || fallback.title,
+		cta: copyOverride?.cta?.trim() || fallback.cta,
+		label: copyOverride?.kicker?.trim() || fallback.label,
+	});
 </script>
 
 {#if items.length}

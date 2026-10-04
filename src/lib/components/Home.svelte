@@ -454,6 +454,7 @@
 	const videoSec = $derived(hp["video"]);
 	const hargaSec = $derived(hp["harga"]);
 	const trustSec = $derived(hp["percaya"]);
+	const etalaseSec = $derived(hp["etalase"]);
 	// Logo pelanggan dari CMS: tiap foto terpilih (thumb 800px, bersih) jadi
 	// satu logo. Kosong = wordmark dummy di LogoCloud.
 	const trustLogos = $derived(
@@ -468,6 +469,11 @@
 	);
 	const orbitPhotos = $derived(
 		hp["orbit"]?.photos?.length ? hp["orbit"].photos.map(adaptPhoto) : null,
+	);
+	// Kurasi foto CMS (etalase → showcase ekowisata). Kosong = perilaku lama
+	// (unggulan dulu, lalu terbaru).
+	const etalasePhotos = $derived(
+		etalaseSec?.photos?.length ? etalaseSec.photos.map(adaptPhoto) : null,
 	);
 	// Ketahanan hero: URL CMS adalah presigned yang kedaluwarsa 1 jam dan mati
 	// saat tunnel storage restart — dua-duanya pernah bikin hero "berubah-ubah"
@@ -636,8 +642,10 @@
 		heroDead = true;
 	}
 	const mulaiImg = $derived(imgFor("closing-fjord", 2400, 1400, mulai?.imageUrl));
-	// Etalase penutup: foto yang ditandai unggulan dulu, lalu terbaru; unik per id.
+	// Etalase penutup: kurasi CMS menang bila diisi; kosong = foto yang
+	// ditandai unggulan dulu, lalu terbaru; unik per id.
 	const featuredPhotos = $derived.by(() => {
+		if (etalasePhotos?.length) return etalasePhotos.slice(0, 4);
 		const seen = new Set<string>();
 		const pool = [...horizontal, ...latest].filter((p) => {
 			if (seen.has(p.id) || p.assetType === "VIDEO") return false;
@@ -1515,10 +1523,10 @@
 							aria-label={s.compareSlider}
 						/>
 					</div>
-					<figcaption class="mt-3 max-w-[60ch] overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80">{s.compareRes}</figcaption>
+					<figcaption class="mt-3 overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80">{s.compareRes}</figcaption>
 				</figure>
 
-				<div data-reveal class="flex flex-col lg:col-span-5">
+				<div data-reveal data-no-hover-sound data-no-click-sound class="flex flex-col lg:col-span-5">
 					<h3 class="font-display text-[clamp(1.5rem,2.6vw,2.1rem)] font-light leading-tight tracking-[-0.01em] text-fg">
 						{s.compareTitle}
 					</h3>
@@ -1576,7 +1584,10 @@
 	</div>
 
 	<!-- Penutup: etalase bingkai pilihan (menggantikan ajakan "darkroom"). -->
-	<FeaturedShowcase photos={featuredPhotos} />
+	<FeaturedShowcase
+		photos={featuredPhotos}
+		copy={{ kicker: etalaseSec?.kicker, title: etalaseSec?.title, cta: etalaseSec?.cta }}
+	/>
 </div>
 
 <style>
