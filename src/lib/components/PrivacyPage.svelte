@@ -51,7 +51,7 @@
 					body: [
 						"Kami tidak memakai cookie iklan. Kami memakai penyimpanan lokal peramban untuk menjagamu tetap masuk, mengingat pilihan bahasa, tampilan, aksesibilitas, dan suara, serta menyimpan sebagian data beranda agar halaman lebih cepat dimuat.",
 						"Situs tidak memuat skrip iklan pihak ketiga. Huruf dan fitur masuk dengan Google dimuat dari Google.",
-						"Hapus data situs di pengaturan peramban untuk menghilangkan semuanya; kamu akan keluar dari akun.",
+						"Hapus data situs di pengaturan peramban untuk menghilangkan semuanya; kamu akan keluar dari akun. Rincian apa yang tersimpan, beserta tombol untuk menghapusnya, ada di halaman Preferensi cookie (/cookies).",
 					],
 				},
 				{
@@ -135,7 +135,7 @@
 					body: [
 						"We do not use advertising cookies. We use your browser's local storage to keep you signed in, remember your language, display, accessibility, and sound choices, and cache parts of the home page so it loads faster.",
 						"The site does not load third-party advertising scripts. Fonts and Google sign-in are loaded from Google.",
-						"Clear the site's data in your browser settings to remove all of this; you will be signed out.",
+						"Clear the site's data in your browser settings to remove all of this; you will be signed out. The details of what is stored, with a button to clear it, are on the Cookie preferences page (/cookies).",
 					],
 				},
 				{

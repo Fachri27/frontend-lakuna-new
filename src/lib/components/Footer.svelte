@@ -16,8 +16,8 @@
 		{ name: "X", href: "" },
 		{ name: "Instagram", href: "" },
 	];
-	// Tujuan tautan footer. "Terms of use" menuju perjanjian lisensi — satu-satunya
-	// halaman ketentuan yang ada. Sisanya belum punya halaman (tetap "#").
+	// Tujuan tautan footer. Kolom Legal: tiga halaman sendiri — /terms (ketentuan
+	// penggunaan), /privacy, dan /cookies. Perjanjian lisensi karya tetap di /license.
 	const LINKS: Record<string, string> = {
 		"About us": "/about",
 		Ecotourism: "/ecotourism",
@@ -29,15 +29,15 @@
 		Ulasan: "/reviews",
 		"Privacy policy": "/privacy",
 		"Kebijakan privasi": "/privacy",
-		"Cookie preferences": "/privacy#cookies",
-		"Preferensi cookie": "/privacy#cookie",
+		"Cookie preferences": "/cookies",
+		"Preferensi cookie": "/cookies",
 		Help: "/help",
 		Bantuan: "/help",
 		FAQ: "/faq",
 		"Customer service": "/customer-service",
 		"Layanan pelanggan": "/customer-service",
-		"Terms of use": "/license",
-		"Ketentuan penggunaan": "/license",
+		"Terms of use": "/terms",
+		"Ketentuan penggunaan": "/terms",
 	};
 	// Koridor foto + tagline hanya milik landing — di halaman lain footer
 	// langsung ke kolom.
