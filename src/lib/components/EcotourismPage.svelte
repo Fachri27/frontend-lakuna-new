@@ -165,6 +165,7 @@
 	let readUnitEl: HTMLElement | undefined = $state();
 	let chipEl: HTMLElement | undefined = $state();
 	let chipNumEl: HTMLElement | undefined = $state();
+	let fxEl: HTMLElement | undefined = $state();
 	let bandEls: HTMLElement[] = $state([]);
 
 	// State reaktif hanya untuk yang JARANG berubah (jenis kendaraan, zona aktif).
@@ -193,6 +194,70 @@
 	let lastBg = "";
 	let lastSide: boolean | null = null;
 	let lastOn: boolean | null = null;
+	let prevS = -1;
+	let trailAcc = 0;
+	let movingTimer: ReturnType<typeof setTimeout> | undefined;
+	let fxPool: HTMLElement[] = [];
+	let fxI = 0;
+	/** Jarak rute (px) antarjejak tiap kendaraan. */
+	const TRAIL_GAP: Record<Kind, number> = { plane: 11, jeep: 15, bike: 13, canoe: 20, ferry: 12, sub: 14 };
+
+	type Puff = { size: number; bg: string; border?: string; dx: number; dy: number; s0: number; s1: number; o: number; ms: number };
+	/** Jejak di belakang kendaraan, sesuai medianya (awan, debu, riak, buih, gelembung). */
+	function emit(kind: Kind | "arrive", x: number, y: number, a: number) {
+		if (!fxEl) return;
+		if (!fxPool.length) {
+			for (let i = 0; i < 34; i++) {
+				const el = document.createElement("span");
+				el.className = "eco-p";
+				fxEl.appendChild(el);
+				fxPool.push(el);
+			}
+		}
+		const rad = (a * Math.PI) / 180;
+		const fx = Math.sin(rad); // arah maju
+		const fy = -Math.cos(rad);
+		const nx = -fy; // tegak lurus
+		const ny = fx;
+		const j = () => Math.random() - 0.5;
+		const r = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
+		const soft = (rgb: string, alpha: number) => `radial-gradient(closest-side, rgba(${rgb},${alpha}), rgba(${rgb},0))`;
+		const put = (def: Puff, ox: number, oy: number) => {
+			const el = fxPool[fxI++ % fxPool.length]!;
+			el.getAnimations().forEach((an) => an.cancel());
+			el.style.width = el.style.height = `${def.size}px`;
+			el.style.margin = `${-def.size / 2}px 0 0 ${-def.size / 2}px`;
+			el.style.background = def.bg;
+			el.style.border = def.border ?? "0";
+			el.animate(
+				[
+					{ transform: `translate3d(${ox}px, ${oy}px, 0) scale(${def.s0})`, opacity: def.o },
+					{ transform: `translate3d(${ox + def.dx}px, ${oy + def.dy}px, 0) scale(${def.s1})`, opacity: 0 },
+				],
+				{ duration: def.ms, easing: "ease-out", fill: "forwards" },
+			);
+		};
+		// Titik di belakang kendaraan; sebaran acak supaya tak tampak seperti manik berderet.
+		const bx = x - fx * 15;
+		const by = y - fy * 15;
+		if (kind === "plane") {
+			// Awan jejak: lembut, melebar jauh, bergeser sedikit tertiup.
+			put({ size: r(8, 12), bg: soft("255,255,255", 0.9), dx: j() * 14 + nx * j() * 8, dy: j() * 14 + ny * j() * 8, s0: 0.4, s1: r(3.2, 4.4), o: r(0.55, 0.85), ms: r(1500, 2100) }, bx + nx * j() * 3, by + ny * j() * 3);
+		} else if (kind === "jeep" || kind === "bike") {
+			// Debu: gumpalan tan yang membesar dan memudar, terlempar ke samping.
+			const side = Math.random() < 0.5 ? -1 : 1;
+			put({ size: r(9, 15), bg: soft("196,170,130", 0.7), dx: nx * side * r(8, 22) - fx * r(6, 16), dy: ny * side * r(8, 22) - fy * r(6, 16), s0: 0.45, s1: r(2.4, 3.6), o: r(0.45, 0.75), ms: r(800, 1300) }, bx + nx * j() * 8, by + ny * j() * 8);
+		} else if (kind === "canoe") {
+			put({ size: r(10, 14), bg: "transparent", border: "1.5px solid rgba(200,235,240,.8)", dx: nx * j() * 6, dy: ny * j() * 6, s0: 0.4, s1: r(2.8, 3.8), o: r(0.6, 0.9), ms: r(1100, 1600) }, bx + nx * j() * 4, by + ny * j() * 4);
+		} else if (kind === "ferry") {
+			// Buih haluan: dua lajur yang melebar membentuk huruf V.
+			for (const side of [-1, 1]) put({ size: r(6, 10), bg: soft("255,255,255", 0.85), dx: nx * side * r(10, 18) - fx * r(4, 10), dy: ny * side * r(10, 18) - fy * r(4, 10), s0: 0.6, s1: r(1.8, 2.6), o: r(0.55, 0.85), ms: r(1000, 1500) }, bx + nx * side * r(3, 6), by + ny * side * r(3, 6));
+		} else if (kind === "sub") {
+			put({ size: r(4, 8), bg: "rgba(190,230,255,.15)", border: "1px solid rgba(190,230,255,.9)", dx: j() * 22, dy: j() * 22, s0: 0.6, s1: r(1.3, 1.9), o: r(0.6, 0.95), ms: r(1200, 1900) }, bx + j() * 10, by + j() * 10);
+		} else {
+			put({ size: 22, bg: "transparent", border: "2px solid var(--safelight)", dx: 0, dy: 0, s0: 0.3, s1: 3.1, o: 0.95, ms: 950 }, x, y); // "tiba" di tempat baru
+		}
+	}
 
 	const fmtM = (m: number) => `${m < 0 ? "−" : ""}${Math.abs(Math.round(m)).toLocaleString(lang === "id" ? "id-ID" : "en-US")}`;
 	const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -360,9 +425,28 @@
 		let lane = 0;
 		for (const Y of dividers) if (ly >= Y) lane++;
 		const kind = LANE_KIND[lane] ?? "plane";
+		const ds = prevS < 0 ? 0 : Math.abs(s - prevS);
+		prevS = s;
+		if (ds > 0.15) {
+			vehEl.classList.add("is-moving");
+			clearTimeout(movingTimer);
+			movingTimer = setTimeout(() => vehEl?.classList.remove("is-moving"), 260);
+		}
 		if (kind !== lastKind) {
 			lastKind = kind;
 			vehKind = kind;
+			if (!reduced) emit("arrive", p.x, p.y, p.a);
+		}
+		if (!reduced && ds > 0 && lastOn !== false) {
+			trailAcc += ds;
+			const gap = TRAIL_GAP[kind];
+			let n = 0;
+			while (trailAcc >= gap && n < 2) {
+				trailAcc -= gap;
+				n++;
+				emit(kind, p.x, p.y, p.a);
+			}
+			if (trailAcc > gap * 3) trailAcc = 0;
 		}
 		if (readEl) {
 			const left = p.x > routeW / 2;
@@ -455,15 +539,15 @@
 	{:else if kind === "canoe"}
 		<path d="M12 1.8C15.7 6 16.5 14 14.7 22.2H9.3C7.5 14 8.3 6 12 1.8z" />
 		<path d="M12 6.5V19" class="eco-veh-stroke" />
-		<path d="M7.5 12.5h9" class="eco-veh-stroke" />
+		<g class="eco-paddle"><path d="M6.6 12.5h10.8" class="eco-veh-stroke" /><rect x="5" y="11.6" width="2.6" height="1.8" rx=".8" /><rect x="16.4" y="11.6" width="2.6" height="1.8" rx=".8" /></g>
 	{:else if kind === "ferry"}
 		<path d="M12 1.2l5.2 7.3V21.2c-3.4 1.5-7 1.5-10.4 0V8.5z" />
 		<rect x="8.4" y="11" width="7.2" height="6.2" rx="1.1" class="eco-veh-cut" />
-		<rect x="10.6" y="7.4" width="2.8" height="2.4" rx=".6" class="eco-veh-cut" />
+		<g class="eco-radar"><path d="M12 8.6V5.4" class="eco-veh-stroke" /></g>
 	{:else}
 		<ellipse cx="12" cy="12" rx="4.1" ry="9.8" />
 		<rect x="10.5" y="9" width="3" height="4.6" rx="1.2" class="eco-veh-cut" />
-		<rect x="8" y="21.2" width="8" height="1.1" rx=".5" />
+		<rect x="8" y="21.2" width="8" height="1.1" rx=".5" class="eco-prop" />
 	{/if}
 {/snippet}
 
@@ -506,12 +590,16 @@
 			<path d={routeD} class="eco-route-base" />
 			<path bind:this={doneEl} d={routeD} class="eco-route-done" stroke-dasharray={routeLen} stroke-dashoffset={routeLen} />
 		</svg>
+		<div bind:this={fxEl} class="eco-fx" aria-hidden="true"></div>
 		<div bind:this={vehEl} class="eco-veh" class:is-compact={compact} aria-hidden="true">
+			<span class="eco-veh-shadow" data-kind={vehKind}></span>
 			<span class="eco-veh-halo"></span>
 			<div bind:this={vehIconEl} class="eco-veh-rot">
-				{#key vehKind}
-					<svg class="eco-veh-icon" viewBox="0 0 24 24">{@render vehicle(vehKind)}</svg>
-				{/key}
+				<div class="eco-veh-bob" data-kind={vehKind}>
+					{#key vehKind}
+						<svg class="eco-veh-icon" viewBox="0 0 24 24">{@render vehicle(vehKind)}</svg>
+					{/key}
+				</div>
 			</div>
 		</div>
 		<p bind:this={readEl} class="eco-read" aria-hidden="true">
@@ -938,6 +1026,145 @@
 		fill: var(--fg, #f1efe9);
 		transform-origin: center;
 		animation: eco-pop 0.28s ease-out both;
+	}
+	/* Bayangan: jauh & samar untuk pesawat (terbang tinggi), dekat untuk yang lain. */
+	.eco-veh-shadow {
+		position: absolute;
+		left: -14px;
+		top: -14px;
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), transparent);
+		transform: translate(6px, 8px);
+	}
+	.eco-veh-shadow[data-kind="plane"] {
+		transform: translate(16px, 24px) scale(0.8);
+		opacity: 0.55;
+	}
+	.eco-veh.is-compact .eco-veh-shadow {
+		transform: translate(4px, 6px) scale(0.75);
+	}
+	/* Halo bernapas pelan: kendaraan terasa hidup bahkan saat gulir diam. */
+	.eco-veh-halo {
+		animation: eco-breathe 2.6s ease-in-out infinite;
+	}
+	@keyframes eco-breathe {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.14); }
+	}
+	/* Gerak khas tiap kendaraan (pembungkus CSS di dalam yang diputar JS). */
+	.eco-veh-bob {
+		width: 100%;
+		height: 100%;
+	}
+	.eco-veh-bob[data-kind="plane"] {
+		animation: eco-fly 3.2s ease-in-out infinite;
+	}
+	.eco-veh-bob[data-kind="jeep"] {
+		animation: eco-idle 0.5s linear infinite;
+	}
+	.eco-veh-bob[data-kind="bike"] {
+		animation: eco-idle 0.5s linear infinite;
+	}
+	.eco-veh-bob[data-kind="canoe"] {
+		animation: eco-rock 2.6s ease-in-out infinite;
+	}
+	.eco-veh-bob[data-kind="ferry"] {
+		animation: eco-rock-lite 3.4s ease-in-out infinite;
+	}
+	.eco-veh-bob[data-kind="sub"] {
+		animation: eco-fly 2.6s ease-in-out infinite;
+	}
+	.eco-veh:global(.is-moving) .eco-veh-bob[data-kind="jeep"] {
+		animation: eco-jolt 0.2s linear infinite;
+	}
+	.eco-veh:global(.is-moving) .eco-veh-bob[data-kind="bike"] {
+		animation: eco-weave 0.6s ease-in-out infinite;
+	}
+	@keyframes eco-fly {
+		0%, 100% { transform: scale(1) rotate(-1.4deg); }
+		50% { transform: scale(1.06) rotate(1.4deg); }
+	}
+	@keyframes eco-idle {
+		0%, 100% { transform: translate(0, 0); }
+		50% { transform: translate(0.3px, 0.2px); }
+	}
+	@keyframes eco-jolt {
+		0% { transform: translate(0, 0); }
+		25% { transform: translate(0.7px, -0.5px); }
+		50% { transform: translate(-0.6px, 0.4px); }
+		75% { transform: translate(0.5px, 0.6px); }
+		100% { transform: translate(0, 0); }
+	}
+	@keyframes eco-weave {
+		0%, 100% { transform: rotate(-3.2deg); }
+		50% { transform: rotate(3.2deg); }
+	}
+	@keyframes eco-rock {
+		0%, 100% { transform: rotate(-2.4deg) translateX(-0.4px); }
+		50% { transform: rotate(2.4deg) translateX(0.4px); }
+	}
+	@keyframes eco-rock-lite {
+		0%, 100% { transform: rotate(-1deg); }
+		50% { transform: rotate(1deg); }
+	}
+	/* Bagian bergerak di dalam ikon. */
+	.eco-paddle,
+	.eco-radar,
+	.eco-prop {
+		transform-box: fill-box;
+		transform-origin: center;
+	}
+	.eco-paddle {
+		animation: eco-stroke 1.15s ease-in-out infinite;
+	}
+	@keyframes eco-stroke {
+		0%, 100% { transform: rotate(-20deg); }
+		50% { transform: rotate(20deg); }
+	}
+	.eco-radar {
+		transform-origin: 12px 8.6px;
+		transform-box: view-box;
+		animation: eco-sweep 2.2s linear infinite;
+	}
+	@keyframes eco-sweep {
+		to { transform: rotate(360deg); }
+	}
+	.eco-prop {
+		animation: eco-spin 0.14s linear infinite;
+	}
+	@keyframes eco-spin {
+		0%, 100% { transform: scaleX(1); }
+		50% { transform: scaleX(0.25); }
+	}
+	/* Lapisan jejak (partikel dibuat lewat JS, makanya :global). */
+	.eco-fx {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 0;
+		height: 0;
+		z-index: 2;
+		pointer-events: none;
+	}
+	.eco :global(.eco-p) {
+		position: absolute;
+		left: 0;
+		top: 0;
+		border-radius: 50%;
+		opacity: 0;
+		pointer-events: none;
+		will-change: transform, opacity;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.eco-veh-halo,
+		.eco-veh-bob,
+		.eco-paddle,
+		.eco-radar,
+		.eco-prop {
+			animation: none !important;
+		}
 	}
 	.eco-veh-cut {
 		fill: color-mix(in srgb, var(--eco-bg) 85%, black);
