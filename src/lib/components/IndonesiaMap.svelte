@@ -8,7 +8,7 @@
 	import "maplibre-gl/dist/maplibre-gl.css";
 	import type { Snippet } from "svelte";
 	import { polarCapsLayer } from "$lib/polarCaps";
-	import { nightTile, NIGHT_TILE_URL } from "$lib/nightTiles";
+	import { nightTile, nightTileUrl, type NightMode } from "$lib/nightTiles";
 	import { i18n } from "$lib/i18n.svelte";
 	import { catLabel, fetchMapHotspots, fetchPhotoOriginal, imgFor, type MapHotspot } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
@@ -23,7 +23,7 @@
 			overview: "Ringkasan",
 			points: "titik",
 			frames: "bingkai",
-			explore: "Geser untuk menjelajah . Klik untuk membuka",
+			explore: "Geser untuk menjelajah · Cubit / Ctrl+gulir untuk zoom · Klik untuk membuka",
 			zoomHint: "Klik untuk perbesar · Gerakkan tetikus untuk menggeser",
 			zoomOutHint: "Klik untuk perkecil · Gerakkan tetikus untuk menggeser",
 			fullscreen: "Layar penuh",
@@ -51,7 +51,7 @@
 			overview: "Overview",
 			points: "points",
 			frames: "frames",
-			explore: "Drag to explore . Click to open",
+			explore: "Drag to explore · Pinch / Ctrl+scroll to zoom · Click to open",
 			zoomHint: "Tap to zoom in · Move mouse to pan",
 			zoomOutHint: "Tap to zoom out · Move mouse to pan",
 			fullscreen: "Fullscreen",
@@ -387,6 +387,31 @@
 		});
 	}
 
+	// ── Sisi malam globe hero (lihat $lib/nightTiles) ───────────────────────
+	// Tiga overlay statis (malam penuh / malam barat / malam timur); hanya
+	// opasitasnya yang digerakkan jam siklus siang–malam milik MapDescent lewat
+	// `setNightMix`. Opasitas dibaca dari state global style — tak perlu
+	// setPaintProperty tiap frame — dan dikalikan pemudaran menurut zoom supaya
+	// hilang sebelum bingkai Nusantara (peta mendarat tetap siang seperti semula).
+	const NIGHT_MODES: { id: string; mode: NightMode; key: string }[] = [
+		{ id: "nightFull", mode: "full", key: "nightFull" },
+		{ id: "nightWest", mode: "west", key: "nightWest" },
+		{ id: "nightEast", mode: "east", key: "nightEast" },
+	];
+	// "zoom" hanya boleh jadi masukan interpolate/step tingkat teratas, jadi state
+	// global ada di NILAI keluarannya: sepenuhnya terlihat sampai zoom 3.7, memudar
+	// ke 0 di zoom 4.3.
+	const nightOpacityExpr = (key: string) =>
+		[
+			"interpolate",
+			["linear"],
+			["zoom"],
+			3.7,
+			["coalesce", ["global-state", key], 0],
+			4.3,
+			0,
+		] as unknown as number;
+
 	const TILE_URL = (z: number, x: number, y: number) =>
 		`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
 
@@ -624,6 +649,12 @@
 				style: {
 					version: 8,
 					projection: { type: "globe" },
+					// Kekuatan overlay malam (diatur lewat setNightMix); 0 = siang.
+					state: {
+						nightFull: { default: 0 },
+						nightWest: { default: 0 },
+						nightEast: { default: 0 },
+					},
 					sources: {
 						esri: {
 							type: "raster",
@@ -640,12 +671,32 @@
 							maxzoom: 16,
 							attribution: "",
 						},
-						// Siang-malam: citra Esri + lampu kota NASA (lihat $lib/nightTiles).
-						night: {
+						// Overlay malam (lampu kota NASA) — tiga mode statis, lihat $lib/nightTiles.
+						nightFull: {
 							type: "raster",
-							tiles: [NIGHT_TILE_URL],
-							tileSize: 256,
-							maxzoom: 16,
+							tiles: [nightTileUrl("full")],
+							// Overlay lampu/bayangan halus: ubin 512 px pada zoom 3 (jauh lebih
+							// sedikit ubin daripada 256 px pada zoom 4).
+							tileSize: 512,
+							maxzoom: 3,
+							attribution: "",
+						},
+						nightWest: {
+							type: "raster",
+							tiles: [nightTileUrl("west")],
+							// Overlay lampu/bayangan halus: ubin 512 px pada zoom 3 (jauh lebih
+							// sedikit ubin daripada 256 px pada zoom 4).
+							tileSize: 512,
+							maxzoom: 3,
+							attribution: "",
+						},
+						nightEast: {
+							type: "raster",
+							tiles: [nightTileUrl("east")],
+							// Overlay lampu/bayangan halus: ubin 512 px pada zoom 3 (jauh lebih
+							// sedikit ubin daripada 256 px pada zoom 4).
+							tileSize: 512,
+							maxzoom: 3,
 							attribution: "",
 						},
 					},
@@ -666,21 +717,18 @@
 								"raster-saturation": ["interpolate", ["linear"], ["zoom"], 2, 0.15, 3.6, 0.1, 4.2, 0],
 							},
 						},
-						{
-							id: "night",
-							type: "raster",
-							source: "night",
-							// Hanya globe hero: memudar ke citra siang saat kamera mendekat
-							// dan hilang sepenuhnya (tak lagi dimuat) sebelum bingkai
-							// Nusantara, jadi peta mendarat tetap siang seperti semula.
+						...NIGHT_MODES.map((m) => ({
+							id: m.id,
+							type: "raster" as const,
+							source: m.id,
+							// Tersembunyi (tak memuat ubin) sampai hero pertama kali terlihat.
+							layout: { visibility: "none" as const },
 							maxzoom: 4.4,
 							paint: {
 								"raster-fade-duration": 150,
-								"raster-opacity": ["interpolate", ["linear"], ["zoom"], 3.7, 1, 4.3, 0],
-								"raster-contrast": ["interpolate", ["linear"], ["zoom"], 2, 0.2, 3.6, 0.12, 4.2, 0],
-								"raster-saturation": ["interpolate", ["linear"], ["zoom"], 2, 0.15, 3.6, 0.1, 4.2, 0],
+								"raster-opacity": nightOpacityExpr(m.key),
 							},
-						},
+						})),
 					],
 					// Halo atmosfer di tepi bumi saat jauh; hilang begitu mendekat.
 					sky: {
@@ -719,6 +767,7 @@
 					if (import.meta.env.DEV) console.warn("[polar-caps]", e);
 				}
 			});
+
 
 			const overviewCamera = () => {
 				// cameraForBounds ikut menghitung padding kamera yang AKTIF. Di
@@ -1202,6 +1251,26 @@
 	/** Turunkan bumi hero (px, positif = lebih rendah) untuk animasi masuk. */
 	export function setHeroLift(px: number) {
 		heroLift = px;
+	}
+	/**
+	 * Kekuatan overlay malam (0..1): penuh / sisi barat / sisi timur. Dipanggil
+	 * jam siklus siang–malam di MapDescent. Panggilan pertama menampakkan lapisan
+	 * (ubin baru mulai dimuat), jadi baru dipanggil ketika hero terlihat.
+	 */
+	let nightReveal = false;
+	let nightLast = "";
+	export function setNightMix(full: number, west: number, east: number) {
+		const mm = map;
+		if (!mm || !mm.getLayer("nightFull")) return;
+		if (!nightReveal) {
+			nightReveal = true;
+			for (const m of NIGHT_MODES) mm.setLayoutProperty(m.id, "visibility", "visible");
+		}
+		const v = [full, west, east].map((n) => Math.min(1, Math.max(0, n)));
+		const sig = v.map((n) => n.toFixed(2)).join("|");
+		if (sig === nightLast) return;
+		nightLast = sig;
+		NIGHT_MODES.forEach((m, i) => (mm as unknown as { setGlobalStateProperty: (k: string, v: unknown) => void }).setGlobalStateProperty(m.key, v[i]));
 	}
 
 	$effect(() => {

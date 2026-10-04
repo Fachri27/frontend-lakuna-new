@@ -80,6 +80,7 @@
 		setSpin: (on: boolean) => void;
 		setPointer: (nx: number, ny: number) => void;
 		setHeroLift: (px: number) => void;
+		setNightMix: (full: number, west: number, east: number) => void;
 	} | null>(null);
 	// Lama kamera menukik (ms) dari bumi utuh ke bingkai Nusantara.
 	// Menutup (diukur dari rekaman) ±1.9 dtk: zoom keluar 0–0.8 dtk lalu
@@ -350,16 +351,24 @@
 		// ── Siklus siang–malam bumi (hero saja) ───────────────────────────
 		// Seperti rujukan: bumi perlahan berganti "waktu" tiap beberapa detik —
 		// malam gelap kebiruan → fajar kehijauan → siang biru terang → senja
-		// hangat → malam lagi. Dilukis sebagai filter warna pada kanvas globe.
+		// hangat → malam lagi. Dilukis sebagai filter warna pada kanvas globe,
+		// DAN sisi malamnya mengikuti jam yang sama (overlay lampu kota di
+		// IndonesiaMap, lewat setNightMix): malam menutupi seluruh bumi, surut ke
+		// barat saat fajar, hilang di siang hari, lalu datang dari timur saat senja.
 		// Hanya selama mode hero & section terlihat; saat menyelam ke peta
 		// bobotnya memudar ke 0 (warna asli), jadi peta tak pernah berfilter.
-		type Tone = { b: number; s: number; c: number; h: number; sep: number };
+		// b = kecerahan filter: SENGAJA ~1 di semua fase — gelapnya malam kini
+		// dilukis overlay (yang juga menyalakan lampu kota); filter kecerahan
+		// menggelapkan dua kali dan meredupkan lampu. d = "terangnya hari" (asal
+		// kecerahan lama) khusus untuk atmosfer tepi bumi. n = bobot overlay malam
+		// [penuh, barat, timur] pada fase itu.
+		type Tone = { b: number; d: number; s: number; c: number; h: number; sep: number; n: [number, number, number] };
 		const TONES: Tone[] = [
-			{ b: 0.42, s: 0.55, c: 1.15, h: 12, sep: 0 }, // malam
-			{ b: 0.72, s: 0.85, c: 1.05, h: -18, sep: 0.12 }, // fajar (kehijauan)
-			{ b: 1.06, s: 1.12, c: 1.02, h: 0, sep: 0 }, // siang
-			{ b: 1.0, s: 1.05, c: 1.0, h: 4, sep: 0 }, // siang (tahan)
-			{ b: 0.78, s: 0.9, c: 1.06, h: -6, sep: 0.28 }, // senja hangat
+			{ b: 0.96, d: 0.42, s: 0.8, c: 1.1, h: 12, sep: 0, n: [1, 0, 0] }, // malam penuh
+			{ b: 1.0, d: 0.72, s: 0.9, c: 1.05, h: -18, sep: 0.12, n: [0, 1, 0] }, // fajar (kehijauan), sisa malam di barat
+			{ b: 1.06, d: 1.06, s: 1.12, c: 1.02, h: 0, sep: 0, n: [0, 0, 0] }, // siang
+			{ b: 1.0, d: 1.0, s: 1.05, c: 1.0, h: 4, sep: 0, n: [0, 0, 0] }, // siang (tahan)
+			{ b: 1.0, d: 0.78, s: 0.95, c: 1.06, h: -6, sep: 0.28, n: [0, 0, 1] }, // senja hangat, malam datang dari timur
 		];
 		const PHASE_S = 5.5; // tiap fase ±5,5 dtk → satu putaran ±27 dtk
 		// toneWeight = kekuatan warna "waktu" di kanvas (tetap 1 — warna ikut
@@ -408,15 +417,21 @@
 					rim.style.top = `${(cy - R).toFixed(1)}px`;
 					rim.style.transform = cv.style.transform || "";
 					// Siang = atmosfer paling terang; malam tetap ada garis tipis.
-					const day = Math.min(1, Math.max(0, (mix(A.b, B.b, t) - 0.4) / 0.66));
+					const day = Math.min(1, Math.max(0, (mix(A.d, B.d, t) - 0.4) / 0.66));
 					rim.style.opacity = ((0.45 + day * 0.55) * rimWeight.w).toFixed(3);
 				}
+			}
+			// Sisi malam mengikuti jam yang sama; hanya saat section terlihat (panggilan
+			// pertama menampakkan lapisan sehingga ubin baru mulai dimuat).
+			if (toneVisible) {
+				const nm = (j: number) => mix(A.n[j] as number, B.n[j] as number, t) * w;
+				cam.setNightMix(nm(0), nm(1), nm(2));
 			}
 			if (w <= 0.001 || !toneVisible) {
 				if (cv.style.filter) cv.style.filter = "";
 				return;
 			}
-			const k = (key: keyof Tone, neutral: number) => mix(neutral, mix(A[key], B[key], t), w);
+			const k = (key: Exclude<keyof Tone, "n">, neutral: number) => mix(neutral, mix(A[key], B[key], t), w);
 			cv.style.filter =
 				`brightness(${k("b", 1).toFixed(3)}) saturate(${k("s", 1).toFixed(3)}) ` +
 				`contrast(${k("c", 1).toFixed(3)}) hue-rotate(${k("h", 0).toFixed(1)}deg) sepia(${k("sep", 0).toFixed(3)})`;
