@@ -1120,6 +1120,7 @@
 	<div class="hero-cover relative">
 		<section
 			bind:this={heroSection}
+			data-hero
 			class="group/hero on-darkroom sticky top-0 z-0 h-[100svh] min-h-[580px] w-full overflow-hidden"
 		>
 			<div class="hero-img-anim absolute inset-0 will-change-transform transition-[filter,opacity] duration-700 ease-out group-has-[form[role=search]:focus-within]/hero:blur-[22px] group-has-[form[role=search]:focus-within]/hero:brightness-[0.55] group-has-[form[role=search]:focus-within]/hero:opacity-60">

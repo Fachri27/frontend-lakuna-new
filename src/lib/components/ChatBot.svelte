@@ -182,7 +182,15 @@
 			seed();
 			await tick();
 			inputEl?.focus();
-		} else launcherEl?.focus();
+		} else {
+			launcherEl?.focus();
+			// Panel menghilang → kursor mendadak berada di atas elemen halaman di
+			// bawahnya dan memicu bunyi hover; itu terdengar seperti bunyi asisten.
+			// Redam sebentar.
+			const root = document.documentElement;
+			root.setAttribute("data-no-hover-sound", "");
+			setTimeout(() => root.removeAttribute("data-no-hover-sound"), 700);
+		}
 	}
 	function onKey(e: KeyboardEvent) {
 		if (e.key === "Escape" && open) {
@@ -191,21 +199,34 @@
 		}
 	}
 
-	// Disembunyikan selama globe terlihat (menutupi visual), kecuali panel sedang terbuka.
-	let inGlobe = $state(false);
+	// Disembunyikan selama hero (beranda) atau globe terlihat — keduanya layar
+	// penuh yang sengaja bersih. Panel yang sudah dibuka tetap tampil.
+	let covered = $state(false);
 	$effect(() => {
-		let globe: HTMLElement | null = null;
 		const onScroll = () => {
-			if (!globe || !globe.isConnected) globe = document.querySelector("[data-globe]");
-			if (!globe) return void (inGlobe = false);
-			const r = globe.getBoundingClientRect();
-			inGlobe = r.top < innerHeight && r.bottom > 0;
+			const hero = document.querySelector("[data-hero]");
+			const heroOn = !!hero && scrollY < innerHeight * 0.9;
+			const globe = document.querySelector("[data-globe]");
+			let globeOn = false;
+			if (globe) {
+				const r = globe.getBoundingClientRect();
+				globeOn = r.top < innerHeight && r.bottom > 0;
+			}
+			covered = heroOn || globeOn;
 		};
 		onScroll();
 		addEventListener("scroll", onScroll, { passive: true });
-		return () => removeEventListener("scroll", onScroll);
+		addEventListener("resize", onScroll);
+		// Navigasi antarhalaman: hero muncul/hilang tanpa scroll.
+		const mo = new MutationObserver(onScroll);
+		mo.observe(document.body, { childList: true, subtree: true });
+		return () => {
+			removeEventListener("scroll", onScroll);
+			removeEventListener("resize", onScroll);
+			mo.disconnect();
+		};
 	});
-	const showLauncher = $derived(open || !inGlobe);
+	const showLauncher = $derived(open || !covered);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -221,7 +242,9 @@
 					<p class="cb-title" title={t.auto}>{t.title}</p>
 					<p class="cb-auto"><span class="cb-dot" aria-hidden="true"></span>{t.status}</p>
 				</div>
-				<button type="button" class="cb-x" onclick={() => toggle(false)} aria-label={t.close}>
+				<!-- stopPropagation: tombol ini ikut hilang dari DOM saat panel menutup, sehingga
+				     pendengar klik global (suara) tak lagi menemukan penanda data-no-click-sound di leluhurnya. -->
+				<button type="button" class="cb-x" onclick={(e) => { e.stopPropagation(); void toggle(false); }} aria-label={t.close}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
 				</button>
 			</header>
