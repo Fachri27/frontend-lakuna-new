@@ -622,8 +622,34 @@
 		let m: import("maplibre-gl").Map | null = null;
 		let ro: ResizeObserver | null = null;
 		let raf = 0;
+		let nearIo: IntersectionObserver | null = null;
 		ready = false;
 		(async () => {
+			// Peta (±800 KB JS, WebGL, ubin satelit, pramuat ubin) baru dibuat saat
+			// bagiannya mendekat (±3 layar lagi), BUKAN saat halaman dibuka — globe
+			// ada jauh di bawah hero, dan memuatnya di awal berebut CPU/GPU/jaringan
+			// dengan video hero dan scroll pertama.
+			await new Promise<void>((res) => {
+				const el = sectionEl;
+				if (!el || typeof IntersectionObserver === "undefined") return res();
+				// Tata letak halaman masih bergeser saat konten awal dimuat (bagian ini bisa
+				// sesaat berada di posisi 2.000 lalu pindah ke 6.600): hanya dianggap
+				// "dekat" bila TETAP dalam jangkauan selama 0,6 dtk.
+				let settle = 0;
+				nearIo = new IntersectionObserver(
+					(es) => {
+						clearTimeout(settle);
+						if (!es.at(-1)?.isIntersecting) return;
+						settle = window.setTimeout(() => {
+							nearIo?.disconnect();
+							res();
+						}, 600);
+					},
+					{ rootMargin: "300% 0px" },
+				);
+				nearIo.observe(el);
+			});
+			if (disposed) return;
 			const ml = await import("maplibre-gl");
 			// MapLibre 6 mencari worker lewat nama berkas dinamis — bundler tak
 			// bisa mengikutkannya, jadi di build produksi peta gagal ("Worker
@@ -1186,6 +1212,7 @@
 
 		return () => {
 			disposed = true;
+			nearIo?.disconnect();
 			cancelAnimationFrame(raf);
 			ro?.disconnect();
 			reclusterRef = null;

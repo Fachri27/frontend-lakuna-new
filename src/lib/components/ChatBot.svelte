@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from "svelte";
+	import { page } from "$app/state";
 	import { i18n, type Lang } from "$lib/i18n.svelte";
 	import { FAQ, type QA } from "$lib/faq";
 	import { CONTACT_EMAIL } from "$lib/contact";
@@ -201,29 +202,48 @@
 
 	// Disembunyikan selama hero (beranda) atau globe terlihat — keduanya layar
 	// penuh yang sengaja bersih. Panel yang sudah dibuka tetap tampil.
-	let covered = $state(false);
+	// Ringan by design: tanpa membaca layout saat scroll (hero = posisi scroll,
+	// globe = IntersectionObserver), dibatasi satu kali per frame, dan elemen
+	// dicari ulang hanya saat pindah halaman — BUKAN lewat MutationObserver di
+	// seluruh body (peta/kartu mengubah DOM terus-menerus; itu dulu memanggil
+	// handler ini ratusan kali per detik).
+	let heroOn = $state(false);
+	let globeOn = $state(false);
+	const covered = $derived(heroOn || globeOn);
 	$effect(() => {
-		const onScroll = () => {
-			const hero = document.querySelector("[data-hero]");
-			const heroOn = !!hero && scrollY < innerHeight * 0.9;
-			const globe = document.querySelector("[data-globe]");
-			let globeOn = false;
-			if (globe) {
-				const r = globe.getBoundingClientRect();
-				globeOn = r.top < innerHeight && r.bottom > 0;
-			}
-			covered = heroOn || globeOn;
+		void page.url.pathname; // cari ulang elemen tiap pindah halaman
+		let hero: Element | null = null;
+		let io: IntersectionObserver | null = null;
+		let raf = 0;
+		const calc = () => {
+			raf = 0;
+			heroOn = !!hero && scrollY < innerHeight * 0.9;
 		};
-		onScroll();
+		const onScroll = () => {
+			if (!raf) raf = requestAnimationFrame(calc);
+		};
+		const find = () => {
+			hero = document.querySelector("[data-hero]");
+			const globe = document.querySelector("[data-globe]");
+			io?.disconnect();
+			io = null;
+			if (globe && typeof IntersectionObserver !== "undefined") {
+				io = new IntersectionObserver(([e]) => (globeOn = !!e?.isIntersecting), { threshold: 0 });
+				io.observe(globe);
+			} else globeOn = false;
+			calc();
+		};
+		// Halaman beranda memasang hero setelah datanya tiba: coba beberapa kali.
+		find();
+		const retries = [250, 900, 2200].map((ms) => setTimeout(find, ms));
 		addEventListener("scroll", onScroll, { passive: true });
 		addEventListener("resize", onScroll);
-		// Navigasi antarhalaman: hero muncul/hilang tanpa scroll.
-		const mo = new MutationObserver(onScroll);
-		mo.observe(document.body, { childList: true, subtree: true });
 		return () => {
+			retries.forEach(clearTimeout);
 			removeEventListener("scroll", onScroll);
 			removeEventListener("resize", onScroll);
-			mo.disconnect();
+			if (raf) cancelAnimationFrame(raf);
+			io?.disconnect();
 		};
 	});
 	const showLauncher = $derived(open || !covered);

@@ -385,9 +385,35 @@
 		const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 		const smooth = (t: number) => t * t * (3 - 2 * t);
 		const rim = stage.querySelector<HTMLElement>(".md-rim");
+		// Satu fase berlangsung ±5,5 dtk, jadi ~20 pembaruan/dtk sudah tak terbedakan
+		// dari 60 — tapi tiap pembaruan menulis filter CSS lima lapis ke kanvas WebGL
+		// layar penuh dan state global peta (MapLibre menilai ulang style & menggambar
+		// ulang), yang mahal di GPU lemah. Tulis hanya bila nilainya berubah.
+		const TONE_STEP_MS = 48;
+		let lastToneAt = -1e9;
+		let lastFilter = "";
+		let toneCv: HTMLCanvasElement | null = null;
+		let rimShown = false;
+		let lastRimTf = "";
+		let cvW = 0;
+		let cvH = 0;
+		let sizeAt = -1e9;
 		const paintTone = (now: number) => {
 			toneRaf = requestAnimationFrame(paintTone);
-			const cv = map.querySelector<HTMLCanvasElement>("canvas");
+			if (now - lastToneAt < TONE_STEP_MS) {
+				// Cincin atmosfer menempel pada kanvas yang bergeser mengikuti kursor:
+				// salin transform tiap frame (hanya tulis, tanpa membaca layout).
+				if (rim && rimShown && toneCv) {
+					const tf = toneCv.style.transform || "";
+					if (tf !== lastRimTf) {
+						lastRimTf = tf;
+						rim.style.transform = tf;
+					}
+				}
+				return;
+			}
+			lastToneAt = now;
+			const cv = (toneCv && toneCv.isConnected ? toneCv : (toneCv = map.querySelector<HTMLCanvasElement>("canvas")));
 			if (!cv) return;
 			// Bobot dipudarkan oleh dive()/kembali ke hero — bukan dipotong
 			// langsung oleh `mode`, supaya warna tak meloncat saat menyelam.
@@ -403,9 +429,17 @@
 			if (rim) {
 				if (!toneVisible || rimWeight.w <= 0.001) {
 					rim.style.opacity = "0";
+					rimShown = false;
 				} else {
-					const W = cv.clientWidth;
-					const H = cv.clientHeight;
+					rimShown = true;
+					// clientWidth/Height memaksa layout; ukuran kanvas jarang berubah → baca 2×/dtk.
+					if (now - sizeAt > 500) {
+						sizeAt = now;
+						cvW = cv.clientWidth;
+						cvH = cv.clientHeight;
+					}
+					const W = cvW;
+					const H = cvH;
 					const vmin = Math.min(W, H);
 					// Jari-jari bulatan yang BENAR-BENAR tergambar ≈ 0,657·R (diukur
 					// dari tepi globe di layar; proyeksi globe MapLibre lebih kecil
@@ -415,7 +449,8 @@
 					rim.style.width = rim.style.height = `${(R * 2).toFixed(1)}px`;
 					rim.style.left = `${(W / 2 - R).toFixed(1)}px`;
 					rim.style.top = `${(cy - R).toFixed(1)}px`;
-					rim.style.transform = cv.style.transform || "";
+					lastRimTf = cv.style.transform || "";
+					rim.style.transform = lastRimTf;
 					// Siang = atmosfer paling terang; malam tetap ada garis tipis.
 					const day = Math.min(1, Math.max(0, (mix(A.d, B.d, t) - 0.4) / 0.66));
 					rim.style.opacity = ((0.45 + day * 0.55) * rimWeight.w).toFixed(3);
@@ -429,12 +464,17 @@
 			}
 			if (w <= 0.001 || !toneVisible) {
 				if (cv.style.filter) cv.style.filter = "";
+				lastFilter = "";
 				return;
 			}
 			const k = (key: Exclude<keyof Tone, "n">, neutral: number) => mix(neutral, mix(A[key], B[key], t), w);
-			cv.style.filter =
+			const filter =
 				`brightness(${k("b", 1).toFixed(3)}) saturate(${k("s", 1).toFixed(3)}) ` +
 				`contrast(${k("c", 1).toFixed(3)}) hue-rotate(${k("h", 0).toFixed(1)}deg) sepia(${k("sep", 0).toFixed(3)})`;
+			if (filter !== lastFilter) {
+				lastFilter = filter;
+				cv.style.filter = filter;
+			}
 		};
 		toneRaf = requestAnimationFrame(paintTone);
 		// Di luar layar: jangan melukis ulang tiap frame.
