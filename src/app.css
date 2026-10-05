@@ -1743,13 +1743,12 @@ a.ias-card:focus-visible {
   filter: invert(1);
   opacity: 0.5;
 }
-/* Overlay ajakan Ctrl+scroll (cooperative gestures): samakan dengan HUD peta. */
+/* Overlay bawaan MapLibre untuk cooperative gestures ("Use Ctrl/⌘ + scroll to zoom
+   the map" + latar gelap) disembunyikan. Perilakunya tetap: scroll biasa menggulir
+   halaman, Ctrl/⌘ + scroll atau cubit dua jari memperbesar; petunjuknya sudah ada
+   di baris bawah peta. */
 .im-wrap .maplibregl-cooperative-gesture-screen {
-  background: color-mix(in srgb, var(--darkroom) 72%, transparent);
-  color: rgba(239, 231, 220, 0.85);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
+  display: none !important;
 }
 
 /* Sembunyikan bar atas (navbar + banner voucher) selama section peta memenuhi
