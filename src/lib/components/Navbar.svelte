@@ -190,7 +190,7 @@ import { i18n } from "$lib/i18n.svelte";
 								{#each categories as cat, i (cat.id)}
 									<a
 										role="menuitem"
-										href={`/photos?cat=${encodeURIComponent(cat.name)}`}
+										href={`/categories/${encodeURIComponent(cat.name)}`}
 										onclick={() => (mega = false)}
 										class="group flex flex-col gap-1 bg-bg p-5 transition-colors hover:bg-surface-2"
 									>

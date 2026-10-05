@@ -1014,7 +1014,10 @@ export function geocodeLocation(location: string): { lat: number; lng: number } 
  * perjalanan Sabang→Merauke tetap rapi. Mengembalikan [] bila fetch gagal
  * atau tak ada lokasi yang cocok (pemanggil boleh pakai fallback statis).
  */
-/** Id foto penanda peta yang dipilih admin di CMS (urutan = prioritas). Gagal/kosong → []. */
+/**
+ * Foto yang dipilih admin (CMS › Beranda › Foto penanda peta) untuk ditampilkan di titik petanya,
+ * berurutan; yang pertama jadi penanda. Gagal/kosong → [] (semua titik memakai semua fotonya).
+ */
 async function fetchPlatePhotoIds(): Promise<string[]> {
   if (USE_DUMMY_MAP) return [];
   try {
@@ -1034,6 +1037,15 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
   const photos = USE_DUMMY_MAP
     ? DUMMY_API_PHOTOS.filter((p) => p.type === "FOTO").map(adaptPhoto)
     : (await fetchPhotos({ type: "FOTO", limit: 200 })).photos;
+
+  // Peta hanya mengambil 200 foto terbaru; foto pilihan admin yang lebih lama tak boleh hilang
+  // diam-diam → ambil per id (maks 80 permintaan paralel, yang gagal dilewati).
+  if (platePhotoIds.length && !USE_DUMMY_MAP) {
+    const have = new Set(photos.map((p) => p.id));
+    const missing = platePhotoIds.filter((id) => !have.has(id)).slice(0, 80);
+    const extra = await Promise.all(missing.map((id) => fetchPhotoById(id).catch(() => null)));
+    for (const p of extra) if (p && p.assetType !== "VIDEO") photos.push(p);
+  }
 
   // Group key = location ternormalisasi (lowercase) supaya "Danau Toba" dan
   // "danau toba" menyatu jadi satu titik; nama tampil = casing asli pertama.
@@ -1099,15 +1111,15 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
     }
     m.photos = [...m.photos, ...h.photos];
   }
-  // Foto penanda pilihan admin (CMS › Peta) jadi yang PERTAMA di titiknya: dialah yang tampil di
-  // penanda dan pertama dibuka. Sisanya tetap urutan semula (sort stabil). Dilakukan setelah
-  // penggabungan titik berdekatan, supaya pilihan tak hilang saat titik digabung.
+  // Pilihan admin: bila sebuah titik punya foto yang dipilih, HANYA foto itu yang tampil (urutan
+  // sesuai pilihan; yang pertama jadi penanda & pertama dibuka). Titik yang belum dipilih tetap
+  // menampilkan semua fotonya. Dilakukan setelah penggabungan titik berdekatan, supaya pilihan
+  // dari kedua nama lokasi ikut dan tak hilang saat titik digabung.
   if (platePhotoIds.length) {
     const rank = new Map(platePhotoIds.map((id, i) => [id, i] as const));
     for (const h of merged) {
-      if (h.photos.some((p) => rank.has(p.id ?? ""))) {
-        h.photos = [...h.photos].sort((a, b) => (rank.get(a.id ?? "") ?? 1e9) - (rank.get(b.id ?? "") ?? 1e9));
-      }
+      const picked = h.photos.filter((p) => rank.has(p.id ?? ""));
+      if (picked.length) h.photos = picked.sort((a, b) => (rank.get(a.id ?? "") ?? 0) - (rank.get(b.id ?? "") ?? 0));
     }
   }
   // Urut west → east (busur Sabang → Merauke).

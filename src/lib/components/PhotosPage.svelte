@@ -6,7 +6,12 @@
 	import SearchField from "./SearchField.svelte";
 	import SortSelect from "./SortSelect.svelte";
 
-	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
+	let { initialCat, initialQ, chipTitle = false }: {
+		initialCat?: string;
+		initialQ?: string;
+		/** true di halaman /categories/[name]: judul mengikuti chip aktif. */
+		chipTitle?: boolean;
+	} = $props();
 
 	const copy = {
 		id: { kicker: "Koleksi foto", kickerMixed: "Arsip", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
@@ -39,6 +44,8 @@
 	// - ?cat= dari navbar Categories → `Results for "<kategori>"` (headCat, dari URL).
 	// - Chip kategori di halaman ini → judul TIDAK berubah (tetap default).
 	// - Pencarian teks → `Results for "<kata>"`.
+	// - PENGECUALIAN: halaman /categories/[name] (prop chipTitle) → judul
+	//   mengikuti chip aktif.
 	const headCat = $derived(initialCat || undefined);
 	const headMixed = $derived(!!headCat || !!needle);
 
@@ -192,7 +199,7 @@
 		<!-- Foto + video bercampur (lewat kategori / pencarian) = bukan lagi "Photos". -->
 		<p class="kicker text-safelight">{headMixed ? t.kickerMixed : t.kicker}</p>
 			<h1 class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-			{headCat ? t.titleSearch(headCat) : needle ? t.titleSearch(query) : t.title}
+			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : needle ? t.titleSearch(query) : t.title}
 		</h1>
 		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{headMixed ? t.subMixed : t.sub}</p>
 
