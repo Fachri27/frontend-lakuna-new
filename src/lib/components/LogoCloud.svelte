@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { ApiResponse } from "../types";
+	import { apiGet } from "$lib/api";
 	/**
 	 * Dinding logo pelanggan — potret 1:1 dari `logo-cloud-16` (React/shadcn)
 	 * ke Svelte. Token warna/usulan shadcn (`bg-background`, `muted-foreground`)
@@ -13,6 +15,28 @@
 		/** Logo kurasi CMS (section `percaya`): gambar asli sebagai logo. Kosong = wordmark dummy. */
 		items?: { name: string; src: string }[] | null;
 	} = $props();
+
+	// Logo unggahan admin (CMS › Logo, /api/logos) menang atas segalanya;
+	// kosong = kurasi foto `percaya`, lalu wordmark dummy.
+	let uploaded = $state<{ name: string; src: string }[] | null>(null);
+	$effect(() => {
+		let alive = true;
+		apiGet<ApiResponse<{ id: string; name: string; imageUrl: string | null }[]>>("/api/logos")
+			.then((r) => {
+				if (!alive) return;
+				const list = (r.data ?? [])
+					.filter((l) => l.imageUrl)
+					.map((l) => ({ name: l.name, src: l.imageUrl as string }));
+				uploaded = list;
+			})
+			.catch(() => {
+				if (alive) uploaded = [];
+			});
+		return () => {
+			alive = false;
+		};
+	});
+	const shown = $derived(uploaded?.length ? uploaded : (items?.length ? items : null));
 
 	// Logo dummy sementara — wordmark teks sampai ada logo pelanggan asli.
 	// Tiap entri punya gaya huruf sendiri supaya terbaca sebagai deretan
@@ -32,8 +56,8 @@
 	<span class="kicker text-fg-muted">{eyebrow}</span>
 </div>
 <div class="mt-12 flex flex-wrap items-center justify-center gap-x-14 gap-y-10 sm:gap-x-20">
-	{#if items?.length}
-		{#each items as logo, li (logo.src + "-" + li)}
+	{#if shown}
+		{#each shown as logo, li (logo.src + "-" + li)}
 			<span data-reveal>
 				<img
 					src={logo.src}
