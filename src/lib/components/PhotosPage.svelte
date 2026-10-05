@@ -4,6 +4,7 @@
 	import { fetchPhotos, fetchCategories, type Photo, type ApiCatItem } from "$lib/data";
 	import Masonry from "./Masonry.svelte";
 	import SearchField from "./SearchField.svelte";
+	import SortSelect from "./SortSelect.svelte";
 
 	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
 
@@ -200,12 +201,19 @@
 				onclear={clearSearch}
 				class="min-w-0 sm:flex-1"
 			/>
-			<div class="flex shrink-0 items-center gap-2" role="group" aria-label={t.sortLabel}>
-				{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
-				{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
-				<span class="ml-2 hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
+			<div class="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+				<span class="whitespace-nowrap text-xs text-fg-muted" aria-live="polite">
 					{total || photos.length} {t.count}
 				</span>
+				<SortSelect
+					value={sort}
+					label={t.sortLabel}
+					options={[
+						{ value: "newest", label: t.newest },
+						{ value: "oldest", label: t.oldest },
+					]}
+					onchange={(v) => ((sort = v), void load())}
+				/>
 			</div>
 		</div>
 
