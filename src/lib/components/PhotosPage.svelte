@@ -205,7 +205,7 @@
 		<!-- Foto + video bercampur (lewat kategori / pencarian) = bukan lagi "Photos". -->
 		<p class="kicker text-safelight">{headMixed ? t.kickerMixed : t.kicker}</p>
 			<h1 class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : by ? t.titleSearch(by) : needle ? t.titleSearch(query) : t.title}
+			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : (by || needle) && cat ? t.titleSearch(cat) : by ? t.titleSearch(by) : needle ? t.titleSearch(query) : t.title}
 		</h1>
 		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{headMixed ? t.subMixed : t.sub}</p>
 
