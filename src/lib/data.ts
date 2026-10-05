@@ -1034,9 +1034,25 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
   // Ambil halaman besar sekali jalan — peta butuh sebanyak mungkin titik.
   // Selama USE_DUMMY_MAP, titiknya dari dataset dummy (tanpa thumbUrl, jadi
   // gambarnya placeholder lewat imgFor) — sama dengan peta di front-lakuna.
-  const photos = USE_DUMMY_MAP
-    ? DUMMY_API_PHOTOS.filter((p) => p.type === "FOTO").map(adaptPhoto)
-    : (await fetchPhotos({ type: "FOTO", limit: 200 })).photos;
+  let photos: Photo[];
+  if (USE_DUMMY_MAP) {
+    photos = DUMMY_API_PHOTOS.filter((p) => p.type === "FOTO").map(adaptPhoto);
+  } else {
+    // API membatasi satu halaman ≤ 100 foto (permintaan limit=200 dulu hanya mengembalikan 100):
+    // lokasi dengan foto lama tersingkir dari peta begitu ada lokasi yang fotonya banyak. Ambil
+    // halaman berikutnya bila ada (paralel, maks 10 halaman); katalog kecil tak menambah permintaan.
+    const first = await fetchPhotos({ type: "FOTO", limit: 100, page: 1 });
+    photos = [...first.photos];
+    const more = Math.min(first.totalPages, 10) - 1;
+    if (more > 0) {
+      const rest = await Promise.all(
+        Array.from({ length: more }, (_, i) =>
+          fetchPhotos({ type: "FOTO", limit: 100, page: i + 2 }).catch(() => ({ photos: [] as Photo[] })),
+        ),
+      );
+      for (const r of rest) photos.push(...r.photos);
+    }
+  }
 
   // Peta hanya mengambil 200 foto terbaru; foto pilihan admin yang lebih lama tak boleh hilang
   // diam-diam → ambil per id (maks 80 permintaan paralel, yang gagal dilewati).
