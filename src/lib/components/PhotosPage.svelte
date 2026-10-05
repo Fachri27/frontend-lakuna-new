@@ -35,9 +35,10 @@
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const mixed = $derived((!!cat && catFromNav) || !!needle);
-	// Header (label, judul, subjudul, placeholder) mengikuti kategori dari URL
-	// saat halaman dibuka — BUKAN chip yang sedang aktif. Memilih chip hanya
-	// mengganti isi galeri; judul "Results for “Aerial”" tetap seperti semula.
+	// ATURAN JUDUL (final, permintaan pemilik — jangan dibalik lagi):
+	// - ?cat= dari navbar Categories → `Results for "<kategori>"` (headCat, dari URL).
+	// - Chip kategori di halaman ini → judul TIDAK berubah (tetap default).
+	// - Pencarian teks → `Results for "<kata>"`.
 	const headCat = $derived(initialCat || undefined);
 	const headMixed = $derived(!!headCat || !!needle);
 

@@ -508,8 +508,6 @@
 				</g>
 			</g>
 		</svg>
-
-		<p class="l-pre__hint" class:is-on={hint}>Ketuk untuk suara</p>
 	</div>
 {/if}
 
@@ -631,31 +629,4 @@
 		pointer-events: none;
 		mix-blend-mode: screen;
 	}
-
-	/* --- petunjuk suara --- */
-
-	/* Di bawah lensa: tepi bawahnya ada di 50% + 0.42 × sisi terpendek layar. */
-	.l-pre__hint {
-		position: absolute;
-		left: 50%;
-		bottom: clamp(1.25rem, 3.2vh, 2.5rem);
-		margin: 0;
-		transform: translate(-50%, 6px);
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-		letter-spacing: 0.08em;
-		white-space: nowrap;
-		color: rgba(var(--pre-paper), 0.72);
-		opacity: 0;
-		pointer-events: none;
-		transition:
-			opacity 0.4s ease,
-			transform 0.4s ease;
-	}
-
-	.l-pre__hint.is-on {
-		opacity: 1;
-		transform: translate(-50%, 0);
-	}
-
 </style>

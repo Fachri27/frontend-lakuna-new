@@ -70,7 +70,7 @@
 		{#if isLanding}
 		<ImageStream images={streamImages} class="ft-stream">
 			<div class="ft-stream-copy">
-				<p class="font-display text-[1.05rem] font-bold uppercase leading-none tracking-[0.02em] text-safelight">{c.nav.tagline}</p>
+				<p class="mb-4 font-display text-[1.05rem] font-bold uppercase leading-none tracking-[0.02em] text-safelight">{c.nav.tagline}</p>
 				<div class="mt-3">
 					<SliceHeadline
 						lineA={c.footer.taglineA}
@@ -171,7 +171,7 @@
 		text-align: center;
 		/* Atas ditekan melewati zona fade topeng koridor (12%): kicker tidak
 		   lagi redup/ketiban bayangan. */
-		padding: clamp(3.5rem, 13svh, 7rem) 1.5rem 0;
+		padding: clamp(2rem, 7svh, 4rem) 1.5rem 0;
 	}
 	/* Tagline di koridor lebih kecil dari ukuran bawaan SliceHeadline
 	   (9,4vw) supaya kartu di kiri-kanan tetap terbaca sebagai koridor. */

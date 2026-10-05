@@ -328,7 +328,7 @@
 			<div class="fs-copy">
 				<p class="fs-kicker serif-em">{copy.kicker}</p>
 				<h2 class="fs-title">{copy.title}</h2>
-				<a href="/photos" class="fs-cta">
+				<a href="/ecotourism" class="fs-cta">
 					<span use:scrambleHover>{copy.cta}</span>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 				</a>
@@ -608,6 +608,10 @@
 		opacity: 1;
 		transform: none;
 		pointer-events: auto;
+	}
+	/* Hover: cahaya ungu di bawah kartu, seperti kartu /photos. */
+	.fs-card:hover {
+		box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.65), 0 14px 40px -12px var(--safelight-glow);
 	}
 	/* Kartu tepat di belakang yang aktif mengintip sebagai "tab" tipis. */
 	.fs-stack:not(.is-open) .fs-card:not(.is-active) {

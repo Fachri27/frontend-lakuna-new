@@ -1507,7 +1507,7 @@
 				</a>
 			</div>
 
-			<a data-reveal href="/pricing" class="rate-row rate-row--pick group">
+			<a data-reveal href="/pricing" class="rate-row group">
 				<div class="rate-name">
 					<h3 class="font-display text-[1.6rem] leading-tight text-fg">
 						{s.subscribe}

@@ -3,15 +3,16 @@
 	import { store } from "$lib/store.svelte";
 	import { announcer } from "$lib/stores/announce.svelte";
 	import { catLabel, fmtIDR, imgFor, fetchPhotos, fetchCategories, pickVideoPreview, type Video, type ApiCatItem } from "$lib/data";
-	import Reveal from "./Reveal.svelte";
-	import SearchField from "./SearchField.svelte";
+import Reveal from "./Reveal.svelte";
+import SearchField from "./SearchField.svelte";
+import SortSelect from "./SortSelect.svelte";
 	import { goto } from "$app/navigation";
 
 	let { initialQ }: { initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain.", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", oldest: "Terlama" },
-		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme.", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", oldest: "Oldest" }
+		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain.", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir" },
+		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme.", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -32,8 +33,9 @@
 	// pemilih foto CMS). Tanpa jeda, tiap ketikan menembak API.
 	let sq = $state(initialQ ?? "");
 	let query = $state((initialQ ?? "").trim());
-	// Urutan waktu: terbaru / terlama.
-	let sort = $state<"newest" | "oldest">("newest");
+	// Urutan + rentang waktu — pola yang sama dengan /photos.
+	let sort = $state<"newest" | "popular">("newest");
+	let period = $state<"all" | "day" | "week" | "month" | "year">("all");
 
 	// Kata kunci dari URL (mis. dari pencarian navbar) mengisi kolom ini.
 	$effect(() => {
@@ -123,7 +125,7 @@
 	});
 
 	function load() {
-		return fetchPhotos({ cat, search: query || undefined, type: "VIDEO", sort, limit: 24 })
+		return fetchPhotos({ cat, search: query || undefined, type: "VIDEO", sort, period: period === "all" ? undefined : period, limit: 24 })
 			.then((r) => {
 				videos = r.photos.map((p) => ({
 					id: p.id,
@@ -164,7 +166,7 @@
 		<p data-reveal class="kicker text-safelight">{t.kicker}</p>
 		<h1 data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{query ? t.titleSearch(query) : t.title}</h1>
 		<p data-reveal class="mt-6 whitespace-nowrap text-[min(1.02rem,1.8vw)] leading-relaxed text-fg-muted">{t.sub}</p>
-		<div data-reveal>
+		<div data-reveal class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
 			<SearchField
 				bind:value={sq}
 				placeholder={t.searchPlaceholder}
@@ -173,8 +175,31 @@
 				submitLabel={t.searchSubmit}
 				onsubmit={syncUrl}
 				onclear={clearSearch}
-				class="mt-8"
+				class="min-w-0 sm:flex-1"
 			/>
+			<div class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-3 sm:justify-end">
+				<SortSelect
+					value={sort}
+					label={t.sortLabel}
+					options={[
+						{ value: "newest", label: t.newest },
+						{ value: "popular", label: t.popular },
+					]}
+					onchange={(v) => ((sort = v), void load())}
+				/>
+				<SortSelect
+					value={period}
+					label={t.timeLabel}
+					options={[
+						{ value: "all", label: t.anyTime },
+						{ value: "day", label: t.pastDay },
+						{ value: "week", label: t.pastWeek },
+						{ value: "month", label: t.pastMonth },
+						{ value: "year", label: t.pastYear },
+					]}
+					onchange={(v) => ((period = v), void load())}
+				/>
+			</div>
 		</div>
 		{#if query}
 			<p data-reveal class="mt-5 flex flex-wrap items-baseline gap-2 text-sm text-fg-muted">
@@ -205,9 +230,6 @@
 		{#each categories as c (c.id)}
 			{@render chip(cat === c.name, c.name, () => (cat = c.name))}
 		{/each}
-		<span aria-hidden="true" class="h-5 w-px shrink-0 bg-hair"></span>
-		{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
-		{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
 		<span class="ml-auto hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
 			{videos.length} {t.count}
 		</span>
