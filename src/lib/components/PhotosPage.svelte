@@ -6,9 +6,11 @@
 	import SearchField from "./SearchField.svelte";
 	import SortSelect from "./SortSelect.svelte";
 
-	let { initialCat, initialQ, chipTitle = false }: {
+	let { initialCat, initialQ, initialBy, chipTitle = false }: {
 		initialCat?: string;
 		initialQ?: string;
+		/** ?by=<nama fotografer>: karya satu fotografer (tautan "oleh …"). Bukan pencarian teks. */
+		initialBy?: string;
 		/** true di halaman /categories/[name]: judul mengikuti chip aktif. */
 		chipTitle?: boolean;
 	} = $props();
@@ -39,7 +41,8 @@
 	let period = $state<"all" | "day" | "week" | "month" | "year">("all");
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
-	const mixed = $derived((!!cat && catFromNav) || !!needle);
+	const by = $derived(initialBy?.trim() || undefined);
+	const mixed = $derived((!!cat && catFromNav) || !!needle || !!by);
 	// ATURAN JUDUL (final, permintaan pemilik — jangan dibalik lagi):
 	// - ?cat= dari navbar Categories → `Results for "<kategori>"` (headCat, dari URL).
 	// - Chip kategori di halaman ini → judul TIDAK berubah (tetap default).
@@ -47,7 +50,7 @@
 	// - PENGECUALIAN: halaman /categories/[name] (prop chipTitle) → judul
 	//   mengikuti chip aktif.
 	const headCat = $derived(initialCat || undefined);
-	const headMixed = $derived(!!headCat || !!needle);
+	const headMixed = $derived(!!headCat || !!needle || !!by);
 
 	$effect(() => {
 		q = initialQ ?? "";
@@ -101,6 +104,7 @@
 		return fetchPhotos({
 			cat,
 			search: needle || undefined,
+			photographer: by,
 			type: mixed ? undefined : "FOTO",
 			sort,
 			period: period === "all" ? undefined : period,
@@ -135,6 +139,7 @@
 		Promise.all([fetchPhotos({
 			cat,
 			search: needle || undefined,
+			photographer: by,
 			type: mixed ? undefined : "FOTO",
 			sort,
 			period: period === "all" ? undefined : period,
@@ -175,6 +180,7 @@
 	$effect(() => {
 		void cat;
 		void needle;
+		void by;
 		void load();
 	});
 </script>
@@ -199,7 +205,7 @@
 		<!-- Foto + video bercampur (lewat kategori / pencarian) = bukan lagi "Photos". -->
 		<p class="kicker text-safelight">{headMixed ? t.kickerMixed : t.kicker}</p>
 			<h1 class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : needle ? t.titleSearch(query) : t.title}
+			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : by ? t.titleSearch(by) : needle ? t.titleSearch(query) : t.title}
 		</h1>
 		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{headMixed ? t.subMixed : t.sub}</p>
 

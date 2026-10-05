@@ -306,6 +306,8 @@ export async function fetchPhotos(opts?: {
   /** Nama kategori asli dari API (mis. "Nature", "Urban") — backend menyaring berdasar category.name. */
   cat?: string;
   search?: string;
+  /** Karya satu fotografer (nama persis); beda dengan `search` yang hanya judul & keyword. */
+  photographer?: string;
   type?: "FOTO" | "VIDEO";
   /** Urutan hasil; default terbaru. */
   sort?: "newest" | "oldest" | "popular" | "price_asc" | "price_desc";
@@ -321,6 +323,7 @@ export async function fetchPhotos(opts?: {
   const params = new URLSearchParams();
   if (opts?.cat) params.set("categoryId", opts.cat);
   if (opts?.search) params.set("search", opts.search);
+  if (opts?.photographer) params.set("photographer", opts.photographer);
   if (opts?.type) params.set("type", opts.type);
   if (opts?.sort) params.set("sort", opts.sort);
   if (opts?.period) params.set("period", opts.period);
@@ -484,8 +487,8 @@ export async function fetchRelatedPhotos(id: string, limit = 4): Promise<Photo[]
 
 /**
  * Karya lain dari kontributor yang sama (galeri kontributor di halaman
- * detail). Backend `search` mencakup kolom photographer, tapi disaring lagi
- * di klien berdasarkan nama persis — search juga kena judul/kategori.
+ * detail). Memakai filter `photographer` di backend (nama persis); disaring lagi
+ * di klien sebagai pengaman.
  */
 export async function fetchContributorWorks(
   author: string,
@@ -495,7 +498,7 @@ export async function fetchContributorWorks(
   const name = author.trim();
   if (!name) return [];
   try {
-    const r = await fetchPhotos({ search: name, limit: limit + 8 });
+    const r = await fetchPhotos({ photographer: name, limit: limit + 8 });
     return r.photos.filter((p) => p.author === name && p.id !== excludeId).slice(0, limit);
   } catch {
     return [];

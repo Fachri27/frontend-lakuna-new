@@ -465,7 +465,7 @@
 							{t.contribSub} <span class="serif-em text-safelight">{video.author}</span>
 						</h2>
 					</div>
-					<a data-reveal href={`/photos?q=${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/photos?by=${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>

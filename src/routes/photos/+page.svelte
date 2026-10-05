@@ -19,4 +19,5 @@
 <PhotosPage
 	initialCat={page.url.searchParams.get("cat") ?? undefined}
 	initialQ={page.url.searchParams.get("q") ?? undefined}
+	initialBy={page.url.searchParams.get("by") ?? undefined}
 />

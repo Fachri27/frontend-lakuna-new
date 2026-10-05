@@ -347,7 +347,7 @@
 						{photo.title[lang]}
 					</h1>
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+						{t.by} <a href={`/photos?by=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 					</p>
 				</div>
 			</div>
@@ -536,10 +536,10 @@
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
-							{t.contribSub} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+							{t.contribSub} <a href={`/photos?by=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 						</h2>
 					</div>
-					<a data-reveal href={`/photos?q=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/photos?by=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>
