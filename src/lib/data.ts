@@ -1014,7 +1014,20 @@ export function geocodeLocation(location: string): { lat: number; lng: number } 
  * perjalanan Sabang→Merauke tetap rapi. Mengembalikan [] bila fetch gagal
  * atau tak ada lokasi yang cocok (pemanggil boleh pakai fallback statis).
  */
+/** Id foto penanda peta yang dipilih admin di CMS (urutan = prioritas). Gagal/kosong → []. */
+async function fetchPlatePhotoIds(): Promise<string[]> {
+  if (USE_DUMMY_MAP) return [];
+  try {
+    const res = await apiGet<ApiResponse<{ value?: string } | null>>("/api/settings/map_plate_photos");
+    const arr: unknown = JSON.parse(res.data?.value ?? "[]");
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchMapHotspots(): Promise<MapHotspot[]> {
+  const platePhotoIds = await fetchPlatePhotoIds();
   // Ambil halaman besar sekali jalan — peta butuh sebanyak mungkin titik.
   // Selama USE_DUMMY_MAP, titiknya dari dataset dummy (tanpa thumbUrl, jadi
   // gambarnya placeholder lewat imgFor) — sama dengan peta di front-lakuna.
@@ -1085,6 +1098,17 @@ export async function fetchMapHotspots(): Promise<MapHotspot[]> {
       m.lng = h.lng;
     }
     m.photos = [...m.photos, ...h.photos];
+  }
+  // Foto penanda pilihan admin (CMS › Peta) jadi yang PERTAMA di titiknya: dialah yang tampil di
+  // penanda dan pertama dibuka. Sisanya tetap urutan semula (sort stabil). Dilakukan setelah
+  // penggabungan titik berdekatan, supaya pilihan tak hilang saat titik digabung.
+  if (platePhotoIds.length) {
+    const rank = new Map(platePhotoIds.map((id, i) => [id, i] as const));
+    for (const h of merged) {
+      if (h.photos.some((p) => rank.has(p.id ?? ""))) {
+        h.photos = [...h.photos].sort((a, b) => (rank.get(a.id ?? "") ?? 1e9) - (rank.get(b.id ?? "") ?? 1e9));
+      }
+    }
   }
   // Urut west → east (busur Sabang → Merauke).
   merged.sort((a, b) => a.lng - b.lng);

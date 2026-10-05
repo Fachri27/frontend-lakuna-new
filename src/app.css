@@ -1360,13 +1360,14 @@ a.ias-card:focus-visible {
   filter: saturate(1) contrast(1.1);
   transform: scale(1.03);
 }
-/* Titik yang dipandang menyala dengan safelight versi lampu — merah cetak
-   (--safelight) terlalu gelap untuk terbaca di atas satelit. */
+/* Titik yang dipandang: PUTIH seperti titik lain (bukan ungu) — nama, nomor, dan kurung sudut. */
 .im-mk.is-focus,
 .im-mk.is-focus .im-mk-name,
-.im-mk.is-focus .im-mk-num,
 .im-mk-plate.is-focus .im-mk-plate-inner {
-  color: var(--color-safelight-lamp);
+  color: var(--im-ink);
+}
+.im-mk.is-focus .im-mk-num {
+  color: rgba(239, 231, 220, 0.78);
 }
 .im-mk-plate.is-focus .im-mk-plate-img {
   filter: saturate(1) contrast(1.1);

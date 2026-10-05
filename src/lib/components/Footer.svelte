@@ -157,8 +157,8 @@
 		width: 100vw;
 		/* Pinggir larut ke latar footer supaya kartu yang keluar tak terpotong
 		   garis keras di tepi section. */
-		-webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
-		mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+		-webkit-mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
+		mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
 	}
 	.ft-stream-copy {
 		position: relative;
@@ -169,9 +169,9 @@
 		align-items: center;
 		justify-content: flex-start;
 		text-align: center;
-		/* Atas ditekan melewati zona fade topeng koridor (12%): kicker tidak
-		   lagi redup/ketiban bayangan. */
-		padding: clamp(2rem, 7svh, 4rem) 1.5rem 0;
+		/* Teks dinaikkan (permintaan): rapat ke atas koridor. Zona pudar topeng di atas
+		   dipersempit (5%) agar kicker tetap terang. */
+		padding: clamp(0.5rem, 2svh, 1.25rem) 1.5rem 0;
 	}
 	/* Tagline di koridor lebih kecil dari ukuran bawaan SliceHeadline
 	   (9,4vw) supaya kartu di kiri-kanan tetap terbaca sebagai koridor. */
