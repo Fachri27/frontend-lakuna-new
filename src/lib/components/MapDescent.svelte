@@ -208,7 +208,8 @@
 		// statistik → tombol (diputar mundur saat naik = muncul bawah → atas).
 		const fadeOrder = [".md-eyebrow", ".md-title", ".md-sub", ".md-meta", ".md-cta, .md-tools"];
 		fadeOrder.forEach((sel, k) => {
-			tl.to(q(sel), { opacity: 0, duration: 0.36, ease: "power2.in" }, k * 0.12);
+			// Cepat & nyaris serentak: teks hero tak boleh tersisa saat kamera sudah menukik ke peta.
+			tl.to(q(sel), { opacity: 0, duration: 0.18, ease: "power2.in" }, k * 0.03);
 		});
 		tl.to(q(".md-stars"), { opacity: 0, duration: 0.8, ease: "power1.in" }, 0.2);
 		// 2 — tepi gelap peta tumbuh PELAN selagi kamera masih bergerak.
