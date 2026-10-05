@@ -8,8 +8,8 @@
 	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", oldest: "Terlama", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
-		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", oldest: "Oldest", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
+		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", oldest: "Terlama", sortLabel: "Urutkan", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
+		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", oldest: "Oldest", sortLabel: "Sort", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -162,6 +162,21 @@
 	});
 </script>
 
+{#snippet chip(active: boolean, label: string, onpick: () => void)}
+	<button
+		type="button"
+		aria-pressed={active}
+		onclick={onpick}
+		class={`press kicker chip shrink-0 whitespace-nowrap rounded-full border transition-colors ${
+			active
+				? "border-safelight bg-safelight text-ivory"
+				: "border-hair text-fg/70 hover:border-safelight hover:text-safelight active:border-safelight active:text-safelight"
+		}`}
+	>
+		{label}
+	</button>
+{/snippet}
+
 <section class="mx-auto max-w-[1500px] px-6 pb-10 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:px-10 lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
 	<div>
 		<p class="kicker text-safelight">{t.kicker}</p>
@@ -172,16 +187,27 @@
 
 		<!-- Pencarian memakai bahasa yang sama dengan rel hero: garis bawah
 			tipis, bukan kotak — satu produk, satu cara mencari. -->
-		<SearchField
-			bind:value={q}
-			placeholder={mixed ? t.searchPlaceholderMixed : t.searchPlaceholder}
-			label={mixed ? t.searchLabelMixed : t.searchLabel}
-			clearLabel={t.clear}
-			submitLabel={t.searchSubmit}
-			onsubmit={syncUrl}
-			onclear={clearSearch}
-			class="mt-8"
-		/>
+		<!-- Pencarian di kiri, urutan (Terbaru/Terlama) + jumlah di kanan — satu
+			baris sejajar; di layar sempit urutan turun ke bawah pencarian. -->
+		<div class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
+			<SearchField
+				bind:value={q}
+				placeholder={mixed ? t.searchPlaceholderMixed : t.searchPlaceholder}
+				label={mixed ? t.searchLabelMixed : t.searchLabel}
+				clearLabel={t.clear}
+				submitLabel={t.searchSubmit}
+				onsubmit={syncUrl}
+				onclear={clearSearch}
+				class="min-w-0 sm:flex-1"
+			/>
+			<div class="flex shrink-0 items-center gap-2" role="group" aria-label={t.sortLabel}>
+				{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
+				{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
+				<span class="ml-2 hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
+					{total || photos.length} {t.count}
+				</span>
+			</div>
+		</div>
 
 		{#if query}
 			<p class="mt-5 flex flex-wrap items-baseline gap-2 text-sm text-fg-muted">
@@ -195,30 +221,10 @@
 	ramping (chip 38px) supaya tidak mendominasi layar; 44px penuh di sm+. -->
 <div class="sticky top-[calc(var(--banner-h,0px)+var(--nav-h))] z-30 border-y border-hair bg-bg/85 backdrop-blur-md sm:backdrop-blur-xl" data-no-hover-sound data-no-click-sound>
 	<div class="rail-scroll mx-auto flex max-w-[1500px] items-center gap-1.5 overflow-x-auto px-[max(1.5rem,env(safe-area-inset-left))] py-1.5 sm:gap-2 sm:px-6 sm:py-3 lg:px-10">
-		{#snippet chip(active: boolean, label: string, onpick: () => void)}
-			<button
-				type="button"
-				aria-pressed={active}
-				onclick={onpick}
-				class={`press kicker chip shrink-0 whitespace-nowrap rounded-full border transition-colors ${
-					active
-						? "border-safelight bg-safelight text-ivory"
-						: "border-hair text-fg/70 hover:border-safelight hover:text-safelight active:border-safelight active:text-safelight"
-				}`}
-			>
-				{label}
-			</button>
-		{/snippet}
 		{@render chip(!cat, t.all, () => ((cat = undefined), (catPicked = true)))}
 		{#each categories as c (c.id)}
 			{@render chip(cat === c.name, c.name, () => ((cat = c.name), (catPicked = true)))}
 		{/each}
-		<span aria-hidden="true" class="h-5 w-px shrink-0 bg-hair"></span>
-		{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
-		{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
-		<span class="ml-auto hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
-			{total || photos.length} {t.count}
-		</span>
 	</div>
 </div>
 
