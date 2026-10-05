@@ -1556,9 +1556,32 @@
 	/** Foto yang baru dibuka mulai dari keadaan terbakar (dibaca efek buka). */
 	let openFromBurn = false;
 	let opening = false;
+	/**
+	 * Kamera peta saat penampil foto dibuka. Di dalam penampil, memilih thumbnail di strip memanggil
+	 * flyTo() yang menerbangkan peta (di balik penampil) ke zoom lokasi itu — dulu peta tertinggal di
+	 * situ begitu penampil ditutup, tidak kembali ke tampilan semula. Dipulihkan di finishClose().
+	 */
+	let camBeforeView: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null;
+	function rememberCamera() {
+		const m = map;
+		if (!m || camBeforeView) return;
+		const c = m.getCenter();
+		camBeforeView = { center: [c.lng, c.lat], zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
+	}
+	function restoreCamera() {
+		const m = map;
+		const cam = camBeforeView;
+		camBeforeView = null;
+		if (!m || !cam) return;
+		// Hentikan terbangan yang masih berjalan, lalu kembali PERSIS ke kamera semula. Peta sedang
+		// tertutup efek "terbakar" saat ini, jadi lompatan langsung tak terlihat.
+		m.stop();
+		m.jumpTo(cam);
+	}
 
 	function openViewer(i: number) {
 		if (opening || viewing != null) return;
+		rememberCamera();
 		// Membuka bingkai = menekan tombol rana. Dipasang di sini, bukan di
 		// handler marker, supaya jalur lain menuju bukaan yang sama juga berbunyi.
 		playShutter();
@@ -1614,6 +1637,7 @@
 	function finishClose() {
 		viewing = null;
 		viewingRef = null;
+		restoreCamera();
 		wrapEl?.classList.remove("is-viewing");
 		// Label marker kembali "mengetik" setelah peta muncul lagi.
 		if (!reduced) {
