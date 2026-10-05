@@ -1,7 +1,10 @@
 export type ApiPhoto = {
   id: string;
   title: string;
+  /** Versi Inggris (opsional); kosong = situs memakai versi Indonesia. */
+  titleEn?: string | null;
   description: string | null;
+  descriptionEn?: string | null;
   photographer: string;
   location: string | null;
   price: number;
@@ -23,7 +26,7 @@ export type ApiPhoto = {
   createdAt: string;
   updatedAt: string;
   photoCategories: { category: { id: string; name: string } }[];
-  photoKeywords: { keyword: { id: string; name: string } }[];
+  photoKeywords: { keyword: { id: string; name: string; lang?: "id" | "en" } }[];
 };
 
 export type ApiPlan = {

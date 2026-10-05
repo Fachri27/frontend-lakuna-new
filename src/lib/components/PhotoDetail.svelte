@@ -50,6 +50,10 @@
 	let license = $state<"personal" | "commercial">("personal");
 	let added = $state(false);
 	let photo = $state<Photo | null>(null);
+	// Kata kunci mengikuti bahasa; bila versi Inggris belum diisi, tampilkan yang Indonesia.
+	const kws = $derived(
+		lang === "en" && photo?.keywordsEn?.length ? photo.keywordsEn : (photo?.keywords ?? []),
+	);
 	let related = $state<Photo[]>([]);
 	let relVideos = $state<Video[]>([]);
 	let contrib = $state<Photo[]>([]);
@@ -466,8 +470,8 @@
 					<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
 						<p class="kicker shrink-0 text-fg-muted">{t.tags}</p>
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
-							{#if photo.keywords.length}
-								{#each photo.keywords as kw (kw)}
+							{#if kws.length}
+								{#each kws as kw (kw)}
 									<a href={`/photos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
 									</a>

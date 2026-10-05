@@ -32,6 +32,8 @@ export type Photo = {
   price: number;
   categories: string[];
   keywords: string[];
+  /** Kata kunci berbahasa Inggris (keywords = Indonesia). Kosong = tampilkan keywords. */
+  keywordsEn?: string[];
   tags: string[];
   desc: Localized;
   featured?: boolean;
@@ -58,6 +60,7 @@ export type Video = {
   thumbUrl?: string;
   /** Kata kunci & kategori asli dari API — pil meta di halaman detail. */
   keywords: string[];
+  keywordsEn?: string[];
   categories: string[];
   /** URL mp4 preview (dipetakan dari ApiPhoto.originalUrl). */
   previewUrl?: string | null;
@@ -174,9 +177,25 @@ function stableUrls(id: string, urls: RememberedUrls): RememberedUrls {
   return out;
 }
 
+/** Judul/deskripsi dua bahasa; versi Inggris yang kosong jatuh ke versi Indonesia. */
+function titleOf(api: ApiPhoto): Localized {
+  return { id: api.title, en: api.titleEn?.trim() || api.title };
+}
+function descOf(api: ApiPhoto): Localized {
+  const id = api.description || api.title;
+  return { id, en: api.descriptionEn?.trim() || id };
+}
+/** Kata kunci per bahasa; yang lama tanpa `lang` dianggap Indonesia. */
+function splitKeywords(api: ApiPhoto): { id: string[]; en: string[] } {
+  const id: string[] = [];
+  const en: string[] = [];
+  for (const pk of api.photoKeywords ?? []) (pk.keyword.lang === "en" ? en : id).push(pk.keyword.name);
+  return { id, en };
+}
+
 export function adaptPhoto(api: ApiPhoto): Photo {
   const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
-  const keywords = (api.photoKeywords ?? []).map((pk) => pk.keyword.name);
+  const { id: keywords, en: keywordsEn } = splitKeywords(api);
   const cat = apiCatToCat(cats);
   const urls = stableUrls(api.id, {
     thumbUrl: api.thumbUrl,
@@ -186,7 +205,7 @@ export function adaptPhoto(api: ApiPhoto): Photo {
   });
   return {
     id: api.id,
-    title: { id: api.title, en: api.title },
+    title: titleOf(api),
     author: api.photographer || "Unknown",
     location: api.location || undefined,
     assetType: api.type === "VIDEO" ? "VIDEO" : "FOTO",
@@ -199,8 +218,9 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     // API, bukan catLabel; keywords menggantikan field "Lokasi").
     categories: [...new Set(cats.filter(Boolean))],
     keywords: [...new Set(keywords.filter(Boolean))],
+    keywordsEn: [...new Set(keywordsEn.filter(Boolean))],
     tags: api.tags ?? [],
-    desc: { id: api.description || api.title, en: api.description || api.title },
+    desc: descOf(api),
     thumbUrl: urls.thumbUrl ?? undefined,
     watermarkUrl: urls.watermarkUrl ?? undefined,
     originalUrl: urls.originalUrl ?? null,
@@ -226,7 +246,7 @@ export function pickVideoPreview(
 
 export function adaptVideo(api: ApiPhoto): Video {
   const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
-  const keywords = (api.photoKeywords ?? []).map((pk) => pk.keyword.name);
+  const { id: keywords, en: keywordsEn } = splitKeywords(api);
   const urls = stableUrls(api.id, {
     thumbUrl: api.thumbUrl,
     watermarkUrl: api.watermarkUrl ?? undefined,
@@ -235,7 +255,7 @@ export function adaptVideo(api: ApiPhoto): Video {
   });
   return {
     id: api.id,
-    title: { id: api.title, en: api.title },
+    title: titleOf(api),
     author: api.photographer || "Unknown",
     cat: "cinema",
     seed: api.id,
@@ -243,9 +263,10 @@ export function adaptVideo(api: ApiPhoto): Video {
     location: api.location || undefined,
     category: (api.photoCategories ?? [])[0]?.category?.name,
     price: api.price,
-    desc: { id: api.description || api.title, en: api.description || api.title },
+    desc: descOf(api),
     thumbUrl: urls.thumbUrl ?? undefined,
     keywords: [...new Set(keywords.filter(Boolean))],
+    keywordsEn: [...new Set(keywordsEn.filter(Boolean))],
     categories: [...new Set(cats.filter(Boolean))],
     // Kartu: klip bersih dulu; pratinjau ber-watermark bila klip belum ada.
     previewUrl: pickVideoPreview(urls.clipUrl, urls.watermarkUrl),
@@ -388,6 +409,7 @@ export async function fetchVideos(limit = 12): Promise<{ videos: Video[]; total:
       desc: p.desc,
       thumbUrl: p.thumbUrl,
       keywords: p.keywords,
+      keywordsEn: p.keywordsEn,
       categories: p.categories,
       previewUrl: pickVideoPreview(p.clipUrl, p.watermarkUrl),
     })),
