@@ -11,50 +11,50 @@
 		address: string; company: string; browse: string; pricing: string;
 	}> = {
 		id: {
-			title: "Lakuna berarti celah.",
-			intro: "Nusantara terlalu luas untuk dilihat habis oleh satu arsip. Di peta ini, setiap provinsi tanpa bingkai adalah celah. Setiap bingkai yang ditambahkan perajangga mengisi satu.",
+			title: "Lakuna berarti celah",
+			intro: "Nusantara terlalu luas untuk dilihat habis oleh satu arsip. Di peta ini, setiap provinsi tanpa bingkai adalah celah. Setiap bingkai yang ditambahkan perajangga mengisi satu",
 			statements: [
 				{
-					say: "Setiap bingkai ditinjau sebelum tayang.",
-					body: "Perajangga mengunggah karyanya, tim kami menyetujuinya. Hanya karya yang disetujui yang masuk arsip.",
+					say: "Setiap bingkai ditinjau sebelum tayang",
+					body: "Perajangga mengunggah karyanya, tim kami menyetujuinya. Hanya karya yang disetujui yang masuk arsip",
 				},
 				{
-					say: "70% dari setiap penjualan kembali ke perajangga.",
-					body: "Fotografer dan videografer mendapat penghasilan setiap kali karyanya dilisensikan.",
+					say: "70% dari setiap penjualan kembali ke perajangga",
+					body: "Fotografer dan videografer mendapat penghasilan setiap kali karyanya dilisensikan",
 				},
 				{
-					say: "Satu lisensi, dalam bahasa yang jelas.",
-					body: "Standar untuk satu bingkai, Subscription untuk kuota bulanan. Setiap unduhan disertai sertifikat lisensi dalam PDF.",
+					say: "Satu lisensi, dalam bahasa yang jelas",
+					body: "Standar untuk satu bingkai, Subscription untuk kuota bulanan. Setiap unduhan disertai sertifikat lisensi dalam PDF",
 					link: { href: "/license", label: "Baca perjanjian lisensi" },
 				},
 			],
 			frameWord: (n) => `${n} bingkai`,
-			mapLabel: "Peta provinsi Indonesia; provinsi yang sudah punya bingkai di arsip ditandai ungu.",
+			mapLabel: "Peta provinsi Indonesia; provinsi yang sudah punya bingkai di arsip ditandai ungu",
 			address: "Alamat",
 			company: "Lakuna Nusantara Media",
 			browse: "Jelajahi arsip",
 			pricing: "Lihat harga",
 		},
 		en: {
-			title: "Lakuna means a gap.",
-			intro: "Nusantara is too large for one archive to have seen all of it. On this map, every province without a frame is a gap. Each frame an image-maker adds fills one in.",
+			title: "Lakuna means a gap",
+			intro: "Nusantara is too large for one archive to have seen all of it. On this map, every province without a frame is a gap. Each frame an image-maker adds fills one in",
 			statements: [
 				{
-					say: "Every frame is reviewed before it goes live.",
-					body: "Image-makers upload their work and our team approves it. Only approved frames reach the archive.",
+					say: "Every frame is reviewed before it goes live",
+					body: "Image-makers upload their work and our team approves it. Only approved frames reach the archive",
 				},
 				{
-					say: "70% of every sale goes back to the image-maker.",
-					body: "Photographers and videographers earn each time their work is licensed.",
+					say: "70% of every sale goes back to the image-maker",
+					body: "Photographers and videographers earn each time their work is licensed",
 				},
 				{
-					say: "One license, written in plain language.",
-					body: "Standard for a single frame, Subscription for a monthly quota. Every download comes with a PDF license certificate.",
+					say: "One license, written in plain language",
+					body: "Standard for a single frame, Subscription for a monthly quota. Every download comes with a PDF license certificate",
 					link: { href: "/license", label: "Read the license agreement" },
 				},
 			],
 			frameWord: (n) => `${n} ${n === 1 ? "frame" : "frames"}`,
-			mapLabel: "Map of Indonesia's provinces; provinces that already have frames in the archive are marked purple.",
+			mapLabel: "Map of Indonesia's provinces; provinces that already have frames in the archive are marked purple",
 			address: "Address",
 			company: "Lakuna Nusantara Media",
 			browse: "Browse the archive",

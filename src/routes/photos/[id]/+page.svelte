@@ -9,7 +9,7 @@
 
 <svelte:head>
 	<title>{decodedId} — Foto</title>
-	<meta name="description" content="Detail foto {decodedId} — Lakuna Nusantara." />
+	<meta name="description" content="Detail foto {decodedId} — Lakuna Nusantara" />
 </svelte:head>
 
 <PhotoDetail photoId={id} />

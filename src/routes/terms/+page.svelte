@@ -4,9 +4,9 @@
 
 <svelte:head>
 	<title>Ketentuan Penggunaan | Lakuna</title>
-	<meta name="description" content="Aturan memakai situs Lakuna Stock: akun, penggunaan yang diizinkan, pembelian, dan menjual karya." />
+	<meta name="description" content="Aturan memakai situs Lakuna Stock: akun, penggunaan yang diizinkan, pembelian, dan menjual karya" />
 	<meta property="og:title" content="Ketentuan Penggunaan | Lakuna" />
-	<meta property="og:description" content="Aturan memakai situs Lakuna Stock." />
+	<meta property="og:description" content="Aturan memakai situs Lakuna Stock" />
 </svelte:head>
 
 <TermsPage />

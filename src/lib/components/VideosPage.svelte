@@ -11,8 +11,8 @@ import SortSelect from "./SortSelect.svelte";
 	let { initialQ }: { initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain.", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir" },
-		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme.", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year" }
+		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir" },
+		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -166,7 +166,7 @@ import SortSelect from "./SortSelect.svelte";
 		<p data-reveal class="kicker text-safelight">{t.kicker}</p>
 		<h1 data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{query ? t.titleSearch(query) : t.title}</h1>
 		<p data-reveal class="mt-6 whitespace-nowrap text-[min(1.02rem,1.8vw)] leading-relaxed text-fg-muted">{t.sub}</p>
-		<div data-reveal class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
+		<div data-reveal class="relative z-40 mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
 			<SearchField
 				bind:value={sq}
 				placeholder={t.searchPlaceholder}

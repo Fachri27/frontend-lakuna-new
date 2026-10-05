@@ -9,11 +9,11 @@
 
 <svelte:head>
 	<title>{name} | Lakuna</title>
-	<meta name="description" content={`Koleksi ${name} dari arsip Nusantara — foto dan video.`} />
+	<meta name="description" content={`Koleksi ${name} dari arsip Nusantara — foto dan video`} />
 	<meta property="og:title" content={`${name} | Lakuna`} />
 	<meta
 		property="og:description"
-		content={`Koleksi ${name} dari arsip Nusantara — foto dan video.`}
+		content={`Koleksi ${name} dari arsip Nusantara — foto dan video`}
 	/>
 </svelte:head>
 

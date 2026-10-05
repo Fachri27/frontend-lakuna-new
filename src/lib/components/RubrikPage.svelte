@@ -6,8 +6,8 @@
 	import { scrambleHover } from "$lib/scramble";
 
 	const copy = {
-		id: { kicker: "Rubrik", title: "Koleksi pilihan", sub: "Anjungan editorial — cerita-cerita visual yang dikurasi dari arsip Lakuna.", explore: "Jelajahi", frames: "bingkai" },
-		en: { kicker: "Rubrics", title: "Curated collections", sub: "Editorial pavilions — visual stories curated from the Lakuna archive.", explore: "Explore", frames: "frames" },
+		id: { kicker: "Rubrik", title: "Koleksi pilihan", sub: "Anjungan editorial — cerita-cerita visual yang dikurasi dari arsip Lakuna", explore: "Jelajahi", frames: "bingkai" },
+		en: { kicker: "Rubrics", title: "Curated collections", sub: "Editorial pavilions — visual stories curated from the Lakuna archive", explore: "Explore", frames: "frames" },
 	};
 
 	const lang = $derived(i18n.lang);

@@ -4,7 +4,8 @@
 	import SliceHeadline from "./SliceHeadline.svelte";
 	import ImageStream from "./ImageStream.svelte";
 	import ApiImage from "./ApiImage.svelte";
-	import { fetchPhotos, imgFor } from "$lib/data";
+	import { fetchPhotos, fetchHomepage, adaptPhoto, imgFor } from "$lib/data";
+	import type { HomepageSection } from "$lib/types";
 
 	const c = $derived(i18n.c);
 
@@ -43,15 +44,34 @@
 	// langsung ke kolom.
 	const isLanding = $derived(page.url.pathname === "/");
 
-	// Koridor foto di balik tagline: foto arsip terbaru (thumbnail cukup —
-	// kartu kecil di kejauhan, besar hanya sesaat sebelum keluar layar).
+	// Koridor foto di balik tagline: kurasi CMS (section koridor_kanan /
+	// koridor_kiri) menang bila diisi; kosong = arsip terbaru DIBAGI DUA
+	// (kanan dan kiri selalu beda foto). Thumbnail cukup — kartu kecil di
+	// kejauhan, besar hanya sesaat sebelum keluar layar.
 	let streamImages = $state<string[]>([]);
+	let streamImagesAlt = $state<string[]>([]);
 	$effect(() => {
 		if (!isLanding) return;
 		let alive = true;
-		fetchPhotos({ type: "FOTO", limit: 12 })
-			.then((r) => {
-				if (alive) streamImages = r.photos.map((ph) => imgFor(ph.seed, 600, 800, ph.thumbUrl));
+		const toUrls = (list: { seed: string; thumbUrl?: string | null }[]) =>
+			list.map((ph) => imgFor(ph.seed, 600, 800, ph.thumbUrl ?? ""));
+		Promise.all([
+			fetchHomepage().catch(() => ({})),
+			fetchPhotos({ type: "FOTO", limit: 12 }).catch(() => null),
+		])
+			.then(([hp, latest]) => {
+				if (!alive) return;
+				const rk = (hp as Record<string, HomepageSection>)["koridor_kanan"]?.photos;
+				const lk = (hp as Record<string, HomepageSection>)["koridor_kiri"]?.photos;
+				if (rk?.length && lk?.length) {
+					streamImages = toUrls(rk.map(adaptPhoto));
+					streamImagesAlt = toUrls(lk.map(adaptPhoto));
+				} else if (latest) {
+					const urls = toUrls(latest.photos);
+					const half = Math.max(1, Math.ceil(urls.length / 2));
+					streamImages = urls.slice(0, half);
+					streamImagesAlt = urls.slice(half);
+				}
 			})
 			.catch(() => {});
 		return () => {
@@ -68,7 +88,7 @@
 			arsip melaju dari titik hilang ke arah penonton, tagline (animasi
 			huruf bergulirnya tetap) duduk di atasnya. -->
 		{#if isLanding}
-		<ImageStream images={streamImages} class="ft-stream">
+		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} class="ft-stream">
 			<div class="ft-stream-copy">
 				<p class="mb-4 font-display text-[1.05rem] font-bold uppercase leading-none tracking-[0.02em] text-safelight">{c.nav.tagline}</p>
 				<div class="mt-3">

@@ -48,8 +48,8 @@
 			or: "atau", google: "Lanjutkan dengan Google",
 			noAccountFree: "Belum punya akun gratis?", createAccount: "Buat akun",
 			hasAccountQ: "Sudah punya akun?", backToLogin: "Masuk",
-			error: "Terjadi kesalahan", success: "Pendaftaran berhasil! Silakan masuk.",
-			googleNotRegistered: "Email belum terdaftar. Silakan daftar terlebih dahulu.",
+			error: "Terjadi kesalahan", success: "Pendaftaran berhasil! Silakan masuk",
+			googleNotRegistered: "Email belum terdaftar. Silakan daftar terlebih dahulu",
 		},
 		en: {
 			title: "Sign in or Register",
@@ -62,8 +62,8 @@
 			or: "or", google: "Continue with Google",
 			noAccountFree: "Don't have a free account yet?", createAccount: "Create account",
 			hasAccountQ: "Already have an account?", backToLogin: "Sign in",
-			error: "An error occurred", success: "Registration successful! Please sign in.",
-			googleNotRegistered: "Email not registered. Please sign up first.",
+			error: "An error occurred", success: "Registration successful! Please sign in",
+			googleNotRegistered: "Email not registered. Please sign up first",
 		},
 	};
 

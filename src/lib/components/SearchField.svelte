@@ -98,3 +98,11 @@
 		</button>
 	</div>
 </form>
+
+<style>
+	/* Tombol × bawaan browser (input type=search) disembunyikan: komponen
+	   sudah punya tombol hapus sendiri — tanpa ini × tampil ganda. */
+	input[type="search"]::-webkit-search-cancel-button {
+		display: none;
+	}
+</style>

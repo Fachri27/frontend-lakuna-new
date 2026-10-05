@@ -7,12 +7,12 @@
 	<title>Galeri Foto</title>
 	<meta
 		name="description"
-		content="Telusuri koleksi foto Nusantara — Alam, Kota, Orang, Travel, Bisnis, dan Sinema. Ribuan bingkai berkualitas sinema dari para perajangga Indonesia."
+		content="Telusuri koleksi foto Nusantara — Alam, Kota, Orang, Travel, Bisnis, dan Sinema. Ribuan bingkai berkualitas sinema dari para perajangga Indonesia"
 	/>
 	<meta property="og:title" content="Galeri Foto | Lakuna" />
 	<meta
 		property="og:description"
-		content="Telusuri koleksi foto Nusantara — Alam, Kota, Orang, Travel, Bisnis, dan Sinema."
+		content="Telusuri koleksi foto Nusantara — Alam, Kota, Orang, Travel, Bisnis, dan Sinema"
 	/>
 </svelte:head>
 

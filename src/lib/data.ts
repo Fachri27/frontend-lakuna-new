@@ -1178,10 +1178,10 @@ export function fmtIDR(n: number): string {
 }
 
 export const COLLECTIONS: Collection[] = [
-  { id: "laut-timur", title: { id: "Laut Timur", en: "Eastern Sea" }, desc: { id: "Bingkai-bingkai dari kepulauan rempah hingga Raja Ampat.", en: "Frames from the spice islands to Raja Ampat." }, seed: "col-laut-timur", count: 48, cat: "travel" },
-  { id: "punggung-nusantara", title: { id: "Punggung Nusantara", en: "Spine of Nusantara" }, desc: { id: "Pegunungan dan gunung berapi dari Sabang hingga Papua.", en: "Mountains and volcanoes from Sabang to Papua." }, seed: "col-punggung", count: 62, cat: "nature" },
-  { id: "kota-yang-tak-tidur", title: { id: "Kota yang Tak Tidur", en: "The Sleepless City" }, desc: { id: "Detak urban Jakarta, Surabaya, dan Bandung.", en: "The urban pulse of Jakarta, Surabaya, and Bandung." }, seed: "col-kota", count: 37, cat: "urban" },
-  { id: "wajah-nusantara", title: { id: "Wajah Nusantara", en: "Faces of Nusantara" }, desc: { id: "Potret dan ritual dari ujung barat hingga timur.", en: "Portraits and rituals from west to east." }, seed: "col-wajah", count: 54, cat: "people" },
-  { id: "sinema-malam", title: { id: "Sinema Malam", en: "Night Cinema" }, desc: { id: "Cahaya rendah, neon, dan bayang malam.", en: "Low light, neon, and the shadows of night." }, seed: "col-sinema", count: 29, cat: "cinema" },
-  { id: "garis-bisnis", title: { id: "Garis Bisnis", en: "Business Lines" }, desc: { id: "Visual korporat yang bersih dan minimal.", en: "Clean, minimal corporate visuals." }, seed: "col-bisnis", count: 22, cat: "business" },
+  { id: "laut-timur", title: { id: "Laut Timur", en: "Eastern Sea" }, desc: { id: "Bingkai-bingkai dari kepulauan rempah hingga Raja Ampat", en: "Frames from the spice islands to Raja Ampat" }, seed: "col-laut-timur", count: 48, cat: "travel" },
+  { id: "punggung-nusantara", title: { id: "Punggung Nusantara", en: "Spine of Nusantara" }, desc: { id: "Pegunungan dan gunung berapi dari Sabang hingga Papua", en: "Mountains and volcanoes from Sabang to Papua" }, seed: "col-punggung", count: 62, cat: "nature" },
+  { id: "kota-yang-tak-tidur", title: { id: "Kota yang Tak Tidur", en: "The Sleepless City" }, desc: { id: "Detak urban Jakarta, Surabaya, dan Bandung", en: "The urban pulse of Jakarta, Surabaya, and Bandung" }, seed: "col-kota", count: 37, cat: "urban" },
+  { id: "wajah-nusantara", title: { id: "Wajah Nusantara", en: "Faces of Nusantara" }, desc: { id: "Potret dan ritual dari ujung barat hingga timur", en: "Portraits and rituals from west to east" }, seed: "col-wajah", count: 54, cat: "people" },
+  { id: "sinema-malam", title: { id: "Sinema Malam", en: "Night Cinema" }, desc: { id: "Cahaya rendah, neon, dan bayang malam", en: "Low light, neon, and the shadows of night" }, seed: "col-sinema", count: 29, cat: "cinema" },
+  { id: "garis-bisnis", title: { id: "Garis Bisnis", en: "Business Lines" }, desc: { id: "Visual korporat yang bersih dan minimal", en: "Clean, minimal corporate visuals" }, seed: "col-bisnis", count: 22, cat: "business" },
 ];

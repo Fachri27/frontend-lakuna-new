@@ -49,6 +49,7 @@
 
 	let {
 		images,
+		imagesAlt,
 		cards = 9,
 		speed = 18,
 		axis = 55,
@@ -57,6 +58,8 @@
 		children,
 	}: {
 		images: string[];
+		/** Rel kiri memakai ini bila diisi — kanan dan kiri bisa beda foto. */
+		imagesAlt?: string[];
 		cards?: number;
 		speed?: number;
 		axis?: number;
@@ -107,9 +110,10 @@
 		style={`perspective:${p.perspective}cqw;perspective-origin:50% ${axis}%`}
 	>
 		<div class="ish-world">
-			{#each [right, left] as name (name)}
+			{#each [right, left] as name, ri (name)}
+				{@const pool = ri === 1 && imagesAlt?.length ? imagesAlt : images}
 				{#each slots as i (i)}
-					{@const src = images.length ? images[i % images.length] : ""}
+					{@const src = pool.length ? pool[i % pool.length] : ""}
 					<div
 						class="{cardCls} ish-card"
 						style={`top:${axis}%;width:${p.cardWidth}cqw;height:${p.cardHeight}cqw;` +

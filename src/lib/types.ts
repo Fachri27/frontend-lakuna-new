@@ -103,7 +103,7 @@ export type ApiFavorite = {
 };
 
 export type HomepageSection = {
-  key: "hero" | "manifesto" | "anjungan_1" | "mulai" | "journeys" | "orbit" | "arsip" | "video" | "harga" | "klip" | "banding" | "percaya";
+  key: "hero" | "manifesto" | "anjungan_1" | "mulai" | "journeys" | "orbit" | "arsip" | "video" | "harga" | "klip" | "banding" | "percaya" | "etalase" | "koridor_kiri" | "koridor_kanan";
   imageKey: string | null;
   imageUrl: string | null;
   /** Jenis media latar hero: "video" = klip autoplay bisu. */

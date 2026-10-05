@@ -11,18 +11,18 @@
 	const copy = {
 		id: {
 			kicker: "Keranjang", title: "Keranjangmu", empty: "Keranjang masih kosong",
-			emptyBody: "Simpan bingkai yang kamu suka di sini, lalu bayar sekaligus.",
+			emptyBody: "Simpan bingkai yang kamu suka di sini, lalu bayar sekaligus",
 			emptyCta: "Jelajahi koleksi", items: "{n} item", total: "Total", pay: "Lanjut ke pembayaran",
 			remove: "Hapus", continue: "Lanjut belanja", eventBadge: "Event", subtotal: "Subtotal ({n} item)",
-			eventDiscount: "Diskon event", estNote: "Voucher & diskon final dihitung saat bayar.",
+			eventDiscount: "Diskon event", estNote: "Voucher & diskon final dihitung saat bayar",
 			kindPhoto: "Foto", kindVideo: "Video", kindPlan: "Paket langganan",
 		},
 		en: {
 			kicker: "Cart", title: "Your cart", empty: "Your cart is empty",
-			emptyBody: "Keep the frames you like here, then pay for them in one go.",
+			emptyBody: "Keep the frames you like here, then pay for them in one go",
 			emptyCta: "Explore the collection", items: "{n} items", total: "Total", pay: "Continue to payment",
 			remove: "Remove", continue: "Keep browsing", eventBadge: "Event", subtotal: "Subtotal ({n} items)",
-			eventDiscount: "Event discount", estNote: "Voucher & final discount calculated at payment.",
+			eventDiscount: "Event discount", estNote: "Voucher & final discount calculated at payment",
 			kindPhoto: "Photo", kindVideo: "Video", kindPlan: "Membership plan",
 		},
 	};

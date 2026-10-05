@@ -16,11 +16,11 @@
 	const copy = {
 		id: {
 			sideTitle: "Buka arsip Nusantara",
-			sideBody: "Satu akun untuk menyimpan bingkai favorit, mengunduh pratinjau, dan melisensikan karya dari Sabang sampai Merauke.",
+			sideBody: "Satu akun untuk menyimpan bingkai favorit, mengunduh pratinjau, dan melisensikan karya dari Sabang sampai Merauke",
 		},
 		en: {
 			sideTitle: "Open the Nusantara archive",
-			sideBody: "One account to save favourite frames, download previews, and license works from Sabang to Merauke.",
+			sideBody: "One account to save favourite frames, download previews, and license works from Sabang to Merauke",
 		},
 	};
 	const lang = $derived(i18n.lang);

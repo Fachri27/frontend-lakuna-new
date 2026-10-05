@@ -21,8 +21,8 @@
 	const code = $derived(String(page.status || 500));
 	const body = $derived(
 		is404
-			? "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."
-			: (page.error?.message ?? "An unexpected error occurred. Please try again."),
+			? "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable"
+			: (page.error?.message ?? "An unexpected error occurred. Please try again"),
 	);
 
 	let canvas: HTMLCanvasElement;

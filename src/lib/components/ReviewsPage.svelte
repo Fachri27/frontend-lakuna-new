@@ -8,17 +8,17 @@
 	}> = {
 		id: {
 			title: "Ulasan",
-			sub: "Kata para pemegang lisensi dan perajangga tentang bekerja dengan Lakuna.",
-			emptyTitle: "Belum ada ulasan yang dipublikasikan.",
-			emptyBody: "Kami hanya menayangkan ulasan asli dari pelanggan dan perajangga, dengan izin mereka. Ulasan pertama akan muncul di sini.",
+			sub: "Kata para pemegang lisensi dan perajangga tentang bekerja dengan Lakuna",
+			emptyTitle: "Belum ada ulasan yang dipublikasikan",
+			emptyBody: "Kami hanya menayangkan ulasan asli dari pelanggan dan perajangga, dengan izin mereka. Ulasan pertama akan muncul di sini",
 			share: "Ceritakan pengalamanmu",
 			browse: "Jelajahi arsip",
 		},
 		en: {
 			title: "Reviews",
-			sub: "What licensees and image-makers say about working with Lakuna.",
-			emptyTitle: "No reviews have been published yet.",
-			emptyBody: "We only publish real reviews from customers and image-makers, with their permission. The first ones will appear here.",
+			sub: "What licensees and image-makers say about working with Lakuna",
+			emptyTitle: "No reviews have been published yet",
+			emptyBody: "We only publish real reviews from customers and image-makers, with their permission. The first ones will appear here",
 			share: "Share your experience",
 			browse: "Browse the archive",
 		},

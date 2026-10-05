@@ -50,15 +50,15 @@
 	let license = $state<"personal" | "commercial">("personal");
 	let added = $state(false);
 	let photo = $state<Photo | null>(null);
-	// Kata kunci mengikuti bahasa; bila versi Inggris belum diisi, tampilkan yang Indonesia.
-	const kws = $derived(
-		lang === "en" && photo?.keywordsEn?.length ? photo.keywordsEn : (photo?.keywords ?? []),
-	);
 	let related = $state<Photo[]>([]);
 	let relVideos = $state<Video[]>([]);
 	let contrib = $state<Photo[]>([]);
 	let events = $state<ApiEvent[]>([]);
 	let downloading = $state(false);
+	// Kata kunci mengikuti bahasa; bila versi Inggris belum diisi, tampilkan yang Indonesia.
+	const kws = $derived(
+		lang === "en" && (photo?.keywordsEn?.length ?? 0) > 0 ? (photo?.keywordsEn ?? []) : (photo?.keywords ?? []),
+	);
 
 	let rootEl: HTMLDivElement | undefined = $state();
 	// Tombol asli di lembar lisensi. Rel bawah mobile hanya hadir saat tombol ini
@@ -185,7 +185,12 @@
 	}
 
 	// Aksi utama = beli langsung: masuk keranjang lalu ke checkout.
+	// Belum masuk: buka login dan TETAP di halaman ini (jangan ke checkout).
 	function handleBuyNow() {
+		if (!store.user) {
+			authModal.open(page.url.pathname + page.url.search);
+			return;
+		}
 		handleAdd();
 		goto("/checkout");
 	}
@@ -347,7 +352,7 @@
 						{photo.title[lang]}
 					</h1>
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <a href={`/photos?by=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+						{t.by} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 					</p>
 				</div>
 			</div>
@@ -434,7 +439,7 @@
 					</div>
 
 					<!-- Spesifikasi kiriman, bukan kalimat samar. Sebelumnya:
-						"Pratinjau tanda air. Unduhan penuh setelah pembelian." -->
+						"Pratinjau tanda air. Unduhan penuh setelah pembelian" -->
 					<div class="border-t border-hair px-5 py-4">
 						<span class="kicker text-fg-muted">{t.youGet}</span>
 						<p class="mt-2 font-mono text-[0.76rem] tabular-nums text-fg">
@@ -536,10 +541,10 @@
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
-							{t.contribSub} <a href={`/photos?by=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+							{t.contribSub} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 						</h2>
 					</div>
-					<a data-reveal href={`/photos?by=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/photos?q=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>

@@ -30,7 +30,7 @@
 		id: {
 			eyebrow: "Mulai menjelajah",
 			title: "Nusantara",
-			sub: "Setiap titik merupakan potret dari koleksi Lakunastock. Menangkap berbagai peristiwa penting.",
+			sub: "Setiap titik merupakan potret dari koleksi Lakunastock. Menangkap berbagai peristiwa penting",
 			frames: "Bingkai",
 			points: "Titik",
 			land: "Mendarat",
@@ -38,7 +38,7 @@
 		en: {
 			eyebrow: "Start exploring",
 			title: "Nusantara",
-			sub: "Each point is a frame from the Lakunastock archive. Deep dive the hidden depths.",
+			sub: "Each point is a frame from the Lakunastock archive. Deep dive the hidden depths",
 			frames: "Frames",
 			points: "Points",
 			land: "Landing",

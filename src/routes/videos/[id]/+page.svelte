@@ -9,7 +9,7 @@
 
 <svelte:head>
 	<title>{decodedId} — Video</title>
-	<meta name="description" content="Detail video {decodedId} — Lakuna Nusantara." />
+	<meta name="description" content="Detail video {decodedId} — Lakuna Nusantara" />
 </svelte:head>
 
 <VideoDetail videoId={id} />

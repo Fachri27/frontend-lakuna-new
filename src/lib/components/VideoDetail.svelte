@@ -7,6 +7,8 @@
 	import { catLabel, fmtIDR, imgFor, fetchPhotoById, fetchPhotoOriginal, fetchRelatedPhotos, fetchVideos, fetchContributorWorks, pickVideoPreview, type Video, type Photo } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
 	import { subscribeModal } from "$lib/subscribeModal.svelte";
+	import { authModal } from "$lib/authModal.svelte";
+	import { page } from "$app/state";
 	import PhotoCard from "./PhotoCard.svelte";
 	import VideoCard from "./VideoCard.svelte";
 
@@ -152,7 +154,12 @@
 	}
 
 	// Aksi utama = beli langsung: masuk keranjang lalu ke checkout.
+	// Belum masuk: buka login dan TETAP di halaman ini (jangan ke checkout).
 	function handleBuyNow() {
+		if (!store.user) {
+			authModal.open(page.url.pathname + page.url.search);
+			return;
+		}
 		handleAdd();
 		goto("/checkout");
 	}

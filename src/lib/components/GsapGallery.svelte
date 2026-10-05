@@ -30,12 +30,12 @@ import gsap from "gsap";
 	const MAX_IMG = 8;
 	const SLICES = 10;
 
-	// Kalimat orbit ikut bahasa situs (permintaan pemilik: versi Inggris
-	// tetap Inggris). Jumlah item kedua bahasa SAMA (10, termasuk jeda
-	// baris "\n") karena wordEls dialokasikan sekali.
+	// Kalimat orbit SELALU Inggris di kedua bahasa (permintaan pemilik).
+	// Jumlah item kedua bahasa SAMA (10, termasuk jeda baris "\n") karena
+	// wordEls dialokasikan sekali.
 	// Aksen (>1) menandai kata ungu sesuai referensi.
 	const PHRASE = {
-		id: ["Bumi", "itu", "sebuah", "karya", "seni,", "\n", "dan", "kita", "hanyalah", "saksi"],
+		id: ["The", "earth", "is", "an", "art,", "\n", "we're", "only", "a", "witness"],
 		en: ["The", "earth", "is", "an", "art,", "\n", "we're", "only", "a", "witness"],
 	};
 	const ACCENT = { id: [4, 8, 9], en: [4, 8, 9] };
