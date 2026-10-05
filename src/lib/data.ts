@@ -177,6 +177,11 @@ function stableUrls(id: string, urls: RememberedUrls): RememberedUrls {
   return out;
 }
 
+/** Judul sesuai bahasa untuk data mentah API (keranjang, pesanan, favorit, unduhan): Inggris bila ada. */
+export function pickTitle(title: string, titleEn: string | null | undefined, lang: "id" | "en"): string {
+  return (lang === "en" && titleEn?.trim()) || title;
+}
+
 /** Judul/deskripsi dua bahasa; versi Inggris yang kosong jatuh ke versi Indonesia. */
 function titleOf(api: ApiPhoto): Localized {
   return { id: api.title, en: api.titleEn?.trim() || api.title };

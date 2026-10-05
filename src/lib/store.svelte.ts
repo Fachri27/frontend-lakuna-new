@@ -6,6 +6,8 @@ export type CartItem = {
 	id: string;
 	kind: "photo" | "video" | "plan";
 	title: string;
+	/** Judul Inggris (foto/video) bila ada — tampil saat bahasa EN. */
+	titleEn?: string;
 	price: number;
 	meta?: string;
 	/** Thumbnail untuk daftar keranjang (foto/video). */
@@ -71,6 +73,7 @@ class AppStore {
 					id: item.id,
 					kind: "photo" as const,
 					title: item.photo.title,
+					titleEn: item.photo.titleEn ?? undefined,
 					price: item.price,
 					meta: item.photoId,
 					thumbUrl: item.thumbUrl,

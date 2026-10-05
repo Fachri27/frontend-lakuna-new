@@ -5,7 +5,7 @@
 	import { cubicOut } from "svelte/easing";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store, type CartItem } from "$lib/store.svelte";
-	import { fmtIDR, imgFor, fetchCartEventDiscounts } from "$lib/data";
+	import { fmtIDR, imgFor, fetchCartEventDiscounts, pickTitle } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
 
 	const copy = {
@@ -107,7 +107,7 @@
 
 						<div class="min-w-0 flex-1">
 							<p class="text-xs text-fg-muted">{kindLabel(item)}</p>
-							<p class="mt-0.5 truncate font-display text-lg font-light leading-snug text-fg">{item.title}</p>
+							<p class="mt-0.5 truncate font-display text-lg font-light leading-snug text-fg">{pickTitle(item.title, item.titleEn, lang)}</p>
 							{#if ev}
 								<p class="mt-1.5 inline-flex max-w-full items-center gap-2 text-[0.72rem] text-fg-muted">
 									<span class="ck-event">{t.eventBadge}</span>
@@ -129,7 +129,7 @@
 							type="button"
 							onclick={() => store.removeFromCart(item.id)}
 							class="ck-remove"
-							aria-label={`${t.remove}: ${item.title}`}
+							aria-label={`${t.remove}: ${pickTitle(item.title, item.titleEn, lang)}`}
 							title={t.remove}
 						>
 							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>

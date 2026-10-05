@@ -2,7 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { fmtIDR, fetchCartEventDiscounts } from "$lib/data";
+	import { fmtIDR, fetchCartEventDiscounts, pickTitle } from "$lib/data";
 	import { apiPost, ApiError } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiCreateOrderResult } from "$lib/types";
@@ -216,7 +216,7 @@
 					<div class="mt-5 space-y-2 text-sm">
 						{#each cart as i (i.id)}
 							<div class="flex justify-between gap-3 text-fg-muted">
-								<span class="truncate">{i.title}</span>
+								<span class="truncate">{pickTitle(i.title, i.titleEn, lang)}</span>
 								<span class="shrink-0">{fmtIDR(i.price)}</span>
 							</div>
 						{/each}

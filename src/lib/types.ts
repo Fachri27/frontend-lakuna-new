@@ -82,7 +82,7 @@ export type ApiCartItem = {
   createdAt: string;
   price: number;
   thumbUrl: string;
-  photo: { id: string; title: string; thumbKey: string; price: number };
+  photo: { id: string; title: string; titleEn?: string | null; thumbKey: string; price: number };
 };
 
 export type ApiFavorite = {
@@ -93,6 +93,7 @@ export type ApiFavorite = {
   photo: {
     id: string;
     title: string;
+    titleEn?: string | null;
     thumbUrl: string;
     watermarkUrl: string | null;
     price: number;
@@ -140,7 +141,7 @@ export type ApiOrder = {
   continuePaymentUrl: string | null;
   items: {
     id: string;
-    photo: { id: string; title: string; thumbUrl: string };
+    photo: { id: string; title: string; titleEn?: string | null; thumbUrl: string };
     licenseType: string;
     price: number;
   }[];
@@ -157,6 +158,7 @@ export type ApiDownload = {
   photo: {
     id: string;
     title: string;
+    titleEn?: string | null;
     thumbUrl: string;
     watermarkUrl: string | null;
   };

@@ -4,7 +4,7 @@
 	import { page } from "$app/state";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { fmtIDR, imgFor, fetchCategories, type ApiCatItem } from "$lib/data";
+	import { fmtIDR, imgFor, fetchCategories, pickTitle, type ApiCatItem } from "$lib/data";
 	import { api, apiGet, apiPost, apiDelete, ApiError } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiFavorite, ApiDownload, ApiOrder, ApiSubscription, ApiUser } from "$lib/types";
@@ -134,7 +134,7 @@
 	/** 6 baris × 3 kolom, sesuai grid favorit di desktop. */
 	const PER_PAGE = 18;
 
-	type FavItem = { id: string; title: string; thumbUrl: string; type: "FOTO" | "VIDEO" };
+	type FavItem = { id: string; title: string; titleEn?: string | null; thumbUrl: string; type: "FOTO" | "VIDEO" };
 
 	type OrderCopy = { paid: string; pending: string; cancelled: string; otherStatus: string };
 
@@ -629,6 +629,7 @@
 				favItems = res.data.map((f) => ({
 					id: f.photo.id,
 					title: f.photo.title,
+					titleEn: f.photo.titleEn,
 					thumbUrl: f.photo.thumbUrl,
 					type: f.photo.type === "VIDEO" ? "VIDEO" : "FOTO",
 				}));
@@ -891,15 +892,15 @@
 								{@const fav = store.isFavorite(f.id)}
 								<li class="pp-tile on-darkroom group">
 									<a href={`/photos/${f.id}`} class="pp-tile__link">
-										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} alt={f.title} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
-										<span class="pp-tile__title">{f.title}</span>
+										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} alt={pickTitle(f.title, f.titleEn, lang)} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
+										<span class="pp-tile__title">{pickTitle(f.title, f.titleEn, lang)}</span>
 										<span class="pp-tile__tag">{f.type === "VIDEO" ? t.video : "HD"}</span>
 									</a>
 									<button
 										type="button"
 										class="pp-tile__save"
 										aria-pressed={fav}
-										aria-label={`${fav ? t.saved : t.save}: ${f.title}`}
+										aria-label={`${fav ? t.saved : t.save}: ${pickTitle(f.title, f.titleEn, lang)}`}
 										onclick={() => store.toggleFavorite(f.id)}
 									>
 										<svg width="12" height="12" viewBox="0 0 24 24" fill={fav ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1063,7 +1064,7 @@
 												<li class="ord-item">
 													<img src={imgFor(it.photo.id, 160, 120, it.photo.thumbUrl)} alt="" class="ord-thumb" loading="lazy" />
 													<div class="min-w-0 flex-1">
-														<p class="truncate text-sm text-fg">{it.photo.title}</p>
+														<p class="truncate text-sm text-fg">{pickTitle(it.photo.title, it.photo.titleEn, lang)}</p>
 														<p class="mt-0.5 text-xs text-fg-muted">{licenseLabel(it.licenseType)}</p>
 													</div>
 													<p class="shrink-0 text-sm tabular-nums text-fg-muted">{fmtIDR(it.price)}</p>
@@ -1125,7 +1126,7 @@
 									<li class="pp-box flex flex-wrap items-center gap-4">
 										<img src={imgFor(d.photo.id, 320, 240, d.photo.thumbUrl)} alt="" loading="lazy" class="ord-thumb" />
 										<div class="min-w-0 flex-1">
-											<p class="truncate font-display text-lg font-light text-fg">{d.photo.title}</p>
+											<p class="truncate font-display text-lg font-light text-fg">{pickTitle(d.photo.title, d.photo.titleEn, lang)}</p>
 											<p class="mt-1 text-xs text-fg-muted">{fmtDate(d.createdAt)} · {d.type}</p>
 										</div>
 										<span class="pp-pill hidden sm:inline-flex">{d.licenseKey}</span>
@@ -1154,7 +1155,7 @@
 								{#each store.cart as item (item.id)}
 									<li class="pp-box flex items-center gap-4">
 										<div class="min-w-0 flex-1">
-											<p class="truncate font-display text-lg font-light text-fg">{item.title}</p>
+											<p class="truncate font-display text-lg font-light text-fg">{pickTitle(item.title, item.titleEn, lang)}</p>
 											{#if item.meta}<p class="mt-1 text-xs text-fg-muted">{item.meta}</p>{/if}
 										</div>
 										<p class="shrink-0 text-fg">{fmtIDR(item.price)}</p>
