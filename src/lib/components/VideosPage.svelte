@@ -10,8 +10,8 @@
 	let { initialQ }: { initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain.", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan" },
-		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme.", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added" }
+		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain.", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", oldest: "Terlama" },
+		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme.", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", oldest: "Oldest" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -32,6 +32,8 @@
 	// pemilih foto CMS). Tanpa jeda, tiap ketikan menembak API.
 	let sq = $state(initialQ ?? "");
 	let query = $state((initialQ ?? "").trim());
+	// Urutan waktu: terbaru / terlama.
+	let sort = $state<"newest" | "oldest">("newest");
 
 	// Kata kunci dari URL (mis. dari pencarian navbar) mengisi kolom ini.
 	$effect(() => {
@@ -121,7 +123,7 @@
 	});
 
 	function load() {
-		return fetchPhotos({ cat, search: query || undefined, type: "VIDEO", limit: 24 })
+		return fetchPhotos({ cat, search: query || undefined, type: "VIDEO", sort, limit: 24 })
 			.then((r) => {
 				videos = r.photos.map((p) => ({
 					id: p.id,
@@ -203,6 +205,9 @@
 		{#each categories as c (c.id)}
 			{@render chip(cat === c.name, c.name, () => (cat = c.name))}
 		{/each}
+		<span aria-hidden="true" class="h-5 w-px shrink-0 bg-hair"></span>
+		{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
+		{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
 		<span class="ml-auto hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
 			{videos.length} {t.count}
 		</span>

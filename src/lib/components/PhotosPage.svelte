@@ -8,8 +8,8 @@
 	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
-		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
+		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", oldest: "Terlama", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
+		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", oldest: "Oldest", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -28,6 +28,8 @@
 	let q = $state(initialQ ?? "");
 	let query = $state((initialQ ?? "").trim());
 	const needle = $derived(query.toLowerCase());
+	// Urutan waktu: terbaru / terlama. Ganti = muat ulang dari halaman 1.
+	let sort = $state<"newest" | "oldest">("newest");
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const mixed = $derived((!!cat && catFromNav) || !!needle);
@@ -85,6 +87,7 @@
 			cat,
 			search: needle || undefined,
 			type: mixed ? undefined : "FOTO",
+			sort,
 			page: 1,
 			limit: PAGE_SIZE
 		})
@@ -117,6 +120,7 @@
 			cat,
 			search: needle || undefined,
 			type: mixed ? undefined : "FOTO",
+			sort,
 			page: next,
 			limit: PAGE_SIZE
 		}), minShow])
@@ -209,6 +213,9 @@
 		{#each categories as c (c.id)}
 			{@render chip(cat === c.name, c.name, () => ((cat = c.name), (catPicked = true)))}
 		{/each}
+		<span aria-hidden="true" class="h-5 w-px shrink-0 bg-hair"></span>
+		{@render chip(sort === "newest", t.newest, () => ((sort = "newest"), void load()))}
+		{@render chip(sort === "oldest", t.oldest, () => ((sort = "oldest"), void load()))}
 		<span class="ml-auto hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
 			{total || photos.length} {t.count}
 		</span>
