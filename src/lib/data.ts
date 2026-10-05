@@ -239,14 +239,21 @@ export function adaptPhoto(api: ApiPhoto): Photo {
  * adalah GAMBAR jpg — dipasang sebagai src video ia gagal diputar DAN memicu
  * error CSP media-src. Tolak di sini, kartu menampilkan poster diam.
  */
+/**
+ * Pratinjau utama (klip kartu) → pratinjau cadangan (transcode ringan). Bila klip rusak/404/tak
+ * bisa didekode, pendengar `error` global di +layout.svelte memutar cadangannya, bukan membeku.
+ */
+export const previewFallback = new Map<string, string>();
+
 export function pickVideoPreview(
   originalUrl?: string | null,
   watermarkUrl?: string | null,
 ): string | null {
-  for (const u of [originalUrl, watermarkUrl]) {
-    if (u && !u.includes("picsum.photos")) return u;
-  }
-  return null;
+  const usable = (u?: string | null): u is string => !!u && !u.includes("picsum.photos");
+  const first = usable(originalUrl) ? originalUrl : null;
+  const second = usable(watermarkUrl) ? watermarkUrl : null;
+  if (first && second && first !== second) previewFallback.set(first, second);
+  return first ?? second;
 }
 
 export function adaptVideo(api: ApiPhoto): Video {

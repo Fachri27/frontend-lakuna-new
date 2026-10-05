@@ -4,6 +4,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { access } from "$lib/access.svelte";
+	import { previewFallback } from "$lib/data";
 	import Navbar from "$lib/components/Navbar.svelte";
 	import Footer from "$lib/components/Footer.svelte";
 	import SmoothScroll from "$lib/components/SmoothScroll.svelte";
@@ -132,6 +133,23 @@
 		if (el.closest("[data-no-click-sound]")) return;
 		playScrambleClick();
 	}
+	// Pratinjau video kartu gagal (klip rusak/404/tak bisa didekode) → putar cadangan ringan
+	// (lihat previewFallback di data.ts) alih-alih membeku. `error` tak bubble: pakai capture.
+	function onPreviewError(e: Event) {
+		const v = e.target;
+		if (!(v instanceof HTMLVideoElement) || !v.hasAttribute("data-preview")) return;
+		const src = v.getAttribute("src");
+		const fb = src ? previewFallback.get(src) : undefined;
+		if (!fb || fb === src) return;
+		const wasPlaying = !!v.closest("[data-playing]");
+		v.setAttribute("src", fb);
+		v.load();
+		if (wasPlaying) void v.play().catch(() => {});
+	}
+	$effect(() => {
+		document.addEventListener("error", onPreviewError, true);
+		return () => document.removeEventListener("error", onPreviewError, true);
+	});
 	$effect(() => {
 		primeScrambleSound();
 		document.addEventListener("mouseover", onHover);
