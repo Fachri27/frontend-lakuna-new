@@ -9,8 +9,8 @@
 	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", oldest: "Terlama", sortLabel: "Urutkan", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
-		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", oldest: "Oldest", sortLabel: "Sort", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
+		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
+		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", popular: "Popular", sortLabel: "Sort", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -30,7 +30,7 @@
 	let query = $state((initialQ ?? "").trim());
 	const needle = $derived(query.toLowerCase());
 	// Urutan waktu: terbaru / terlama. Ganti = muat ulang dari halaman 1.
-	let sort = $state<"newest" | "oldest">("newest");
+	let sort = $state<"newest" | "popular">("newest");
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const mixed = $derived((!!cat && catFromNav) || !!needle);
@@ -210,7 +210,7 @@
 					label={t.sortLabel}
 					options={[
 						{ value: "newest", label: t.newest },
-						{ value: "oldest", label: t.oldest },
+						{ value: "popular", label: t.popular },
 					]}
 					onchange={(v) => ((sort = v), void load())}
 				/>

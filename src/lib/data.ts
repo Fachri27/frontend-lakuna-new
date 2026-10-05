@@ -275,7 +275,7 @@ export async function fetchPhotos(opts?: {
   search?: string;
   type?: "FOTO" | "VIDEO";
   /** Urutan hasil; default terbaru. */
-  sort?: "newest" | "oldest" | "price_asc" | "price_desc";
+  sort?: "newest" | "oldest" | "popular" | "price_asc" | "price_desc";
   page?: number;
   limit?: number;
 }): Promise<{ photos: Photo[]; total: number; totalPages: number }> {
