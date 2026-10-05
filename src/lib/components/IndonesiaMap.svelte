@@ -19,7 +19,6 @@
 		id: {
 			kicker: "Peta archipelago",
 			title: "Dari Sabang\nsampai Merauke",
-			sub: "Mulai menjelajah Nusantara lewat koleksi kami.\nSetiap provinsi memiliki kisahnya sendiri.",
 			overview: "Ringkasan",
 			points: "titik",
 			frames: "bingkai",
@@ -47,7 +46,6 @@
 		en: {
 			kicker: "Archipelago map",
 			title: "From Sabang\nto Merauke",
-			sub: "Start to explore Nusantara through our collection.\nEach province has the different story.",
 			overview: "Overview",
 			points: "points",
 			frames: "frames",
@@ -1729,10 +1727,6 @@
 		panY?.(-ny * room * 2);
 	}
 
-	const stats = $derived({
-		points: hotspots.length,
-		frames: hotspots.reduce((sum, h) => sum + h.photos.length, 0),
-	});
 	const hot = $derived(viewing != null ? hotspots[viewing] : null);
 	const shot = $derived(hot ? hot.photos[Math.min(frame, hot.photos.length - 1)] : null);
 	// Viewer layar penuh memakai file ASLI (tanpa watermark), diminta per foto
@@ -1851,10 +1845,6 @@
 			<div class="im-slate im-reveal">
 				<p class="im-mono im-slate-kicker"><span class="im-live-dot"></span>{t.kicker}</p>
 				<h2 class="im-title">{t.title}</h2>
-				<p class="im-lede">{t.sub}</p>
-				{#if stats.points}
-					<p class="im-mono im-slate-stats">{stats.points} {t.points} · {stats.frames} {t.frames}</p>
-				{/if}
 			</div>
 
 			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">
