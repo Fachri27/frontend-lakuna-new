@@ -35,6 +35,11 @@
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const mixed = $derived((!!cat && catFromNav) || !!needle);
+	// Header (label, judul, subjudul, placeholder) mengikuti kategori dari URL
+	// saat halaman dibuka — BUKAN chip yang sedang aktif. Memilih chip hanya
+	// mengganti isi galeri; judul "Results for “Aerial”" tetap seperti semula.
+	const headCat = $derived(initialCat || undefined);
+	const headMixed = $derived(!!headCat || !!needle);
 
 	$effect(() => {
 		q = initialQ ?? "";
@@ -184,11 +189,11 @@
 <section class="mx-auto max-w-[1500px] px-6 pb-10 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:px-10 lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
 	<div>
 		<!-- Foto + video bercampur (lewat kategori / pencarian) = bukan lagi "Photos". -->
-		<p class="kicker text-safelight">{mixed ? t.kickerMixed : t.kicker}</p>
+		<p class="kicker text-safelight">{headMixed ? t.kickerMixed : t.kicker}</p>
 			<h1 class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-			{cat && catFromNav ? t.titleSearch(cat) : needle ? t.titleSearch(query) : t.title}
+			{headCat ? t.titleSearch(headCat) : needle ? t.titleSearch(query) : t.title}
 		</h1>
-		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{mixed ? t.subMixed : t.sub}</p>
+		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{headMixed ? t.subMixed : t.sub}</p>
 
 		<!-- Pencarian memakai bahasa yang sama dengan rel hero: garis bawah
 			tipis, bukan kotak — satu produk, satu cara mencari. -->
@@ -197,8 +202,8 @@
 		<div class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
 			<SearchField
 				bind:value={q}
-				placeholder={mixed ? t.searchPlaceholderMixed : t.searchPlaceholder}
-				label={mixed ? t.searchLabelMixed : t.searchLabel}
+				placeholder={headMixed ? t.searchPlaceholderMixed : t.searchPlaceholder}
+				label={headMixed ? t.searchLabelMixed : t.searchLabel}
 				clearLabel={t.clear}
 				submitLabel={t.searchSubmit}
 				onsubmit={syncUrl}
@@ -210,6 +215,15 @@
 					{total || photos.length} {t.count}
 				</span>
 				<SortSelect
+					value={sort}
+					label={t.sortLabel}
+					options={[
+						{ value: "newest", label: t.newest },
+						{ value: "popular", label: t.popular },
+					]}
+					onchange={(v) => ((sort = v), void load())}
+				/>
+				<SortSelect
 					value={period}
 					label={t.timeLabel}
 					options={[
@@ -220,15 +234,6 @@
 						{ value: "year", label: t.pastYear },
 					]}
 					onchange={(v) => ((period = v), void load())}
-				/>
-				<SortSelect
-					value={sort}
-					label={t.sortLabel}
-					options={[
-						{ value: "newest", label: t.newest },
-						{ value: "popular", label: t.popular },
-					]}
-					onchange={(v) => ((sort = v), void load())}
 				/>
 			</div>
 		</div>
