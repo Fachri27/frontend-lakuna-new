@@ -17,8 +17,9 @@
 
 	const copy = {
 		id: {
-			kicker: "Peta archipelago",
+			kicker: "PETA ARCHIPELAGO",
 			title: "Dari Sabang\nsampai Merauke",
+			sub: "Mulai menjelajah Nusantara lewat koleksi kami.\nSetiap provinsi memiliki kisahnya sendiri.",
 			overview: "Ringkasan",
 			points: "titik",
 			frames: "bingkai",
@@ -44,8 +45,9 @@
 			open: "Buka titik",
 		},
 		en: {
-			kicker: "Archipelago map",
+			kicker: "ARCHIPELAGO MAP",
 			title: "From Sabang\nto Merauke",
+			sub: "Start to explore Nusantara through our collection.\nEach province has the different story.",
 			overview: "Overview",
 			points: "points",
 			frames: "frames",
@@ -93,90 +95,90 @@
 
 	const FALLBACK_HOTSPOTS: Hotspot[] = [
 		{ name: "Sabang", lat: 5.9, lng: 95.3, cat: "nature",
-			desc: { id: "Pulau paling barat Indonesia — titik nol Nusantara.", en: "Indonesia's westernmost island — the zero point of the archipelago." },
+			desc: { id: "Pulau paling barat Indonesia — titik nol Nusantara", en: "Indonesia's westernmost island — the zero point of the archipelago" },
 			photos: [
-				{ seed: "nus-sabang-1", caption: { id: "Titik nol Nusantara di Pulau Weh.", en: "Zero kilometer of the archipelago on Weh Island." } },
-				{ seed: "nus-sabang-2", caption: { id: "Terumbu karang di Selat Sabang.", en: "Coral gardens in the Sabang Strait." } },
-				{ seed: "nus-sabang-3", caption: { id: "Mercusuar tua menghadap Samudra Hindia.", en: "An old lighthouse facing the Indian Ocean." } },
+				{ seed: "nus-sabang-1", caption: { id: "Titik nol Nusantara di Pulau Weh", en: "Zero kilometer of the archipelago on Weh Island" } },
+				{ seed: "nus-sabang-2", caption: { id: "Terumbu karang di Selat Sabang", en: "Coral gardens in the Sabang Strait" } },
+				{ seed: "nus-sabang-3", caption: { id: "Mercusuar tua menghadap Samudra Hindia", en: "An old lighthouse facing the Indian Ocean" } },
 			] },
 		{ name: "Danau Toba", lat: 2.6, lng: 98.8, cat: "nature",
-			desc: { id: "Kaldera raksasa dengan pulau vulkanik di tengah Sumatra.", en: "A giant caldera with a volcanic island at the heart of Sumatra." },
+			desc: { id: "Kaldera raksasa dengan pulau vulkanik di tengah Sumatra", en: "A giant caldera with a volcanic island at the heart of Sumatra" },
 			photos: [
-				{ seed: "nus-toba-1", caption: { id: "Kaldera raksasa dari ketinggian.", en: "The giant caldera from above." } },
-				{ seed: "nus-toba-2", caption: { id: "Pulau Samosir di tengah danau.", en: "Samosir Island at the lake's heart." } },
-				{ seed: "nus-toba-3", caption: { id: "Rumah Batak tradisional di tepi air.", en: "Traditional Batak houses by the water." } },
+				{ seed: "nus-toba-1", caption: { id: "Kaldera raksasa dari ketinggian", en: "The giant caldera from above" } },
+				{ seed: "nus-toba-2", caption: { id: "Pulau Samosir di tengah danau", en: "Samosir Island at the lake's heart" } },
+				{ seed: "nus-toba-3", caption: { id: "Rumah Batak tradisional di tepi air", en: "Traditional Batak houses by the water" } },
 			] },
 		{ name: "Jakarta", lat: -6.2, lng: 106.8, cat: "urban",
-			desc: { id: "Detak urban padat dan cahaya malam ibu kota.", en: "The dense urban pulse and night lights of the capital." },
+			desc: { id: "Detak urban padat dan cahaya malam ibu kota", en: "The dense urban pulse and night lights of the capital" },
 			photos: [
-				{ seed: "nus-jakarta-1", caption: { id: "Bundaran HI saat senja.", en: "Bundaran HI at dusk." } },
-				{ seed: "nus-jakarta-2", caption: { id: "Gang sempit di kota padat.", en: "A narrow alley in the dense city." } },
-				{ seed: "nus-jakarta-3", caption: { id: "Pelabuhan tua Sunda Kelapa.", en: "The old Sunda Kelapa harbor." } },
-				{ seed: "nus-jakarta-4", caption: { id: "Hujan malam dan neon.", en: "Night rain and neon." } },
+				{ seed: "nus-jakarta-1", caption: { id: "Bundaran HI saat senja", en: "Bundaran HI at dusk" } },
+				{ seed: "nus-jakarta-2", caption: { id: "Gang sempit di kota padat", en: "A narrow alley in the dense city" } },
+				{ seed: "nus-jakarta-3", caption: { id: "Pelabuhan tua Sunda Kelapa", en: "The old Sunda Kelapa harbor" } },
+				{ seed: "nus-jakarta-4", caption: { id: "Hujan malam dan neon", en: "Night rain and neon" } },
 			] },
 		{ name: "Bali", lat: -8.4, lng: 115.2, cat: "travel",
-			desc: { id: "Ladang berundak, puri, dan garis pantai yang dibingkai senja.", en: "Terraced fields, temples, and coastlines framed by dusk." },
+			desc: { id: "Ladang berundak, puri, dan garis pantai yang dibingkai senja", en: "Terraced fields, temples, and coastlines framed by dusk" },
 			photos: [
-				{ seed: "nus-bali-1", caption: { id: "Ladang berundak Jatiluwih.", en: "Jatiluwih terraced fields." } },
-				{ seed: "nus-bali-2", caption: { id: "Pura di tepi tebing Uluwatu.", en: "A temple on the Uluwatu cliffs." } },
-				{ seed: "nus-bali-3", caption: { id: "Ombak Tanah Lot menjelang malam.", en: "Waves at Tanah Lot before night." } },
+				{ seed: "nus-bali-1", caption: { id: "Ladang berundak Jatiluwih", en: "Jatiluwih terraced fields" } },
+				{ seed: "nus-bali-2", caption: { id: "Pura di tepi tebing Uluwatu", en: "A temple on the Uluwatu cliffs" } },
+				{ seed: "nus-bali-3", caption: { id: "Ombak Tanah Lot menjelang malam", en: "Waves at Tanah Lot before night" } },
 			] },
 		{ name: "Komodo", lat: -8.5, lng: 119.5, cat: "nature",
-			desc: { id: "Pulau naga dengan perairan jernih dan tebing terjal.", en: "Island of dragons with clear waters and steep cliffs." },
+			desc: { id: "Pulau naga dengan perairan jernih dan tebing terjal", en: "Island of dragons with clear waters and steep cliffs" },
 			photos: [
-				{ seed: "nus-komodo-1", caption: { id: "Komodo di padang savana.", en: "A dragon on the savanna." } },
-				{ seed: "nus-komodo-2", caption: { id: "Pink Beach dari bukit.", en: "Pink Beach from the hill." } },
-				{ seed: "nus-komodo-3", caption: { id: "Perairan jernih Taman Nasional.", en: "Clear waters of the national park." } },
+				{ seed: "nus-komodo-1", caption: { id: "Komodo di padang savana", en: "A dragon on the savanna" } },
+				{ seed: "nus-komodo-2", caption: { id: "Pink Beach dari bukit", en: "Pink Beach from the hill" } },
+				{ seed: "nus-komodo-3", caption: { id: "Perairan jernih Taman Nasional", en: "Clear waters of the national park" } },
 			] },
 		{ name: "Makassar", lat: -5.1, lng: 119.4, cat: "urban",
-			desc: { id: "Pelabuhan dan perlintasan ramai Selat Makassar.", en: "Harbors and the busy crossings of the Makassar Strait." },
+			desc: { id: "Pelabuhan dan perlintasan ramai Selat Makassar", en: "Harbors and the busy crossings of the Makassar Strait" },
 			photos: [
-				{ seed: "nus-makassar-1", caption: { id: "Pelabuhan Paotere saat fajar.", en: "Paotere harbor at dawn." } },
-				{ seed: "nus-makassar-2", caption: { id: "Jembatan dan lalu lintas Selat.", en: "Bridges and strait traffic." } },
-				{ seed: "nus-makassar-3", caption: { id: "Pasar tradisional yang ramai.", en: "A bustling traditional market." } },
+				{ seed: "nus-makassar-1", caption: { id: "Pelabuhan Paotere saat fajar", en: "Paotere harbor at dawn" } },
+				{ seed: "nus-makassar-2", caption: { id: "Jembatan dan lalu lintas Selat", en: "Bridges and strait traffic" } },
+				{ seed: "nus-makassar-3", caption: { id: "Pasar tradisional yang ramai", en: "A bustling traditional market" } },
 			] },
 		{ name: "Manado", lat: 1.5, lng: 124.8, cat: "nature",
-			desc: { id: "Bunaken dan dasar laut khatulistiwa di utara.", en: "Bunaken and the equatorial seabeds of the north." },
+			desc: { id: "Bunaken dan dasar laut khatulistiwa di utara", en: "Bunaken and the equatorial seabeds of the north" },
 			photos: [
-				{ seed: "nus-manado-1", caption: { id: "Taman laut Bunaken.", en: "The Bunaken marine park." } },
-				{ seed: "nus-manado-2", caption: { id: "Tebing karang bawah laut.", en: "Underwater coral walls." } },
-				{ seed: "nus-manado-3", caption: { id: "Bukit Minahasa di pagi hari.", en: "Minahasa hills in the morning." } },
+				{ seed: "nus-manado-1", caption: { id: "Taman laut Bunaken", en: "The Bunaken marine park" } },
+				{ seed: "nus-manado-2", caption: { id: "Tebing karang bawah laut", en: "Underwater coral walls" } },
+				{ seed: "nus-manado-3", caption: { id: "Bukit Minahasa di pagi hari", en: "Minahasa hills in the morning" } },
 			] },
 		{ name: "Ternate", lat: 0.8, lng: 127.4, cat: "travel",
-			desc: { id: "Gunung berapi berpuncak awan dan benteng rempah.", en: "A cloud-capped volcano and an old spice fortress." },
+			desc: { id: "Gunung berapi berpuncak awan dan benteng rempah", en: "A cloud-capped volcano and an old spice fortress" },
 			photos: [
-				{ seed: "nus-ternate-1", caption: { id: "Gunung Gamalama berpuncak awan.", en: "Cloud-capped Mount Gamalama." } },
-				{ seed: "nus-ternate-2", caption: { id: "Benteng Tolukko peninggalan rempah.", en: "Tolukko Fort, a spice-era relic." } },
-				{ seed: "nus-ternate-3", caption: { id: "Pantai timur pulau vulkanik.", en: "The eastern shore of the volcanic isle." } },
+				{ seed: "nus-ternate-1", caption: { id: "Gunung Gamalama berpuncak awan", en: "Cloud-capped Mount Gamalama" } },
+				{ seed: "nus-ternate-2", caption: { id: "Benteng Tolukko peninggalan rempah", en: "Tolukko Fort, a spice-era relic" } },
+				{ seed: "nus-ternate-3", caption: { id: "Pantai timur pulau vulkanik", en: "The eastern shore of the volcanic isle" } },
 			] },
 		{ name: "Raja Ampat", lat: -0.5, lng: 130.5, cat: "travel",
-			desc: { id: "Karst hijau menjulang di atas laguna pirus.", en: "Green karst towering over turquoise lagoons." },
+			desc: { id: "Karst hijau menjulang di atas laguna pirus", en: "Green karst towering over turquoise lagoons" },
 			photos: [
-				{ seed: "nus-rajaampat-1", caption: { id: "Karst Wayag dari udara.", en: "The Wayag karst from above." } },
-				{ seed: "nus-rajaampat-2", caption: { id: "Laguna pirus di antara pulau.", en: "Turquoise lagoons between isles." } },
-				{ seed: "nus-rajaampat-3", caption: { id: "Kampung di tepi karang.", en: "A village on the reef's edge." } },
-				{ seed: "nus-rajaampat-4", caption: { id: "Matahari tenggelam di Fam.", en: "Sunset over the Fam islands." } },
+				{ seed: "nus-rajaampat-1", caption: { id: "Karst Wayag dari udara", en: "The Wayag karst from above" } },
+				{ seed: "nus-rajaampat-2", caption: { id: "Laguna pirus di antara pulau", en: "Turquoise lagoons between isles" } },
+				{ seed: "nus-rajaampat-3", caption: { id: "Kampung di tepi karang", en: "A village on the reef's edge" } },
+				{ seed: "nus-rajaampat-4", caption: { id: "Matahari tenggelam di Fam", en: "Sunset over the Fam islands" } },
 			] },
 		{ name: "Sorong", lat: -0.9, lng: 131.3, cat: "travel",
-			desc: { id: "Gerbang barat menuju kepulauan Raja Ampat.", en: "The western gateway to the Raja Ampat islands." },
+			desc: { id: "Gerbang barat menuju kepulauan Raja Ampat", en: "The western gateway to the Raja Ampat islands" },
 			photos: [
-				{ seed: "nus-sorong-1", caption: { id: "Gerbang pelabuhan menuju Raja Ampat.", en: "The harbor gateway to Raja Ampat." } },
-				{ seed: "nus-sorong-2", caption: { id: "Pasar ikan di pinggir kota.", en: "A fish market on the town's edge." } },
-				{ seed: "nus-sorong-3", caption: { id: "Matahari terbit di ujung barat.", en: "Sunrise at the western edge." } },
+				{ seed: "nus-sorong-1", caption: { id: "Gerbang pelabuhan menuju Raja Ampat", en: "The harbor gateway to Raja Ampat" } },
+				{ seed: "nus-sorong-2", caption: { id: "Pasar ikan di pinggir kota", en: "A fish market on the town's edge" } },
+				{ seed: "nus-sorong-3", caption: { id: "Matahari terbit di ujung barat", en: "Sunrise at the western edge" } },
 			] },
 		{ name: "Jayapura", lat: -2.6, lng: 140.7, cat: "urban",
-			desc: { id: "Teluk dan perbukitan di ujung timur negeri.", en: "A bay and hills at the eastern edge of the nation." },
+			desc: { id: "Teluk dan perbukitan di ujung timur negeri", en: "A bay and hills at the eastern edge of the nation" },
 			photos: [
-				{ seed: "nus-jayapura-1", caption: { id: "Teluk Yos Sudarso dari bukit.", en: "Yos Sudarso Bay from the hills." } },
-				{ seed: "nus-jayapura-2", caption: { id: "Pasar Hamadi di pagi hari.", en: "Hamadi market in the morning." } },
-				{ seed: "nus-jayapura-3", caption: { id: "Perbukitan Danau Sentani.", en: "The hills around Lake Sentani." } },
+				{ seed: "nus-jayapura-1", caption: { id: "Teluk Yos Sudarso dari bukit", en: "Yos Sudarso Bay from the hills" } },
+				{ seed: "nus-jayapura-2", caption: { id: "Pasar Hamadi di pagi hari", en: "Hamadi market in the morning" } },
+				{ seed: "nus-jayapura-3", caption: { id: "Perbukitan Danau Sentani", en: "The hills around Lake Sentani" } },
 			] },
 		{ name: "Merauke", lat: -8.5, lng: 139.4, cat: "nature",
-			desc: { id: "Pantai selatan dan sabana timur — ujung Nusantara.", en: "Southern coast and eastern savanna — the end of Nusantara." },
+			desc: { id: "Pantai selatan dan sabana timur — ujung Nusantara", en: "Southern coast and eastern savanna — the end of Nusantara" },
 			photos: [
-				{ seed: "nus-merauke-1", caption: { id: "Sabana Wasur di musim kemarau.", en: "Wasur savanna in the dry season." } },
-				{ seed: "nus-merauke-2", caption: { id: "Pantai selatan ujung Nusantara.", en: "The southern coast at the end of Nusantara." } },
-				{ seed: "nus-merauke-3", caption: { id: "Kanguru liar di padang.", en: "Wild wallabies on the plain." } },
+				{ seed: "nus-merauke-1", caption: { id: "Sabana Wasur di musim kemarau", en: "Wasur savanna in the dry season" } },
+				{ seed: "nus-merauke-2", caption: { id: "Pantai selatan ujung Nusantara", en: "The southern coast at the end of Nusantara" } },
+				{ seed: "nus-merauke-3", caption: { id: "Kanguru liar di padang", en: "Wild wallabies on the plain" } },
 			] },
 	];
 
@@ -1778,6 +1780,10 @@
 		panY?.(-ny * room * 2);
 	}
 
+	const stats = $derived({
+		points: hotspots.length,
+		frames: hotspots.reduce((sum, h) => sum + h.photos.length, 0),
+	});
 	const hot = $derived(viewing != null ? hotspots[viewing] : null);
 	const shot = $derived(hot ? hot.photos[Math.min(frame, hot.photos.length - 1)] : null);
 	// Viewer layar penuh memakai file ASLI (tanpa watermark), diminta per foto
@@ -1896,6 +1902,10 @@
 			<div class="im-slate im-reveal">
 				<p class="im-mono im-slate-kicker"><span class="im-live-dot"></span>{t.kicker}</p>
 				<h2 class="im-title">{t.title}</h2>
+				<p class="im-lede">{t.sub}</p>
+				{#if stats.points}
+					<p class="im-mono im-slate-stats">{stats.points} {t.points} · {stats.frames} {t.frames}</p>
+				{/if}
 			</div>
 
 			<p class="im-hint im-mono im-reveal {dragged ? "is-done" : ""}">

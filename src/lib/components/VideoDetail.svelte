@@ -18,10 +18,10 @@
 			format: "Format", tags: "Kata kunci", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
 			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Kuota unduhan bulanan",
 			addToCart: "Tambah ke keranjang", added: "Ditambahkan", buyNow: "Beli sekarang",
-			save: "Simpan", saved: "Tersimpan", noClip: "Pratinjau klip belum tersedia.",
+			save: "Simpan", saved: "Tersimpan", noClip: "Pratinjau klip belum tersedia",
 			slip: "Lembar lisensi", usage: "Jenis pakai", fee: "Biaya lisensi",
 			youGet: "Yang kamu terima",
-			previewNote: "Pratinjau memutar berkas asli. Unduhan berlisensi tersedia setelah pembelian.",
+			previewNote: "Pratinjau memutar berkas asli. Unduhan berlisensi tersedia setelah pembelian",
 			related: "Bingkai bergerak terkait", byArtist: "Dari perajangga yang sama",
 			relPhotos: "Foto terkait", relVideos: "Video terkait",
 			contrib: "Galeri kontributor", contribSub: "Karya lain dari",
@@ -33,10 +33,10 @@
 			format: "Format", tags: "Keywords", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
 			personalDesc: "Personal & social media use", commercialDesc: "Monthly download quota",
 			addToCart: "Add to cart", added: "Added", buyNow: "Buy now",
-			save: "Save", saved: "Saved", noClip: "No preview clip available yet.",
+			save: "Save", saved: "Saved", noClip: "No preview clip available yet",
 			slip: "Licence slip", usage: "Usage", fee: "Licence fee",
 			youGet: "What you get",
-			previewNote: "The preview plays the original file. The licensed download is available after purchase.",
+			previewNote: "The preview plays the original file. The licensed download is available after purchase",
 			related: "Related motion frames", byArtist: "From the same image-maker",
 			relPhotos: "Related photos", relVideos: "Related videos",
 			contrib: "Contributor gallery", contribSub: "More works from",
@@ -297,7 +297,7 @@
 						{video.title[lang]}
 					</h1>
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <span class="text-safelight">{video.author}</span>
+						{t.by} <a href={`/videos?q=${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
 					</p>
 				</div>
 			</div>
@@ -398,9 +398,9 @@
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
 							{#if kws.length}
 								{#each kws as kw (kw)}
-									<span class="kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted">
+									<a href={`/videos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
-									</span>
+									</a>
 								{/each}
 							{:else}
 								<span class="text-sm text-fg/40">—</span>
@@ -462,10 +462,10 @@
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
-							{t.contribSub} <span class="serif-em text-safelight">{video.author}</span>
+							{t.contribSub} <a href={`/videos?q=${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
 						</h2>
 					</div>
-					<a data-reveal href={`/photos?by=${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/videos?q=${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>

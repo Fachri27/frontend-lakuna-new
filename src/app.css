@@ -1188,6 +1188,18 @@ a.ias-card:focus-visible {
   color: var(--im-ink);
   text-shadow: 0 2px 24px rgba(4, 6, 7, 0.6);
 }
+.im-lede {
+  margin: 0;
+  max-width: 52ch;
+  font-family: var(--font-body);
+  font-size: clamp(0.85rem, 1vw, 0.98rem);
+  line-height: 1.5;
+  white-space: pre-line;
+  color: rgba(239, 231, 220, 0.8);
+}
+.im-slate-stats {
+  color: var(--color-safelight-lamp);
+}
 .im-live-dot {
   width: 5px;
   height: 5px;
@@ -1408,6 +1420,9 @@ a.ias-card:focus-visible {
   .im-slate {
     max-width: calc(100vw - 8rem);
     gap: 0.45rem;
+  }
+  .im-lede {
+    display: none;
   }
   .im-mk-label {
     font-size: 0.54rem;
