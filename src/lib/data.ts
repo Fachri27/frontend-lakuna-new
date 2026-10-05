@@ -276,6 +276,8 @@ export async function fetchPhotos(opts?: {
   type?: "FOTO" | "VIDEO";
   /** Urutan hasil; default terbaru. */
   sort?: "newest" | "oldest" | "popular" | "price_asc" | "price_desc";
+  /** Hanya yang diunggah dalam rentang ini; kosong = semua waktu. */
+  period?: "day" | "week" | "month" | "year";
   page?: number;
   limit?: number;
 }): Promise<{ photos: Photo[]; total: number; totalPages: number }> {
@@ -288,6 +290,7 @@ export async function fetchPhotos(opts?: {
   if (opts?.search) params.set("search", opts.search);
   if (opts?.type) params.set("type", opts.type);
   if (opts?.sort) params.set("sort", opts.sort);
+  if (opts?.period) params.set("period", opts.period);
   params.set("page", String(opts?.page ?? 1));
   params.set("limit", String(opts?.limit ?? 24));
 

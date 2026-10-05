@@ -9,8 +9,8 @@
 	let { initialCat, initialQ }: { initialCat?: string; initialQ?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
-		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", popular: "Popular", sortLabel: "Sort", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
+		id: { kicker: "Koleksi foto", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain.", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif.", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
+		en: { kicker: "Photos", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles.", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword.", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles.", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -31,6 +31,7 @@
 	const needle = $derived(query.toLowerCase());
 	// Urutan waktu: terbaru / terlama. Ganti = muat ulang dari halaman 1.
 	let sort = $state<"newest" | "popular">("newest");
+	let period = $state<"all" | "day" | "week" | "month" | "year">("all");
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const mixed = $derived((!!cat && catFromNav) || !!needle);
@@ -89,6 +90,7 @@
 			search: needle || undefined,
 			type: mixed ? undefined : "FOTO",
 			sort,
+			period: period === "all" ? undefined : period,
 			page: 1,
 			limit: PAGE_SIZE
 		})
@@ -122,6 +124,7 @@
 			search: needle || undefined,
 			type: mixed ? undefined : "FOTO",
 			sort,
+			period: period === "all" ? undefined : period,
 			page: next,
 			limit: PAGE_SIZE
 		}), minShow])
@@ -201,10 +204,22 @@
 				onclear={clearSearch}
 				class="min-w-0 sm:flex-1"
 			/>
-			<div class="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
-				<span class="whitespace-nowrap text-xs text-fg-muted" aria-live="polite">
+			<div class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-3 sm:justify-end">
+				<span class="mr-1 hidden whitespace-nowrap text-xs text-fg-muted sm:inline" aria-live="polite">
 					{total || photos.length} {t.count}
 				</span>
+				<SortSelect
+					value={period}
+					label={t.timeLabel}
+					options={[
+						{ value: "all", label: t.anyTime },
+						{ value: "day", label: t.pastDay },
+						{ value: "week", label: t.pastWeek },
+						{ value: "month", label: t.pastMonth },
+						{ value: "year", label: t.pastYear },
+					]}
+					onchange={(v) => ((period = v), void load())}
+				/>
 				<SortSelect
 					value={sort}
 					label={t.sortLabel}
