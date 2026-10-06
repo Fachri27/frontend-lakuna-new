@@ -35,6 +35,27 @@ function jump(y: number) {
 	else window.scrollTo(0, y);
 }
 
+/** Tunggu peta selesai memuat (sinyal dari IndonesiaMap), maksimal 4,5 dtk — hanya bila panggung peta sedang di layar. */
+function waitForMap(): Promise<void> {
+	const stage = document.querySelector(".md-sticky");
+	if (!stage) return Promise.resolve();
+	const r = stage.getBoundingClientRect();
+	const inMap = r.top <= 2 && r.bottom > window.innerHeight * 0.6;
+	if (!inMap || document.documentElement.dataset.mapIdle === "1") return Promise.resolve();
+	return new Promise((resolve) => {
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			window.removeEventListener("lakuna:map-idle", finish);
+			window.clearTimeout(timer);
+			resolve();
+		};
+		const timer = window.setTimeout(finish, 4500);
+		window.addEventListener("lakuna:map-idle", finish);
+	});
+}
+
 export function installHomeScrollRestore() {
 	// `document` hanya ada di peramban; fungsi ini juga dipanggil saat render di server.
 	const root = () => document.documentElement;
@@ -88,9 +109,12 @@ export function installHomeScrollRestore() {
 				requestAnimationFrame(() =>
 					requestAnimationFrame(() => {
 						jump(saved.y);
-						root().classList.remove("home-restoring");
-						// Komponen globe menunggu ini: posisi di dalam track peta = sudah mendarat (tanpa rise()).
+						// Dikirim SAAT penutup masih menutup: globe mendarat diam-diam (tanpa rise()) bila posisinya di
+						// dalam track peta, dan galeri tak berbunyi karena lompatan.
 						window.dispatchEvent(new Event("lakuna:home-restored"));
+						// Di bagian peta: tahan penutup sampai peta selesai memuat ubin, supaya peta hitam / setengah
+						// termuat (kotak miring) tak sempat terlihat.
+						void waitForMap().then(() => root().classList.remove("home-restoring"));
 					}),
 				);
 				return;

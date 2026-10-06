@@ -1195,6 +1195,13 @@
 				el.classList.remove("is-moving");
 				if (phase === "landed") syncFocus();
 			});
+			// Peta selesai memuat ubin & menggambar (hanya di fase peta): tanda untuk penutup Back (homeScroll),
+			// supaya peta yang masih hitam / setengah termuat tidak sempat terlihat.
+			mm.on("idle", () => {
+				if (phase !== "landed") return;
+				document.documentElement.dataset.mapIdle = "1";
+				window.dispatchEvent(new Event("lakuna:map-idle"));
+			});
 
 			// Rotasi HP / jendela diubah ukurannya: kamera ikut dipaskan ulang —
 			// hero ke posisi bumi, peta ke bingkai Nusantara (selama pengunjung
@@ -1241,6 +1248,7 @@
 
 		return () => {
 			disposed = true;
+			delete document.documentElement.dataset.mapIdle;
 			nearIo?.disconnect();
 			cancelAnimationFrame(raf);
 			ro?.disconnect();
