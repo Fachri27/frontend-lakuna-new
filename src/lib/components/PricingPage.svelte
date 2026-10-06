@@ -30,7 +30,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 			billedMonthly: "Ditagih bulanan", billedUpfront: "Ditagih di muka",
 		},
 		en: {
-			kicker: "Membership", title: "Access thousands of", titleEm: "photos and videos", titleB: "of the highest quality",
+			kicker: "Subscription", title: "Get an access to the unlimited", titleEm: "best quality archives", titleB: "in one click",
 			sub: "Pick the plan that fits your needs",
 			standar: "Standard", subscribe: "Subscribe", popular: "Most popular",
 			monthly: "Monthly", annual: "Annual", perItem: "/item", perMonth: "/mo",
@@ -308,7 +308,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 	</section>
 
 	<!-- ── Rate plates ── -->
-	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-20">
+	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-12">
 		<div class="mx-auto grid max-w-[1400px] gap-6 lg:grid-cols-2">
 			<!-- ── 01 · Standar ── -->
 			<Reveal class="h-full">
@@ -523,9 +523,9 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 	</section>
 
 	<!-- ── Trusted Clients ── -->
-	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-24 pt-8">
+	<section class="relative px-[clamp(1.25rem,4vw,4rem)] pb-24">
 		<div class="mx-auto max-w-[1400px]">
-			<Reveal class="mt-16 lg:mt-24">
+			<Reveal class="mt-8 lg:mt-12">
 				<LogoCloud eyebrow={trustSec?.kicker || t.trustedBy} items={trustLogos} />
 			</Reveal>
 		</div>
