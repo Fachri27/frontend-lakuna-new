@@ -24,6 +24,17 @@ import { i18n } from "$lib/i18n.svelte";
 	let mobileMenuRef = $state<HTMLDivElement>();
 	let prevCartCount = 0;
 
+	// Keranjang butuh akun: belum masuk → buka popup login (tujuan sesudahnya = keranjang), bukan pindah
+	// halaman. Selama status login masih dimuat (store.loading) klik dibiarkan menavigasi biasa agar
+	// pengguna yang sebenarnya sudah masuk tidak keliru disuruh login; halaman keranjang punya penjaganya sendiri.
+	// Klik tengah / dengan modifier (tab baru) tidak dibajak.
+	function onCartClick(e: MouseEvent) {
+		if (store.user || store.loading) return;
+		if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		e.preventDefault();
+		authModal.open("/checkout");
+	}
+
 	$effect(() => {
 		const onScroll = () => (scrolled = window.scrollY > 24);
 		onScroll();
@@ -274,6 +285,7 @@ import { i18n } from "$lib/i18n.svelte";
 				<div data-no-hover-sound data-no-click-sound class="contents">
 					<a
 						href="/checkout"
+						onclick={onCartClick}
 					class={`press relative grid h-11 w-11 place-items-center rounded-full border transition-colors duration-500 hover:text-safelight active:border-safelight active:text-safelight md:h-9 md:w-9 ${line} ${icon}`}
 					aria-label={`Cart, ${store.cartCount} items`}
 				>
