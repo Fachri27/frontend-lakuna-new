@@ -222,9 +222,9 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 0;
-		/* Logo diperkecil: ±55% tinggi dan 58% lebar ruangnya (sebelumnya penuh, terlalu besar). */
-		width: 58%;
-		height: 55%;
+		/* Ukuran logo: 68% tinggi dan 72% lebar ruangnya (penuh = terlalu besar, 55/58% = terlalu kecil). */
+		width: 72%;
+		height: 68%;
 		opacity: 1;
 		filter: blur(0);
 		transition:
