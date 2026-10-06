@@ -827,7 +827,13 @@
 				phase = "landed";
 			}
 
+			// Batas zoom-out peta: satu tingkat di luar bingkai Nusantara, paling jauh zoom 3 (globe dengan tepi
+			// bumi mulai tampak). Hanya berlaku di fase peta: kamera hero (globe di landing) dan selam/naik
+			// memakai zoom di sekitar 3 yang di layar kecil bisa lebih rendah, jadi tak boleh ikut terjepit.
+			const landedMinZoom = () => Math.max(0, Math.min(3, overviewCamera().zoom - 1));
+
 			setInteractiveRef = (on: boolean) => {
+				mm.setMinZoom(on ? landedMinZoom() : 0);
 				// Desktop: mengikuti tombol geser (panOn). Layar sentuh: cubit dan
 				// geser DUA jari menyala begitu mendarat, tanpa menekan tombol —
 				// cooperativeGestures menjaga satu jari tetap menggulir halaman,
@@ -1188,7 +1194,14 @@
 				lastH = el.clientHeight;
 				mm.resize();
 				if (phase === "hero") mm.jumpTo(heroCamera(el, heroLat, heroLift));
-				else if (phase === "landed" && !dragged) mm.jumpTo(overviewCamera());
+				else if (phase === "landed") {
+					// Ukuran berubah → bingkai Nusantara berubah → batas zoom-out ikut dihitung ulang
+					// (tanpa ini batas lama bisa menjepit tampilan ringkasan di layar yang lebih kecil).
+					mm.setMinZoom(0);
+					const cam = overviewCamera();
+					mm.setMinZoom(Math.max(0, Math.min(3, cam.zoom - 1)));
+					if (!dragged) mm.jumpTo(cam);
+				}
 			});
 			ro.observe(el);
 
@@ -1490,11 +1503,11 @@
 		setInteractiveRef?.(phase === "landed");
 	}
 
-	/** Geser zoom satu tingkat, dijepit ke batas peta (1–15). */
+	/** Geser zoom satu tingkat, dijepit ke batas peta (batas zoom-out fase peta – 15). */
 	function zoomStep(d: number) {
 		const m = map;
 		if (!m) return;
-		m.zoomTo(Math.min(15, Math.max(1, Math.round(m.getZoom() + d))), { duration: 350 });
+		m.zoomTo(Math.min(15, Math.max(m.getMinZoom(), Math.round(m.getZoom() + d))), { duration: 350 });
 	}
 
 	function flyTo(i: number, zoom = FOCUS_Z) {
