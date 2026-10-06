@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ecoHrefFor } from "$lib/ecoBands";
 	import gsap from "gsap";
 	import { imgFor, fetchPhotoOriginal, type Photo } from "$lib/data";
 	import { i18n } from "$lib/i18n.svelte";
@@ -350,7 +351,7 @@
 				>
 					{#each items as p, i (p.id + "-" + i)}
 						<a
-							href={`/photos/${p.id}`}
+							href={ecoHrefFor(p)}
 							class="fs-card"
 							class:is-active={i === active}
 							style={`--i: ${i}; --from-end: ${items.length - 1 - i}`}

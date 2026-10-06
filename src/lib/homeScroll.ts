@@ -50,11 +50,16 @@ export function installHomeScrollRestore() {
 				/* penyimpanan penuh / diblokir — abaikan */
 			}
 		}
+		// Menuju zona Ekowisata (#eco-<zona>, mis. dari kartu etalase): tutup tampilan sejak klik. Halaman itu
+		// membukanya lagi setelah gulir ke zona dipasang (EcotourismPage onMount).
+		if (to?.url.pathname === "/ecotourism" && to.url.hash.startsWith("#eco-")) root().classList.add("eco-jumping");
 		// Kembali ke landing lewat riwayat: tutup tampilan SEKARANG supaya posisi sementara tak terlihat.
 		if (type === "popstate" && to?.url.pathname === "/" && read()) root().classList.add("home-restoring");
 	});
 
 	afterNavigate(({ to, type }) => {
+		// Penutup zona Ekowisata hanya milik halaman Ekowisata; di halaman lain jangan sampai tertinggal.
+		if (to?.url.pathname !== "/ecotourism") root().classList.remove("eco-jumping");
 		if (type !== "popstate" || to?.url.pathname !== "/") {
 			root().classList.remove("home-restoring");
 			return;

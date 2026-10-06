@@ -3,6 +3,7 @@
 	import { i18n, type Lang } from "$lib/i18n.svelte";
 	import { fetchPhotos, imgFor, type Photo } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
+	import { ECO_BAND_TERMS } from "$lib/ecoBands";
 
 	/**
 	 * Ekowisata sebagai SATU garis turun: puncak → karang. Lima zona; altimeter
@@ -21,7 +22,7 @@
 
 	const BANDS: Band[] = [
 		{
-			id: "mountain", from: 3200, to: 1500, tone: [20, 27, 40], terms: ["gunung", "mountain"],
+			id: "mountain", from: 3200, to: 1500, tone: [20, 27, 40], terms: ECO_BAND_TERMS.mountain,
 			name: { id: "Pegunungan", en: "Mountains" },
 			note: {
 				id: "Kawah, savana di ketinggian, dan jalur pendakian yang kuotanya dibatasi supaya tanahnya sempat pulih",
@@ -29,7 +30,7 @@
 			},
 		},
 		{
-			id: "forest", from: 1500, to: 200, tone: [12, 28, 21], terms: ["hutan", "forest"],
+			id: "forest", from: 1500, to: 200, tone: [12, 28, 21], terms: ECO_BAND_TERMS.forest,
 			name: { id: "Hutan hujan", en: "Rainforest" },
 			note: {
 				id: "Rumah orangutan, harimau, dan burung rangkong. Jalan setapaknya dipandu warga desa yang menjaganya",
@@ -37,7 +38,7 @@
 			},
 		},
 		{
-			id: "water", from: 200, to: 0, tone: [10, 30, 36], terms: ["danau", "lake", "sungai", "river"],
+			id: "water", from: 200, to: 0, tone: [10, 30, 36], terms: ECO_BAND_TERMS.water,
 			name: { id: "Danau dan sungai", en: "Lakes and rivers" },
 			note: {
 				id: "Perahu tanpa mesin, kampung di atas air, dan sungai yang masih menjadi jalan utama",
@@ -45,7 +46,7 @@
 			},
 		},
 		{
-			id: "coast", from: 0, to: -5, tone: [31, 26, 17], terms: ["pantai", "beach", "mangrove"],
+			id: "coast", from: 0, to: -5, tone: [31, 26, 17], terms: ECO_BAND_TERMS.coast,
 			name: { id: "Pantai dan mangrove", en: "Beaches and mangroves" },
 			note: {
 				id: "Penyu bertelur, bakau yang menahan gelombang, dan kampung nelayan yang menjual hasil lautnya langsung",
@@ -53,7 +54,7 @@
 			},
 		},
 		{
-			id: "reef", from: -5, to: -30, tone: [5, 22, 40], terms: ["karang", "reef", "laut"],
+			id: "reef", from: -5, to: -30, tone: [5, 22, 40], terms: ECO_BAND_TERMS.reef,
 			name: { id: "Terumbu karang", en: "Coral reefs" },
 			note: {
 				id: "Dari Raja Ampat sampai Wakatobi: penyelaman di zona lindung, dengan tambat jangkar supaya karang tak patah",
@@ -120,6 +121,38 @@
 
 	onMount(() => {
 		let alive = true;
+
+		// Datang dengan #eco-<zona> (mis. dari kartu etalase di beranda): gulir ke zona itu SETELAH semua zona
+		// selesai memuat fotonya — sebelum itu tinggi halaman terus berubah dan posisinya akan meleset.
+		// Tampilan ditutup selama menunggu supaya tak ada lompatan yang terlihat.
+		const wanted = location.hash.startsWith("#eco-") ? BANDS.findIndex((b) => `eco-${b.id}` === location.hash.slice(1)) : -1;
+		const root = document.documentElement;
+		let pending = BANDS.length;
+		let jumped = false;
+		let guard: ReturnType<typeof setTimeout> | undefined;
+		const toBand = () => {
+			const el = bandEls[wanted];
+			if (el) window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY - 80));
+		};
+		const jump = () => {
+			if (jumped || wanted < 0) return;
+			jumped = true;
+			clearTimeout(guard);
+			setTimeout(() => {
+				toBand();
+				requestAnimationFrame(() =>
+					requestAnimationFrame(() => {
+						toBand();
+						root.classList.remove("eco-jumping");
+					}),
+				);
+			}, 60);
+		};
+		if (wanted >= 0) {
+			root.classList.add("eco-jumping");
+			guard = setTimeout(jump, 3000); // jaring pengaman bila ada zona yang lambat/gagal memuat
+		}
+
 		for (const b of BANDS) {
 			byBand[b.id] = { photos: [], total: 0, done: false };
 			Promise.all(b.terms.map((q) => fetchPhotos({ search: q, limit: 5 }).catch(() => ({ photos: [] as Photo[], total: 0, totalPages: 0 }))))
@@ -129,9 +162,14 @@
 					const merged: Photo[] = [];
 					for (const r of rs) for (const p of r.photos) if (!seen.has(p.id)) (seen.add(p.id), merged.push(p));
 					byBand[b.id] = { photos: merged.slice(0, 5), total: merged.length, done: true };
+					if (--pending === 0) jump();
 				});
 		}
-		return () => (alive = false);
+		return () => {
+			alive = false;
+			clearTimeout(guard);
+			root.classList.remove("eco-jumping");
+		};
 	});
 
 	const hrefOf = (p: Photo) => (p.assetType === "VIDEO" ? `/videos/${p.id}` : `/photos/${p.id}`);
@@ -682,6 +720,14 @@
 </div>
 
 <style>
+	/* Datang dengan #eco-<zona>: tampilan ditutup sampai gulir ke zona dipasang (lihat onMount). */
+	:global(html.eco-jumping body) {
+		opacity: 0;
+		transition: none;
+	}
+	:global(html:not(.eco-jumping) body) {
+		transition: opacity 0.18s ease;
+	}
 	.eco {
 		--eco-line: rgba(241, 239, 233, 0.16);
 		position: relative;
