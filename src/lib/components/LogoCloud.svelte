@@ -191,37 +191,38 @@
 </div>
 
 <style>
-	/* Petak berbingkai tipis: bingkainya adalah strukturnya, tanpa bayangan atau hiasan. */
+	/* Tanpa kotak: logo mengambang di grid; "petak" hanyalah ruang yang dipakai tiap logo berganti. */
 	.lc-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.5rem;
+		gap: 2rem 2rem;
 	}
 	@media (min-width: 640px) {
 		.lc-grid {
 			grid-template-columns: repeat(4, minmax(0, 1fr));
-			gap: 0.75rem;
+			gap: 2rem 3rem;
 		}
 	}
 	.lc-tile {
 		display: grid;
 		place-items: center;
-		height: clamp(4.5rem, 9vw, 7.25rem);
-		padding: 0 1.25rem;
-		border: 1px solid var(--hair);
-		border-radius: 4px;
-		background: color-mix(in srgb, var(--fg) 2.5%, transparent);
+		height: 4rem;
+	}
+	@media (min-width: 640px) {
+		.lc-tile {
+			height: 5rem;
+		}
 	}
 	/* Muka petak: yang berganti. Keluar = buram + pudar; masuk = menajam kembali. */
 	.lc-face {
-		/* flex + min-height 0 supaya logo yang lebar/tinggi diperkecil ke dalam petak (di grid baris
-		   otomatis, max-height persen tak membatasi dan logo menembus bingkai). */
+		/* flex + min-height 0 supaya logo yang lebar/tinggi diperkecil ke dalam ruangnya (di grid baris
+		   otomatis, max-height persen tak membatasi dan logo meluber). */
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		min-height: 0;
-		width: 100%;
-		height: 56%;
+		width: 85%;
+		height: 100%;
 		opacity: 1;
 		filter: blur(0);
 		transition:
