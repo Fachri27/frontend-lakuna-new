@@ -1578,7 +1578,7 @@
 				sungguhan, bukan kalimat. Digeser sendiri oleh pembaca — gerak yang
 				menjawab aksi, bukan animasi yang jalan sendiri. -->
 		<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:items-stretch lg:gap-12">
-			<figure data-reveal class="cmp @container flex flex-col lg:col-span-7 lg:h-full">
+			<figure data-reveal class="cmp @container relative flex flex-col lg:col-span-7 lg:mb-10 lg:h-full">
 				<div class="cmp-stage lg:flex-auto">
 						<img class="cmp-img" src={compareShot.watermarkUrl} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
 						<div class="cmp-clean" style={`clip-path: inset(0 0 0 ${comparePos}%)`}>
@@ -1605,7 +1605,9 @@
 							aria-label={s.compareSlider}
 						/>
 					</div>
-					<figcaption class="mt-3 overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80">{s.compareRes}</figcaption>
+					<!-- Di layar lebar keterangan DILEPAS dari aliran tinggi (tepat di bawah gambar): kolom kanan
+						sejajar dengan dasar GAMBAR, bukan dasar keterangan. `lg:mb-10` menyisakan ruangnya. -->
+					<figcaption class="mt-3 overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80 lg:absolute lg:inset-x-0 lg:top-full">{s.compareRes}</figcaption>
 				</figure>
 
 				<div data-reveal data-no-hover-sound data-no-click-sound class="flex flex-col lg:col-span-5 lg:h-full">
