@@ -2164,3 +2164,11 @@ video {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+/* Back ke landing: tampilan ditutup sampai posisi gulir dipulihkan (lihat lib/homeScroll.ts). */
+html.home-restoring body {
+  opacity: 0;
+}
+html:not(.home-restoring) body {
+  transition: opacity 0.18s ease;
+}

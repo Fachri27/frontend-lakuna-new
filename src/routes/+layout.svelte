@@ -22,8 +22,12 @@
 	import type { Snippet } from "svelte";
 	import { installCreditCrop } from "$lib/creditCrop";
 	import { primeScrambleSound, playScrambleSound, playScrambleClick } from "$lib/scramble";
+	import { installHomeScrollRestore } from "$lib/homeScroll";
 
 	let { children }: { children: Snippet } = $props();
+
+	// Back ke landing: pulihkan gulir setelah tinggi halaman final (tanpa kilasan bagian yang salah).
+	installHomeScrollRestore();
 
 	// Hydrate client-only state (localStorage → runes) sekali di sisi client.
 	$effect(() => {
