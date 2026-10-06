@@ -163,21 +163,81 @@ export function scrambleElement(root: HTMLElement) {
 }
 
 /**
- * Action `use:scrambleHover` — hover judul: animasi acak saja, TANPA bunyi
+ * Action `use:scrambleHover` — hover tepat di atas HURUF judul: animasi acak saja, TANPA bunyi
  * (judul bukan tombol; bunyi hover berulang tiap kursor lewat terasa
  * mengganggu). Diam bila reduce-motion.
  */
 export function scrambleHover(node: HTMLElement) {
-	function onEnter() {
-		if (typeof window === "undefined") return;
-		if (access.settings.reduceMotion) return;
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-		scrambleElement(node);
+	function allowedNow(): boolean {
+		if (typeof window === "undefined") return false;
+		if (access.settings.reduceMotion) return false;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+		return true;
 	}
-	node.addEventListener("pointerenter", onEnter);
+
+	// Tombol/tautan: seluruh areanya adalah sasaran hover, jadi cukup pointerenter.
+	if (node.closest("button, a, [role='button']")) {
+		const onEnter = () => {
+			if (allowedNow()) scrambleElement(node);
+		};
+		node.addEventListener("pointerenter", onEnter);
+		return {
+			destroy() {
+				node.removeEventListener("pointerenter", onEnter);
+			},
+		};
+	}
+
+	// Judul (teks biasa): elemennya blok selebar kolom, jadi kursor di ruang kosong sebelah teks
+	// tak boleh memicu. Pemicu = kursor MASUK ke salah satu persegi huruf (per baris), bukan ke kotak elemen.
+	const PAD = 3; // toleransi px di sekitar huruf, supaya tepi tak terasa "meleset"
+	let inside = false;
+	let raf = 0;
+	let lastX = 0;
+	let lastY = 0;
+
+	function overText(x: number, y: number): boolean {
+		const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+		const range = document.createRange();
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			if (!(n as Text).data.trim()) continue;
+			range.selectNodeContents(n);
+			for (const r of range.getClientRects()) {
+				if (x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD) return true;
+			}
+		}
+		return false;
+	}
+
+	function check() {
+		raf = 0;
+		const hit = overText(lastX, lastY);
+		if (hit && !inside) {
+			inside = true;
+			if (allowedNow()) scrambleElement(node);
+		} else if (!hit) {
+			inside = false;
+		}
+	}
+	function onMove(e: PointerEvent) {
+		lastX = e.clientX;
+		lastY = e.clientY;
+		if (!raf) raf = requestAnimationFrame(check);
+	}
+	function onLeave() {
+		inside = false;
+		if (raf) {
+			cancelAnimationFrame(raf);
+			raf = 0;
+		}
+	}
+	node.addEventListener("pointermove", onMove);
+	node.addEventListener("pointerleave", onLeave);
 	return {
 		destroy() {
-			node.removeEventListener("pointerenter", onEnter);
+			node.removeEventListener("pointermove", onMove);
+			node.removeEventListener("pointerleave", onLeave);
+			if (raf) cancelAnimationFrame(raf);
 		},
 	};
 }
