@@ -65,7 +65,7 @@
 					loading="lazy"
 					decoding="async"
 					draggable={false}
-					class="h-10 w-auto opacity-50 grayscale transition-all duration-200 hover:opacity-100 hover:grayscale-0 sm:h-12"
+					class="h-10 w-auto brightness-0 invert opacity-55 transition-opacity duration-200 hover:opacity-90 sm:h-12"
 				/>
 			</span>
 		{/each}
