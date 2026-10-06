@@ -407,7 +407,7 @@
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
 							{#if kws.length}
 								{#each kws as kw (kw)}
-									<a href={`/videos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
+									<a href={`/photos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
 									</a>
 								{/each}
