@@ -26,28 +26,57 @@
 	const wordsB = $derived(split(lineB));
 
 	let root = $state<HTMLElement | null>(null);
-	let shown = $state(false);
+	/** Terlihat penuh? Gulungan huruf acak hanya berjalan saat ini true. */
+	let settled = false;
 
-	// Muncul per baris: tiap baris meluncur naik dari balik topengnya saat
-	// judul masuk viewport (sekali saja). Hormat reduce-motion via CSS.
+	// Fade in saat judul digulir masuk dan fade out saat digulir keluar — mengikuti posisi gulir, jadi
+	// berbalik arah bila gulir berbalik. Hanya opasitas + geser kecil; hormat reduce-motion.
 	$effect(() => {
 		const el = root;
 		if (!el) return;
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || access.settings.reduceMotion) {
-			shown = true;
+			el.style.setProperty("--sl-o", "1");
+			settled = true;
 			return;
 		}
+		const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+		const smooth = (t: number) => t * t * (3 - 2 * t);
+		let raf = 0;
+		let near = false;
+		const paint = () => {
+			raf = 0;
+			const h = window.innerHeight;
+			const r = el.getBoundingClientRect();
+			// Masuk: tepi atas judul naik dari 96% ke 62% tinggi layar. Keluar: tepi bawah naik dari 14% ke 0%
+			// — sempit, supaya di dasar halaman (judul berhenti dekat atas layar) keadaan akhirnya tetap penuh.
+			const inP = clamp01((h * 0.96 - r.top) / (h * 0.34));
+			const outP = clamp01(r.bottom / (h * 0.14));
+			const o = smooth(Math.min(inP, outP));
+			el.style.setProperty("--sl-o", o.toFixed(3));
+			settled = o > 0.95;
+		};
+		const schedule = () => {
+			if (!near || raf) return;
+			raf = requestAnimationFrame(paint);
+		};
+		// Hanya mengikuti gulir selama judul dekat layar (hemat kerja di bagian halaman lain).
 		const io = new IntersectionObserver(
 			([entry]) => {
-				if (entry?.isIntersecting) {
-					shown = true;
-					io.disconnect();
-				}
+				near = !!entry?.isIntersecting;
+				if (near) schedule();
 			},
-			{ threshold: 0.25 },
+			{ rootMargin: "20% 0px 20% 0px" },
 		);
 		io.observe(el);
-		return () => io.disconnect();
+		window.addEventListener("scroll", schedule, { passive: true });
+		window.addEventListener("resize", schedule);
+		paint();
+		return () => {
+			io.disconnect();
+			window.removeEventListener("scroll", schedule);
+			window.removeEventListener("resize", schedule);
+			if (raf) cancelAnimationFrame(raf);
+		};
 	});
 
 	$effect(() => {
@@ -73,7 +102,7 @@
 		};
 
 		const loop = () => {
-			if (!visible || reduce.matches || access.settings.reduceMotion) return;
+			if (!visible || !settled || reduce.matches || access.settings.reduceMotion) { if (visible) timer = window.setTimeout(loop, 400); return; }
 			sliceOne();
 			// Kadang dua huruf sekaligus, seperti di cetakan yang goyah.
 			if (Math.random() < 0.3) window.setTimeout(sliceOne, 80);
@@ -111,7 +140,7 @@
 	{/each}
 {/snippet}
 
-<h2 bind:this={root} class="sl" class:is-in={shown} aria-label={`${lineA} ${smallA} ${smallB} ${lineB}`.replace(/\s+/g, " ").trim()}>
+<h2 bind:this={root} class="sl" aria-label={`${lineA} ${smallA} ${smallB} ${lineB}`.replace(/\s+/g, " ").trim()}>
 	<span class="sl-mask" aria-hidden="true">
 	<span class="sl-row">
 		<span class="sl-big">{@render big(wordsA)}</span>
@@ -136,21 +165,16 @@
 		font-size: clamp(2.9rem, 9.4vw, 8.75rem);
 		line-height: 0.86;
 		letter-spacing: -0.045em;
+		/* Fade in/out + geser kecil, digerakkan oleh gulir lewat --sl-o (0–1). */
+		opacity: var(--sl-o, 0);
+		transform: translateY(calc((1 - var(--sl-o, 0)) * 0.28em));
+		will-change: opacity, transform;
 	}
 	.sl-row {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
 		column-gap: 0.12em;
-		/* Muncul per baris: mulai tenggelam di balik topeng, naik berjenjang. */
-		transform: translateY(112%);
-		transition: transform 1s cubic-bezier(0.16, 1, 0.3, 1);
-	}
-	.sl-mask:nth-of-type(2) .sl-row {
-		transition-delay: 0.13s;
-	}
-	.sl.is-in .sl-row {
-		transform: translateY(0);
 	}
 	/* Topeng per baris: yang keluar batas tak terlihat. */
 	.sl-mask {
@@ -161,9 +185,9 @@
 		margin-bottom: -0.06em;
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.sl-row {
+		.sl {
+			opacity: 1;
 			transform: none;
-			transition: none;
 		}
 	}
 	/* Baris kedua menjorok, seperti komposisi rujukan. */
