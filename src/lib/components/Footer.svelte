@@ -85,20 +85,19 @@
 <footer class="bg-bg" data-no-hover-sound data-no-click-sound>
 	<div class="mx-auto max-w-[1500px] px-6 pb-6 pt-20 lg:px-10">
 		<!-- Tagline besar di tengah koridor foto (khusus landing): dua rel foto
-			arsip melaju dari titik hilang ke arah penonton, tagline (animasi
-			huruf bergulirnya tetap) duduk di atasnya. -->
+			arsip melaju dari titik hilang ke arah penonton, tagline duduk di
+			atasnya. Label + judul memudar masuk/keluar bersama mengikuti gulir
+			(satu-satunya gerak mereka), lihat SliceHeadline. -->
 		{#if isLanding}
 		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} class="ft-stream">
 			<div class="ft-stream-copy">
-				<p class="mb-4 font-display text-[1.05rem] font-bold uppercase leading-none tracking-[0.02em] text-safelight">{c.nav.tagline}</p>
-				<div class="mt-3">
-					<SliceHeadline
-						lineA={c.footer.taglineA}
-						smallA={c.footer.taglineEm}
-						smallB={c.footer.taglineB.trim().split(/\s+/)[0] ?? ""}
-						lineB={c.footer.taglineB.trim().split(/\s+/).slice(1).join(" ")}
-					/>
-				</div>
+				<SliceHeadline
+					kicker={c.nav.tagline}
+					lineA={c.footer.taglineA}
+					smallA={c.footer.taglineEm}
+					smallB={c.footer.taglineB.trim().split(/\s+/)[0] ?? ""}
+					lineB={c.footer.taglineB.trim().split(/\s+/).slice(1).join(" ")}
+				/>
 			</div>
 		</ImageStream>
 		{/if}
