@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { backNav } from "$lib/backNav";
 	import { goto } from "$app/navigation";
 	import ApiImage from "./ApiImage.svelte";
 	import gsap from "gsap";
@@ -46,6 +47,7 @@
 
 	const lang = $derived(i18n.lang);
 	const t = $derived(copy[lang]);
+	const back = backNav("/photos");
 
 	let license = $state<"personal" | "commercial">("personal");
 	let added = $state(false);
@@ -299,7 +301,7 @@
 			dua sisanya masing-masing punya tugas (kaki pelat = keterangan cetakan,
 			kepala slip = identitas dokumen). -->
 		<div class="mx-auto flex max-w-[1500px] items-center px-6 pb-6 lg:px-10">
-			<a href="/photos" class="arrow-link text-sm text-fg-muted hover:text-safelight">
+			<a href={back.href} onclick={back.onclick} class="arrow-link text-sm text-fg-muted hover:text-safelight">
 				<span class="arr">←</span> {t.back}
 			</a>
 		</div>
