@@ -1,12 +1,19 @@
 <script lang="ts">
 	import type { ApiResponse } from "../types";
 	import { apiGet } from "$lib/api";
+	import { access } from "$lib/access.svelte";
 	/**
-	 * Dinding logo pelanggan — potret 1:1 dari `logo-cloud-16` (React/shadcn)
-	 * ke Svelte. Token warna/usulan shadcn (`bg-background`, `muted-foreground`)
-	 * dipetakan ke token situs (`bg`, `fg-muted`, `hair`) supaya tetap satu
-	 * bahasa dengan kamar gelap. Tanpa dependensi baru: murni <img> + utility.
+	 * Dinding logo pelanggan: grid petak berbingkai tipis. Secara acak satu petak
+	 * buram lalu memudar, logonya berganti, lalu menajam kembali — satu-satunya gerak.
+	 *
+	 *  - Logo lebih banyak dari petak → yang masuk diambil dari logo cadangan.
+	 *  - Jumlah logo pas → dua petak bertukar logo.
+	 *
+	 * Berhenti saat tak terlihat dan saat kursor di atas petak; hover tetap seperti
+	 * biasa (logo makin terang). Reduce-motion: statis.
 	 */
+	type Logo = { key: string; name: string; src?: string; text?: string; cls?: string };
+
 	let {
 		eyebrow,
 		items = null,
@@ -36,12 +43,11 @@
 			alive = false;
 		};
 	});
-	const shown = $derived(uploaded?.length ? uploaded : (items?.length ? items : null));
+	const shown = $derived(uploaded?.length ? uploaded : items?.length ? items : null);
 
 	// Logo dummy sementara — wordmark teks sampai ada logo pelanggan asli.
-	// Tiap entri punya gaya huruf sendiri supaya terbaca sebagai deretan
-	// merek, bukan satu daftar biasa.
-	const logos = [
+	// Tiap entri punya gaya huruf sendiri supaya terbaca sebagai deretan merek.
+	const dummy = [
 		{ name: "NUSANTARA+", cls: "font-display font-light tracking-[0.08em]" },
 		{ name: "KALA", cls: "font-mono font-medium tracking-[0.3em]" },
 		{ name: "ruang·gelap", cls: "font-display italic font-light" },
@@ -50,34 +56,185 @@
 		{ name: "BINGKAI", cls: "font-mono text-[0.95em] tracking-[0.22em]" },
 		{ name: "Svara", cls: "font-sans font-medium italic" },
 	];
+
+	const pool = $derived<Logo[]>(
+		shown
+			? shown.map((l, i) => ({ key: `${l.src}-${i}`, name: l.name, src: l.src }))
+			: dummy.map((l, i) => ({ key: `d-${i}`, name: l.name, text: l.name, cls: l.cls })),
+	);
+
+	/** Jumlah petak: semua logo, paling banyak dua baris di layar lebar (4 kolom × 2). */
+	const MAX_CELLS = 8;
+	const FADE_MS = 420;
+
+	let slots = $state<Logo[]>([]);
+	let out = $state<boolean[]>([]);
+	let spares: Logo[] = [];
+	let hovered = -1;
+	let gridEl = $state<HTMLElement | null>(null);
+
+	// Isi petak dari kumpulan logo; gambar dimuat lebih dulu supaya pertukaran terlihat seketika.
+	$effect(() => {
+		const list = pool;
+		// Variabel lokal: membaca `slots` setelah menulisnya akan memicu efek ini lagi tanpa henti.
+		const cells = list.slice(0, MAX_CELLS);
+		slots = cells;
+		spares = list.slice(MAX_CELLS);
+		out = cells.map(() => false);
+		for (const l of list) {
+			if (l.src) {
+				const im = new Image();
+				im.src = l.src;
+			}
+		}
+	});
+
+	$effect(() => {
+		const el = gridEl;
+		if (!el) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || access.settings.reduceMotion) return;
+		let visible = false;
+		let timer = 0;
+		const timers = new Set<number>();
+		const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+		const later = (fn: () => void, ms: number) => {
+			const t = window.setTimeout(() => {
+				timers.delete(t);
+				fn();
+			}, ms);
+			timers.add(t);
+		};
+
+		const step = () => {
+			if (!visible) return;
+			const free: number[] = [];
+			slots.forEach((_, i) => {
+				if (!out[i] && i !== hovered) free.push(i);
+			});
+			if (free.length >= 2 || (free.length === 1 && spares.length)) {
+				const i = free.splice(Math.floor(Math.random() * free.length), 1)[0]!;
+				if (spares.length) {
+					// Satu petak: keluar buram → ganti dengan logo cadangan → masuk tajam.
+					out[i] = true;
+					later(() => {
+						const k = Math.floor(Math.random() * spares.length);
+						const incoming = spares[k]!;
+						spares[k] = slots[i]!;
+						slots[i] = incoming;
+						out[i] = false;
+					}, FADE_MS);
+				} else {
+					// Tak ada cadangan: dua petak bertukar logo.
+					const j = free[Math.floor(Math.random() * free.length)]!;
+					out[i] = true;
+					out[j] = true;
+					later(() => {
+						const a = slots[i]!;
+						slots[i] = slots[j]!;
+						slots[j] = a;
+						out[i] = false;
+						out[j] = false;
+					}, FADE_MS);
+				}
+			}
+			timer = window.setTimeout(step, rnd(900, 1700));
+		};
+
+		const io = new IntersectionObserver(
+			([entry]) => {
+				const was = visible;
+				visible = !!entry?.isIntersecting;
+				if (visible && !was) timer = window.setTimeout(step, 600);
+				if (!visible) window.clearTimeout(timer);
+			},
+			{ threshold: 0.2 },
+		);
+		io.observe(el);
+		return () => {
+			io.disconnect();
+			window.clearTimeout(timer);
+			timers.forEach((t) => window.clearTimeout(t));
+		};
+	});
 </script>
 
 <div data-reveal class="flex items-center justify-between border-t border-hair pt-3">
 	<span class="kicker text-fg-muted">{eyebrow}</span>
 </div>
-<div class="mt-12 flex flex-wrap items-center justify-center gap-x-14 gap-y-10 sm:gap-x-20">
-	{#if shown}
-		{#each shown as logo, li (logo.src + "-" + li)}
-			<span data-reveal>
-				<img
-					src={logo.src}
-					alt={logo.name}
-					loading="lazy"
-					decoding="async"
-					draggable={false}
-					class="h-10 w-auto brightness-0 invert opacity-55 transition-opacity duration-200 hover:opacity-90 sm:h-12"
-				/>
-			</span>
-		{/each}
-	{:else}
-		{#each logos as logo, li (logo.name + "-" + li)}
-		<span data-reveal>
-			<span
-				class={`whitespace-nowrap text-3xl text-fg-muted opacity-50 transition-all duration-200 hover:opacity-100 sm:text-5xl ${logo.cls}`}
-			>
-				{logo.name}
+<div bind:this={gridEl} data-reveal class="lc-grid mt-12">
+	{#each slots as logo, i (i)}
+		<span
+			class="lc-tile"
+			role="presentation"
+			onpointerenter={() => (hovered = i)}
+			onpointerleave={() => (hovered = -1)}
+		>
+			<span class="lc-face" class:is-out={out[i]}>
+				{#if logo.src}
+					<img
+						src={logo.src}
+						alt={logo.name}
+						decoding="async"
+						draggable={false}
+						class="lc-img h-full w-full object-contain brightness-0 invert opacity-55 transition-opacity duration-200 hover:opacity-90"
+					/>
+				{:else}
+					<span
+						class={`lc-text whitespace-nowrap text-xl text-fg-muted opacity-60 transition-opacity duration-200 hover:opacity-100 sm:text-2xl ${logo.cls ?? ""}`}
+					>
+						{logo.text}
+					</span>
+				{/if}
 			</span>
 		</span>
-		{/each}
-	{/if}
+	{/each}
 </div>
+
+<style>
+	/* Petak berbingkai tipis: bingkainya adalah strukturnya, tanpa bayangan atau hiasan. */
+	.lc-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+	@media (min-width: 640px) {
+		.lc-grid {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			gap: 0.75rem;
+		}
+	}
+	.lc-tile {
+		display: grid;
+		place-items: center;
+		height: clamp(4.5rem, 9vw, 7.25rem);
+		padding: 0 1.25rem;
+		border: 1px solid var(--hair);
+		border-radius: 4px;
+		background: color-mix(in srgb, var(--fg) 2.5%, transparent);
+	}
+	/* Muka petak: yang berganti. Keluar = buram + pudar; masuk = menajam kembali. */
+	.lc-face {
+		/* flex + min-height 0 supaya logo yang lebar/tinggi diperkecil ke dalam petak (di grid baris
+		   otomatis, max-height persen tak membatasi dan logo menembus bingkai). */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 0;
+		width: 100%;
+		height: 56%;
+		opacity: 1;
+		filter: blur(0);
+		transition:
+			opacity 0.42s ease,
+			filter 0.42s ease;
+	}
+	.lc-face.is-out {
+		opacity: 0;
+		filter: blur(10px);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.lc-face {
+			transition: none;
+		}
+	}
+</style>
