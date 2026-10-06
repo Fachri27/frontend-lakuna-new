@@ -1,6 +1,5 @@
 <script lang="ts">
 import { probeCredit, coverBackground } from "$lib/creditCrop";
-import { primePageTurn, playPageTurn, PAGE_TURN_VOLUME, PAGE_TURN_EXIT_VOLUME } from "$lib/pageTurn";
 import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	import { imgFor, type Photo } from "$lib/data";
@@ -149,12 +148,7 @@ import gsap from "gsap";
 		// atau berlomba dengan pin peta saat refresh.
 		void count;
 
-		// Bunyi balik halaman per foto yang tiba di depan orbit: preload sekali di sini.
-		primePageTurn();
-		// Keadaan tiap foto pada pembaruan sebelumnya: -1 belum masuk, 0 di
-		// orbit, 1 sudah keluar. null = belum dicatat (refresh di tengah
-		// section tidak boleh berbunyi tanpa gerakan).
-		let photoState: number[] | null = null;
+		// Galeri orbit TANPA bunyi (dulu bunyi balik halaman per foto, lib/pageTurn.ts — kini tak dipakai).
 
 		const stageEl = pinNode.querySelector<HTMLElement>(".cg-stage");
 		const ctx = gsap.context(() => {
@@ -308,47 +302,6 @@ import gsap from "gsap";
 				end: () => `bottom bottom+=${pinNode.offsetHeight}`,
 			onUpdate: (self) => {
 				const progress = self.progress;
-
-				// ── Bunyi balik halaman ───────────────────────────────
-				// Tiap foto berbunyi saat MUNCUL (imgT melewati 0) dan, lebih
-				// pelan, saat HILANG (melewati 1) — dua arah gulir, sampai
-				// foto terakhir keluar. Dulu hanya saat "foto terdepan"
-				// berganti: di ekor orbit terdepan tak berganti lagi, jadi
-				// foto-foto yang keluar sampai section tertutup diam saja.
-				// Ambang bunyi mengikuti yang TERLIHAT, bukan t = 0 / 1: di t ≈ 0 foto masih
-				// jauh di luar layar kiri dan transparan (alpha baru penuh di t = 0,06), jadi
-				// bunyinya mendahului gambar. Diukur: semua bunyi masuk berbunyi saat foto 0%
-				// di dalam layar. Kini bunyi masuk saat foto sudah tampil penuh di layar, dan
-				// bunyi keluar saat foto mulai meninggalkan layar (bukan sesudah hilang).
-				const SOUND_ENTER_T = 0.08;
-				const SOUND_EXIT_T = 0.95;
-				const now = Array.from({ length: count }, (_, i) => {
-					const t = progress * totalRange - i * stagger;
-					return t <= SOUND_ENTER_T ? -1 : t >= SOUND_EXIT_T ? 1 : 0;
-				});
-				// Pembaruan pertama tepat di awal section (masuk dari atas):
-				// anggap semua foto belum masuk, supaya foto pertama yang sudah
-				// mulai terbang ikut berbunyi. Di tengah section (refresh) tetap
-				// hanya dicatat — tanpa gerakan, tanpa bunyi.
-				if (!photoState && progress < 0.04) photoState = now.map(() => -1);
-				if (photoState) {
-					// Dihitung PER FOTO: beberapa foto yang berganti keadaan dalam
-					// satu pembaruan (gulir cepat) masing-masing tetap berbunyi,
-					// berurutan dengan jeda pendek — bukan dilebur jadi satu.
-					const queue: number[] = [];
-					for (let i = 0; i < count; i++) {
-						const was = photoState[i];
-						const is = now[i];
-						if (was === is) continue;
-						if (is === 0) queue.unshift(PAGE_TURN_VOLUME); // masuk orbit
-						else if (was === 0) queue.push(PAGE_TURN_EXIT_VOLUME); // keluar orbit
-					}
-					queue.forEach((vol, k) => {
-						if (k === 0) playPageTurn(vol);
-						else window.setTimeout(() => playPageTurn(vol), k * 110);
-					});
-				}
-				photoState = now;
 
 					// ── Angkat panggung ───────────────────────────────────
 					// Pin baru menempel saat puncak section tiba di puncak layar;
