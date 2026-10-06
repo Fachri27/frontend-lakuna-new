@@ -2,6 +2,7 @@
 	import { i18n, type Lang } from "$lib/i18n.svelte";
 	import { ADDRESS, COMPANY, CONTACT_EMAIL, mailto } from "$lib/contact";
 	import PageShell from "./PageShell.svelte";
+	import SupportForm from "./SupportForm.svelte";
 
 	const copy: Record<Lang, {
 		title: string; sub: string;
@@ -9,6 +10,7 @@
 		before: string; beforeBody: string; faq: string; help: string;
 		include: string; items: { title: string; body: string }[];
 		subject: string;
+		formTitle: string; formLead: string;
 	}> = {
 		id: {
 			title: "Layanan pelanggan",
@@ -29,6 +31,8 @@
 				{ title: "Yang terjadi dan yang kamu harapkan", body: "Ceritakan singkat. Tangkapan layar membantu bila ada pesan galat" },
 			],
 			subject: "Bantuan Lakuna",
+			formTitle: "Kirim pesan",
+			formLead: "Tulis kendalamu di sini. Kami membalas lewat email, dan ID pesanan akan mempercepatnya",
 		},
 		en: {
 			title: "Customer service",
@@ -49,6 +53,8 @@
 				{ title: "What happened and what you expected", body: "A short description. A screenshot helps if there is an error message" },
 			],
 			subject: "Lakuna support",
+			formTitle: "Send a message",
+			formLead: "Tell us what went wrong. We reply by email, and an order ID speeds things up",
 		},
 	};
 
@@ -57,6 +63,14 @@
 </script>
 
 <PageShell title={t.title} sub={t.sub}>
+	<section class="pg-rule sv-row">
+		<div>
+			<h2 class="pg-h2">{t.formTitle}</h2>
+			<p class="pg-p sv-lead">{t.formLead}</p>
+		</div>
+		<div class="sv-col sv-form"><SupportForm /></div>
+	</section>
+
 	<section class="pg-rule sv-row">
 		<h2 class="pg-h2">{t.reach}</h2>
 		<div class="sv-col">
@@ -111,6 +125,14 @@
 	}
 	.sv-col {
 		max-width: 52ch;
+	}
+	.sv-lead {
+		margin-top: 0.75rem;
+		max-width: 38ch;
+	}
+	/* Kolom form tak perlu dibatasi 52ch seperti teks bacaan. */
+	.sv-form {
+		max-width: 60ch;
 	}
 	.sv-col > * + * {
 		margin-top: 1.75rem;
