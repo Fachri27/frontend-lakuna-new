@@ -622,6 +622,8 @@
 		const isTouch = window.matchMedia("(pointer: coarse)").matches;
 		const TOUCH_SPEED = 1.35;
 		let lastRiseAt = 0;
+		// Kapan posisi gulir terakhir dipulihkan (Back dari halaman lain). -Infinity = belum pernah.
+		let restoredAt = -Infinity;
 		// Penunda perapat posisi sebelum kamera bergerak (lihat dive()).
 		let alignT: ReturnType<typeof setTimeout> | undefined;
 
@@ -726,6 +728,10 @@
 			end: "bottom bottom",
 			onUpdate: (self) => {
 				const p = self.progress;
+				// Back ke landing: posisi gulir dipulihkan (homeScroll) — jangan menyelam/mendarat/naik selama
+				// itu dan sebentar sesudahnya; keadaannya diselesaikan oleh onHomeRestored. Tanpa ini posisi yang
+				// meleset 2px dari ujung track dianggap "naik dari peta" → rise() → antarmuka hero menimpa peta.
+				if (document.documentElement.classList.contains("home-restoring") || performance.now() - restoredAt < 1500) return;
 				// Gulir ke atas lewat tombol: hanya kembalikan peta ke globe (tanpa merebut gulir); jangan
 				// menyelam / mendarat / menahan posisi.
 				if (document.documentElement.dataset.scrollingTop) {
@@ -751,6 +757,12 @@
 				}
 			},
 		});
+		// Posisi gulir selesai dipulihkan (Back): bila ada di dalam track peta, langsung mendarat secara diam-diam.
+		const onHomeRestored = () => {
+			restoredAt = performance.now();
+			if (mode === "hero" && st.progress > 0.5) jumpLanded();
+		};
+		window.addEventListener("lakuna:home-restored", onHomeRestored);
 		// Ukur ulang yang sopan: tunda sampai gulir tenang supaya tidak
 		// menendang posisi pin di tengah guliran pertama.
 		const refresh = () => calmRefresh();
@@ -770,6 +782,7 @@
 		ro.observe(document.documentElement);
 		return () => {
 			window.removeEventListener("load", refresh);
+			window.removeEventListener("lakuna:home-restored", onHomeRestored);
 			ro.disconnect();
 			clearTimeout(rt);
 			clearTimeout(alignT);

@@ -89,6 +89,8 @@ export function installHomeScrollRestore() {
 					requestAnimationFrame(() => {
 						jump(saved.y);
 						root().classList.remove("home-restoring");
+						// Komponen globe menunggu ini: posisi di dalam track peta = sudah mendarat (tanpa rise()).
+						window.dispatchEvent(new Event("lakuna:home-restored"));
 					}),
 				);
 				return;
