@@ -1554,15 +1554,23 @@ a.ias-card:focus-visible {
 .im-dv-compass-w { left: -0.85rem; top: 50%; transform: translateY(-50%); }
 .im-dv-compass-e { right: -0.85rem; top: 50%; transform: translateY(-50%); }
 
-.im-dv-meta {
+.im-dv-info {
   position: absolute;
   left: clamp(16px, 2vw, 30px);
-  bottom: calc(clamp(92px, 13vh, 120px) + 2.6rem);
+  bottom: calc(clamp(92px, 13vh, 120px) + 0.6rem);
+  max-width: min(62ch, 60vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  z-index: 10;
+}
+.im-dv-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  max-width: min(62ch, 60vw);
+  max-width: 100%;
 }
 .im-dv-meta-name {
   color: var(--im-ink);
@@ -1574,15 +1582,11 @@ a.ias-card:focus-visible {
   color: var(--color-safelight);
 }
 .im-dv-cap {
-  position: absolute;
-  left: clamp(16px, 2vw, 30px);
-  bottom: calc(clamp(92px, 13vh, 120px) + 0.6rem);
   max-width: min(52ch, 55vw);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  z-index: 10;
 }
 .im-dv-caption {
   margin: 0;
@@ -1595,6 +1599,9 @@ a.ias-card:focus-visible {
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--safelight) 60%, transparent);
   text-underline-offset: 4px;
+}
+.im-dv-caption--link {
+  pointer-events: auto;
 }
 .im-dv-caption--link:hover {
   color: var(--safelight);
@@ -1610,23 +1617,6 @@ a.ias-card:focus-visible {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.im-dv-goto {
-  display: inline-block;
-  margin-top: 0.25rem;
-  padding: 0.55rem 1.2rem;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  color: var(--im-ink);
-  transition: border-color 0.25s, color 0.25s;
-}
-.im-dv-goto:hover {
-  border-color: var(--safelight);
-  color: var(--safelight);
-}
-
 /* filmstrip */
 /* File HD di atas thumbnail; memudar masuk begitu termuat. */
 .im-dv-hd {

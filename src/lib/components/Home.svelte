@@ -1368,7 +1368,7 @@
 			</div>
 
 		{#if droneItems.length > 0}
-			<div bind:this={dragViewEl} class="dg-view" role="region" aria-label="Contact sheet">
+			<div bind:this={dragViewEl} class="dg-view" role="region" aria-label="Contact sheet" data-no-hover-sound data-no-click-sound>
 				<div bind:this={reelLgEl} class="dg-track">
 					{#each droneItems as v, i (v.id + "-" + i)}
 								<a
@@ -1574,9 +1574,9 @@
 				adalah "watermark-nya hilang tidak?", jadi dijawab dengan file
 				sungguhan, bukan kalimat. Digeser sendiri oleh pembaca — gerak yang
 				menjawab aksi, bukan animasi yang jalan sendiri. -->
-			<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:gap-12">
-				<figure data-reveal class="cmp @container lg:col-span-7">
-					<div class="cmp-stage">
+		<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:items-stretch lg:gap-12">
+			<figure data-reveal class="cmp @container flex flex-col lg:col-span-7 lg:h-full">
+				<div class="cmp-stage lg:flex-auto">
 						<img class="cmp-img" src={compareShot.watermarkUrl} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
 						<div class="cmp-clean" style={`clip-path: inset(0 0 0 ${comparePos}%)`}>
 							<img
@@ -1605,7 +1605,7 @@
 					<figcaption class="mt-3 overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80">{s.compareRes}</figcaption>
 				</figure>
 
-				<div data-reveal data-no-hover-sound data-no-click-sound class="flex flex-col lg:col-span-5">
+				<div data-reveal data-no-hover-sound data-no-click-sound class="flex flex-col lg:col-span-5 lg:h-full">
 					<h3 class="font-display text-[clamp(1.5rem,2.6vw,2.1rem)] font-light leading-tight tracking-[-0.01em] text-fg">
 						{s.compareTitle}
 					</h3>
@@ -1630,9 +1630,9 @@
 						</button>
 					</div>
 
-					<!-- Panel mengisi sisa tinggi kolom (sejajar dengan gambar
-						perbandingan): deskripsi, harga, manfaat, lalu tombol di dasar. -->
-					<div class="ben-panel">
+				<!-- Panel mengisi sisa tinggi kolom (sejajar dengan gambar
+					perbandingan): deskripsi, harga, manfaat, lalu tombol di dasar. -->
+				<div class="ben-panel h-full">
 						<p class="ben-when">{benefitPlan === "PREMIUM" ? s.subscribeWhen : s.standarWhen}</p>
 						<p class="ben-price">
 							{#if (benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) != null}

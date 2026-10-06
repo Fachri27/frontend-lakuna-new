@@ -5,7 +5,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { fmtIDR, imgFor, fetchCategories, pickTitle, type ApiCatItem } from "$lib/data";
-	import { api, apiGet, apiPost, apiDelete, ApiError } from "$lib/api";
+	import { api, apiGet, apiPost, apiPatch, apiDelete, ApiError } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiFavorite, ApiDownload, ApiOrder, ApiSubscription, ApiUser } from "$lib/types";
 	import ApiImage from "./ApiImage.svelte";
@@ -22,6 +22,14 @@
 			nextPage: "Halaman berikutnya", prevPage: "Sebelumnya",
 			noFav: "Belum ada favorit", noFavCta: "Cari bingkai favoritmu", noFavFiltered: "Belum ada favorit di jenis ini", logout: "Keluar",
 			account: "Akun", username: "Nama pengguna", email: "Email",
+			realName: "Nama asli", editProfile: "Ubah profil", saveProfile: "Simpan perubahan", saving: "Menyimpan…",
+			profileOk: "Profil diperbarui", profileFail: "Gagal menyimpan profil. Coba lagi",
+			changePw: "Ganti kata sandi", currentPw: "Kata sandi saat ini", newPw: "Kata sandi baru", confirmPw: "Konfirmasi kata sandi baru",
+			pwMismatch: "Konfirmasi kata sandi tidak cocok", pwMin: "Kata sandi baru minimal 6 karakter",
+			pwOk: "Kata sandi berhasil diubah", pwFail: "Gagal mengganti kata sandi. Coba lagi",
+			nlTitle: "Nawala", nlBody: "Kabar kurasi dan promo dari Lakuna", nlOn: "Berlangganan", nlOff: "Berhenti", nlFail: "Gagal mengubah langganan nawala",
+			delTitle: "Hapus akun", delBody: "Tindakan ini permanen dan tidak bisa dibatalkan. Semua favorit, keranjang, dan riwayatmu ikut terhapus.",
+			delType: "Ketik DELETE untuk yakin", delGo: "Hapus permanen", delFail: "Gagal menghapus akun. Coba lagi",
 			quota: "Kuota", downloadsEmpty: "Unduhanmu akan muncul di sini setelah pembelian", manage: "Kelola langganan",
 			subEmpty: "Kamu belum berlangganan", subEmptyCta: "Lihat paket", billingMonthly: "Bulanan", billingAnnual: "Tahunan",
 			subStarted: "Mulai", subExpires: "Berakhir", subStatusActive: "Aktif", subStatusExpired: "Kedaluwarsa", subStatusCancelled: "Dibatalkan", subStatusInactive: "Nonaktif",
@@ -79,6 +87,14 @@
 			nextPage: "Next Page", prevPage: "Previous",
 			noFav: "No favourites yet", noFavCta: "Find your favourite frames", noFavFiltered: "No favourites of this type yet", logout: "Sign out",
 			account: "Account", username: "Username", email: "Email",
+			realName: "Real name", editProfile: "Edit profile", saveProfile: "Save changes", saving: "Saving…",
+			profileOk: "Profile updated", profileFail: "Couldn't save profile. Try again",
+			changePw: "Change password", currentPw: "Current password", newPw: "New password", confirmPw: "Confirm new password",
+			pwMismatch: "Password confirmation doesn't match", pwMin: "New password must be at least 6 characters",
+			pwOk: "Password changed", pwFail: "Couldn't change password. Try again",
+			nlTitle: "Newsletter", nlBody: "Curation news and promos from Lakuna", nlOn: "Subscribed", nlOff: "Unsubscribed", nlFail: "Couldn't change newsletter setting",
+			delTitle: "Delete account", delBody: "This is permanent and can't be undone. Your favourites, cart, and history go with it.",
+			delType: "Type DELETE to confirm", delGo: "Delete permanently", delFail: "Couldn't delete account. Try again",
 			quota: "Quota", downloadsEmpty: "Your downloads will appear here after purchase", manage: "Manage membership",
 			subEmpty: "You don't have a subscription yet", subEmptyCta: "See plans", billingMonthly: "Monthly", billingAnnual: "Annual",
 			subStarted: "Started", subExpires: "Expires", subStatusActive: "Active", subStatusExpired: "Expired", subStatusCancelled: "Cancelled", subStatusInactive: "Inactive",
@@ -231,6 +247,120 @@
 			avSaving = false;
 			// Beri waktu gambar server termuat sebelum URL lokal dilepas.
 			setTimeout(() => URL.revokeObjectURL(local), 4000);
+		}
+	}
+
+	// ── Pengaturan akun ("My Profile"): ubah username/nama asli,
+	// ganti kata sandi, nawala, hapus akun. ──
+	let profName = $state("");
+	let profReal = $state("");
+	let profBusy = $state(false);
+	let profMsg = $state("");
+	let profErr = $state("");
+	let profLoaded = $state(false);
+	let nlActive = $state(true);
+	let nlBusy = $state(false);
+	let nlErr = $state("");
+	let pwCur = $state("");
+	let pwNew = $state("");
+	let pwConfirm = $state("");
+	let pwBusy = $state(false);
+	let pwMsg = $state("");
+	let pwErr = $state("");
+	let delInput = $state("");
+	let delBusy = $state(false);
+	let delErr = $state("");
+	const delArmed = $derived(delInput.trim() === "DELETE");
+
+	function fillProfileFromMe(me: { username?: string; realName?: string | null; newsletter?: boolean }) {
+		if (!profLoaded) {
+			profName = me.username ?? "";
+			profReal = me.realName ?? "";
+			profLoaded = true;
+		}
+		if (typeof me.newsletter === "boolean") nlActive = me.newsletter;
+	}
+
+	async function saveProfile() {
+		if (profBusy) return;
+		profBusy = true;
+		profMsg = "";
+		profErr = "";
+		try {
+			const res = await apiPatch<ApiResponse<ApiUser>>("/api/users/me", {
+				username: profName.trim(),
+				realName: profReal.trim(),
+			});
+			if (res.success) {
+				fillProfileFromMe({ username: res.data.username, realName: res.data.realName, newsletter: res.data.newsletter });
+				profName = res.data.username;
+				profReal = res.data.realName ?? "";
+				if (typeof res.data.newsletter === "boolean") nlActive = res.data.newsletter;
+				if (store.user) store.user = { ...store.user, name: res.data.username };
+				profMsg = t.profileOk;
+			}
+		} catch (err) {
+			profErr = err instanceof ApiError && err.message ? err.message : t.profileFail;
+		} finally {
+			profBusy = false;
+		}
+	}
+
+	async function toggleNewsletter() {
+		if (nlBusy) return;
+		nlBusy = true;
+		nlErr = "";
+		const next = !nlActive;
+		try {
+			const res = await apiPatch<ApiResponse<ApiUser>>("/api/users/me/newsletter", { active: next });
+			if (res.success && typeof res.data?.newsletter === "boolean") nlActive = res.data.newsletter;
+			else nlActive = next;
+		} catch (err) {
+			nlErr = err instanceof ApiError && err.message ? err.message : t.nlFail;
+		} finally {
+			nlBusy = false;
+		}
+	}
+
+	async function changePassword(e: SubmitEvent) {
+		e.preventDefault();
+		if (pwBusy) return;
+		pwMsg = "";
+		pwErr = "";
+		if (pwNew !== pwConfirm) {
+			pwErr = t.pwMismatch;
+			return;
+		}
+		if (pwNew.length < 6) {
+			pwErr = t.pwMin;
+			return;
+		}
+		pwBusy = true;
+		try {
+			await apiPost<ApiResponse<unknown>>("/api/users/me/password", { current: pwCur, new: pwNew });
+			pwMsg = t.pwOk;
+			pwCur = "";
+			pwNew = "";
+			pwConfirm = "";
+		} catch (err) {
+			pwErr = err instanceof ApiError && err.message ? err.message : t.pwFail;
+		} finally {
+			pwBusy = false;
+		}
+	}
+
+	async function deleteAccount() {
+		if (delBusy || !delArmed) return;
+		delBusy = true;
+		delErr = "";
+		try {
+			await apiDelete<ApiResponse<unknown>>("/api/users/me");
+			delInput = "";
+			await store.logout();
+			await goto("/", { replaceState: true });
+		} catch (err) {
+			delErr = err instanceof ApiError && err.message ? err.message : t.delFail;
+			delBusy = false;
 		}
 	}
 
@@ -622,7 +752,10 @@
 		if (!user) return;
 		// Avatar tidak disimpan di store, jadi diambil sekali di sini.
 		apiGet<ApiResponse<ApiUser>>("/api/users/me").then((res) => {
-			if (res.success) avatarUrl = res.data.avatarUrl;
+			if (res.success) {
+				avatarUrl = res.data.avatarUrl;
+				fillProfileFromMe(res.data);
+			}
 		}).catch(() => {});
 		apiGet<ApiResponse<ApiFavorite[]>>("/api/favorite").then((res) => {
 			if (res.success) {
@@ -941,6 +1074,143 @@
 							<dd class="min-w-0 flex-1 truncate text-fg" title={user.email}>{user.email}</dd>
 						</div>
 					</dl>
+
+					<h3 class="pp-sub">{t.editProfile}</h3>
+					<form
+						class="max-w-lg"
+						onsubmit={(e) => {
+							e.preventDefault();
+							void saveProfile();
+						}}
+					>
+						{#if profMsg}<p role="status" class="rounded-[10px] bg-green-500/10 px-4 py-3 text-sm text-green-400">{profMsg}</p>{/if}
+						{#if profErr}<p role="alert" class="rounded-[10px] bg-red-500/10 px-4 py-3 text-sm text-red-400">{profErr}</p>{/if}
+						<div class="border-t border-hair">
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.username}</span>
+								<input
+									type="text"
+									bind:value={profName}
+									minlength={3}
+									maxlength={30}
+									autocomplete="username"
+									class="up-input"
+									placeholder={user.name}
+								/>
+							</label>
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.realName}</span>
+								<input
+									type="text"
+									bind:value={profReal}
+									maxlength={100}
+									autocomplete="name"
+									class="up-input"
+									placeholder="—"
+								/>
+							</label>
+						</div>
+						<button
+							type="submit"
+							disabled={profBusy}
+							class="press mt-5 rounded-full bg-safelight px-7 py-3 text-sm font-medium text-ivory disabled:opacity-60"
+						>
+							{profBusy ? t.saving : t.saveProfile}
+						</button>
+					</form>
+
+					<h3 class="pp-sub">{t.changePw}</h3>
+					<form class="max-w-lg" onsubmit={changePassword}>
+						{#if pwMsg}<p role="status" class="rounded-[10px] bg-green-500/10 px-4 py-3 text-sm text-green-400">{pwMsg}</p>{/if}
+						{#if pwErr}<p role="alert" class="rounded-[10px] bg-red-500/10 px-4 py-3 text-sm text-red-400">{pwErr}</p>{/if}
+						<div class="border-t border-hair">
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.currentPw}</span>
+								<input
+									type="password"
+									bind:value={pwCur}
+									required
+									autocomplete="current-password"
+									class="up-input"
+									placeholder="••••••••"
+								/>
+							</label>
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.newPw}</span>
+								<input
+									type="password"
+									bind:value={pwNew}
+									required
+									minlength={6}
+									maxlength={72}
+									autocomplete="new-password"
+									class="up-input"
+									placeholder="••••••••"
+								/>
+							</label>
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.confirmPw}</span>
+								<input
+									type="password"
+									bind:value={pwConfirm}
+									required
+									minlength={6}
+									maxlength={72}
+									autocomplete="new-password"
+									class="up-input"
+									placeholder="••••••••"
+								/>
+							</label>
+						</div>
+						<button
+							type="submit"
+							disabled={pwBusy}
+							class="press mt-5 rounded-full bg-safelight px-7 py-3 text-sm font-medium text-ivory disabled:opacity-60"
+						>
+							{pwBusy ? t.saving : t.changePw}
+						</button>
+					</form>
+
+					<h3 class="pp-sub">{t.nlTitle}</h3>
+					<div class="pp-box flex max-w-lg flex-wrap items-center justify-between gap-4">
+						<p class="min-w-0 flex-1 text-sm text-fg-muted">{t.nlBody}</p>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={nlActive}
+							aria-label={t.nlTitle}
+							disabled={nlBusy}
+							onclick={toggleNewsletter}
+							class="pp-ghost shrink-0 disabled:opacity-60"
+						>
+							{nlActive ? t.nlOn : t.nlOff}
+						</button>
+					</div>
+					{#if nlErr}<p role="alert" class="mt-3 max-w-lg text-sm text-red-400">{nlErr}</p>{/if}
+
+					<h3 class="pp-sub">{t.delTitle}</h3>
+					<div class="pp-box max-w-lg">
+						<p class="text-sm leading-relaxed text-fg-muted">{t.delBody}</p>
+						<label class="mt-4 block">
+							<span class="kicker text-fg-muted">{t.delType}</span>
+							<input
+								type="text"
+								bind:value={delInput}
+								placeholder="DELETE"
+								autocomplete="off"
+								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
+							/>
+						</label>
+						{#if delErr}<p role="alert" class="mt-3 text-sm text-red-400">{delErr}</p>{/if}
+						<button
+							type="button"
+							disabled={!delArmed || delBusy}
+							onclick={deleteAccount}
+							class="press mt-4 w-full rounded-full border border-red-500/40 py-3 text-sm font-medium text-red-400 transition-transform hover:scale-[1.01] disabled:opacity-40"
+						>
+							{delBusy ? t.saving : t.delGo}
+						</button>
+					</div>
 
 					<h3 class="pp-sub">{t.subscription}</h3>
 					{#if !hasSub || !sub}

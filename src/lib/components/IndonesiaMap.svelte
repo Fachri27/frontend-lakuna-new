@@ -10,7 +10,7 @@
 	import { polarCapsLayer } from "$lib/polarCaps";
 	import { nightTile, nightTileUrl, type NightMode } from "$lib/nightTiles";
 	import { i18n } from "$lib/i18n.svelte";
-	import { catLabel, fetchMapHotspots, fetchPhotoOriginal, imgFor, type MapHotspot } from "$lib/data";
+	import { catLabel, fetchMapHotspots, fetchPhotoById, fetchPhotoOriginal, imgFor, type MapHotspot } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
 
 	gsap.registerPlugin(ScrollTrigger);
@@ -36,6 +36,7 @@
 			close: "Tutup",
 			prev: "Sebelumnya",
 			next: "Berikutnya",
+			detail: "Lihat detail foto",
 			frame: "Bingkai",
 			plate: "Galeri",
 			pano: "Panorama",
@@ -64,6 +65,7 @@
 			close: "Close",
 			prev: "Previous",
 			next: "Next",
+			detail: "View photo detail",
 			frame: "Frame",
 			plate: "Gallery",
 			pano: "Panorama",
@@ -1639,7 +1641,7 @@
 		});
 	}
 	/** Kotak berkeliling panggung foto (keterangan, tombol, petunjuk). */
-	const DV_CHROME = ".im-dv-meta, .im-dv-caption, .im-dv-hint, .im-dv-close, .im-dv-veil, .im-dv-strip-wrap";
+	const DV_CHROME = ".im-dv-meta, .im-dv-cap, .im-dv-info, .im-dv-hint, .im-dv-close, .im-dv-veil, .im-dv-strip-wrap";
 	// Tutup: keterangan pergi, foto terbakar (±0,25 dtk), CUT ke peta yang
 	// pulih dari terbakar ke normal.
 	let closing = false;
@@ -1815,6 +1817,26 @@
 	// saat dibuka; selagi menunggu / bila gagal, pratinjau ber-watermark.
 	// "" = sudah dicoba tapi tak tersedia.
 	let originals = $state<Record<string, string>>({});
+	// Meta foto untuk blok keterangan (judul + deskripsi + tombol detail).
+	let shotMeta = $state<{ id: string; title: string; desc: string } | null>(null);
+	$effect(() => {
+		const id = viewing != null ? shot?.id : undefined;
+		if (!id) {
+			shotMeta = null;
+			return;
+		}
+		let alive = true;
+		shotMeta = null;
+		void fetchPhotoById(id)
+			.then((p) => {
+				if (!alive || !p) return;
+				shotMeta = { id: p.id, title: p.title[lang] || "", desc: p.desc?.[lang] || "" };
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	});
 	$effect(() => {
 		const id = viewing != null ? shot?.id : undefined;
 		if (!id || id in originals) return;
@@ -1872,7 +1894,7 @@
 
 		<div class="im-hud">
 
-			<div class="im-cluster im-reveal">
+			<div class="im-cluster im-reveal" data-no-hover-sound data-no-click-sound>
 				{#if touchDevice}
 					<button
 						type="button"
@@ -1939,7 +1961,7 @@
 		</div>
 
 		{#if viewing != null && hot && shot}
-			<div bind:this={dvRoot} class="im-dv" role="dialog" aria-modal="true" aria-label={hot.name}>
+			<div bind:this={dvRoot} class="im-dv" role="dialog" aria-modal="true" aria-label={hot.name} data-no-hover-sound data-no-click-sound>
 				<div
 					bind:this={dvStage}
 					class="im-dv-stage {zoomed ? "is-zoomed" : ""}"
@@ -1990,6 +2012,7 @@
 				</button>
 
 
+				<div class="im-dv-info">
 				<div class="im-dv-meta im-mono">
 					<span class="im-dv-meta-name">{splitPlace(hot.name).place}</span>
 					{#if splitPlace(hot.name).region}
@@ -2005,7 +2028,19 @@
 					<span>{catLabel[hot.cat][lang]}</span>
 				</div>
 
-				<p class="im-dv-caption">{shot.caption[lang]}</p>
+				<div class="im-dv-cap">
+					{#if shotMeta?.id}
+						<a href={`/photos/${shotMeta.id}`} class="im-dv-caption im-dv-caption--link">
+							{shotMeta.title || shot.caption[lang]}
+						</a>
+					{:else}
+						<p class="im-dv-caption">{shot.caption[lang]}</p>
+					{/if}
+					{#if shotMeta?.desc}
+						<p class="im-dv-desc">{shotMeta.desc}</p>
+					{/if}
+				</div>
+				</div>
 
 				<div class="im-dv-strip-wrap" data-no-hover-sound data-no-click-sound>
 					<div bind:this={dvStrip} class="im-dv-strip">
