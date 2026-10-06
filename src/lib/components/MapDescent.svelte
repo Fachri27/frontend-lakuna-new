@@ -674,7 +674,7 @@
 			}
 		}
 
-		function rise() {
+		function rise(opts?: { noScroll?: boolean }) {
 			if (mode === "rising" || mode === "hero") return;
 			mode = "rising";
 			lastRiseAt = performance.now();
@@ -686,7 +686,8 @@
 			// Kamera kembali selama sisa timeline yang diputar mundur.
 			cam!.rise((tl.time() / speed) * 1000);
 			tl.timeScale(speed).reverse();
-			scrollToY(trackStart(), tl.time() / speed);
+			// Tombol "ke atas" sedang menggulir melewati sini: jangan rebut gulirnya (dulu berhenti di awal globe).
+			if (!opts?.noScroll) scrollToY(trackStart(), tl.time() / speed);
 		}
 		diveFn = dive;
 
@@ -725,6 +726,12 @@
 			end: "bottom bottom",
 			onUpdate: (self) => {
 				const p = self.progress;
+				// Gulir ke atas lewat tombol: hanya kembalikan peta ke globe (tanpa merebut gulir); jangan
+				// menyelam / mendarat / menahan posisi.
+				if (document.documentElement.dataset.scrollingTop) {
+					if (self.direction === -1 && mode === "landed" && p < 0.999) rise({ noScroll: true });
+					return;
+				}
 				if (self.direction === 1 && mode === "hero") {
 					// Lompatan jauh (End, anchor) melewati track: langsung mendarat
 					// tanpa menarik gulir kembali ke atas.
