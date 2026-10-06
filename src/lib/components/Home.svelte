@@ -214,6 +214,8 @@
 	const subscribeFrom = $derived(
 		plans.length > 0 ? Math.min(...plans.map((p) => p.priceMonthly)) : null,
 	);
+	// Kuota pilihan pada baris Premium: harga di sampingnya mengikuti kuota yang dipilih.
+	let pickedQuota = $state<number | null>(null);
 
 	// Kurasi CMS (section `klip`): hanya video terpilih yang tampil di contact
 	// sheet, sesuai urutan pilih. Kosong = video terbaru otomatis.
@@ -720,6 +722,16 @@
 	const rateImg = $derived(imgFor("rate-sheet", 2400, 1400, hargaSec?.imageUrl || hp["manifesto"]?.imageUrl));
 	// Tangga kuota langganan — angka asli dari API, tiga tingkat teratas.
 	const quotaLadder = $derived([...new Set(plans.map((p) => p.quota))].sort((a, b) => a - b).slice(0, 3));
+	// Belum dipilih = tingkat terendah (yang menjadi harga "mulai dari"). Pilihan yang sudah tak ada di
+	// tangga (data paket berubah) jatuh kembali ke tingkat terendah.
+	const quotaSel = $derived(
+		pickedQuota != null && quotaLadder.includes(pickedQuota) ? pickedQuota : (quotaLadder[0] ?? null),
+	);
+	const quotaPrice = $derived.by(() => {
+		if (quotaSel == null) return null;
+		const prices = plans.filter((p) => p.quota === quotaSel).map((p) => p.priceMonthly);
+		return prices.length ? Math.min(...prices) : null;
+	});
 	// Tiga bingkai contoh: yang dibayar per bingkai memang isi arsip ini.
 	const rateFrames = $derived(
 		standarType === "VIDEO"
@@ -1510,7 +1522,7 @@
 				</a>
 			</div>
 
-			<a data-reveal href="/pricing" class="rate-row group">
+			<div data-reveal class="rate-row group">
 				<div class="rate-name">
 					<h3 class="font-display text-[1.6rem] leading-tight text-fg">
 						{s.subscribe}
@@ -1519,36 +1531,41 @@
 					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">{s.subscribeDesc}</p>
 				</div>
 				{#if quotaLadder.length}
-					<span class="rate-ladder">
+					<span class="rate-ladder" role="group" aria-label={s.quotaUnit}>
 						{#each quotaLadder as q, qi (q + "-" + qi)}
-							<span class="rate-chip">{q}</span>
+							<button
+								type="button"
+								class="rate-chip"
+								aria-pressed={quotaSel === q}
+								onclick={() => (pickedQuota = q)}
+							>{q}</button>
 						{/each}
 						<span class="rate-chip-unit">{s.quotaUnit}</span>
 					</span>
 				{:else}
 					<span aria-hidden="true" class="rate-lead"></span>
 				{/if}
-				<p class="rate-price">
-					{#if subscribeFrom != null}
-						<span class="rate-from">{s.from}</span><span class="rate-num">{fmtIDR(subscribeFrom)}</span><span class="rate-unit">{s.perMonth}</span>
+				<p class="rate-price" aria-live="polite">
+					{#if quotaPrice != null}
+						<span class="rate-num">{fmtIDR(quotaPrice)}</span><span class="rate-unit">{s.perMonth}</span>
 					{:else}
 						<span class="rate-num text-fg-muted">…</span>
 					{/if}
 				</p>
-				<span class="rate-cta">{s.subscribeCta}</span>
-			</a>
+				<a class="rate-cta" href="/pricing">{s.subscribeCta}</a>
+			</div>
 
 			<!-- Harga custom: tak ada angka tetap, jadi barisnya menjawab
 				"hubungi kami", bukan "pilih paket". -->
-			<a data-reveal href={customHref} class="rate-row group">
+			<div data-reveal class="rate-row group">
 				<div class="rate-name">
 					<h3 class="font-display text-[1.6rem] leading-tight text-fg">{s.custom}</h3>
 					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">{s.customDesc}</p>
 				</div>
 				<span aria-hidden="true" class="rate-lead"></span>
 				<p class="rate-price"><span class="rate-num">{s.customPrice}</span></p>
-				<span class="rate-cta">{s.customCta}</span>
-			</a>
+				<a class="rate-cta" href={customHref}>{s.customCta}</a>
+			</div>
 			</Reveal>
 		</div>
 
@@ -2270,13 +2287,11 @@
 		overflow: hidden;
 		border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
 		filter: grayscale(0.3);
-		transition: filter 0.4s ease, transform 0.4s ease;
+		transition: filter 0.4s ease;
 	}
+	/* Hanya warna yang berubah saat hover; bingkai tidak bergerak. */
 	.rate-row:hover .rate-frame {
 		filter: grayscale(0);
-	}
-	.rate-row:hover .rate-frame:nth-child(2) {
-		transform: translateY(-3px);
 	}
 	.rate-ladder {
 		display: flex;
@@ -2294,6 +2309,21 @@
 		font-size: 0.8rem;
 		letter-spacing: 0.04em;
 		color: color-mix(in srgb, var(--fg) 88%, transparent);
+		background: transparent;
+		cursor: pointer;
+		transition: border-color 0.25s ease, background-color 0.25s ease, color 0.25s ease;
+	}
+	.rate-chip:hover {
+		border-color: color-mix(in srgb, var(--safelight) 75%, transparent);
+	}
+	.rate-chip[aria-pressed="true"] {
+		border-color: var(--safelight);
+		background: color-mix(in srgb, var(--safelight) 18%, transparent);
+		color: var(--fg);
+	}
+	.rate-chip:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: 2px;
 	}
 	.rate-chip-unit {
 		font-family: var(--font-mono);
