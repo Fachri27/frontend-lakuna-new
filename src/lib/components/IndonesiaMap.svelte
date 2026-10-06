@@ -198,6 +198,8 @@
 	const NUSANTARA: [[number, number], [number, number]] = [[-11.2, 94.6], [6.4, 141.4]];
 	// Zoom MapLibre = zoom Leaflet − 1 (ubin 512 vs 256 px) untuk skala yang sama.
 	const FOCUS_Z = 6;
+	/** Seberapa jauh peta boleh diperkecil dari tampilan ringkasan Nusantara (tingkat zoom). */
+	const LANDED_ZOOM_OUT = 0.3;
 	const CLUSTER_MAX_Z = 10;
 	const FLY_DUR = 0.9;
 
@@ -827,12 +829,21 @@
 				phase = "landed";
 			}
 
-			// Batas zoom-out peta: satu tingkat di luar bingkai Nusantara, paling jauh zoom 3 (globe dengan tepi
-			// bumi mulai tampak). Hanya berlaku di fase peta: kamera hero (globe di landing) dan selam/naik
-			// memakai zoom di sekitar 3 yang di layar kecil bisa lebih rendah, jadi tak boleh ikut terjepit.
-			const landedMinZoom = () => Math.max(0, Math.min(3, overviewCamera().zoom - 1));
+			// Batas zoom-out peta: hanya ±0,3 tingkat di luar bingkai Nusantara (tepi bumi baru mulai tampak,
+			// bukan globe utuh). Relatif terhadap tampilan ringkasan supaya sama di semua ukuran layar.
+			// Hanya berlaku di fase peta: kamera hero (globe di landing) dan selam/naik memakai zoom yang di
+			// layar kecil bisa lebih rendah, jadi tak boleh ikut terjepit.
+			// Dasarnya zoom yang benar-benar dipakai saat mendarat (dicatat sekali), BUKAN overviewCamera() yang
+			// dihitung ulang: hasilnya bisa berbeda dari kamera pendaratan (panel judul memengaruhi bingkai) dan
+			// batasnya jadi lebih tinggi dari zoom peta. Dikosongkan saat keluar dari fase peta.
+			let zoomBase = 0;
+			const landedMinZoom = () => {
+				if (!zoomBase) zoomBase = mm.getZoom();
+				return Math.max(0, zoomBase - LANDED_ZOOM_OUT);
+			};
 
 			setInteractiveRef = (on: boolean) => {
+				if (!on) zoomBase = 0;
 				mm.setMinZoom(on ? landedMinZoom() : 0);
 				// Desktop: mengikuti tombol geser (panOn). Layar sentuh: cubit dan
 				// geser DUA jari menyala begitu mendarat, tanpa menekan tombol —
@@ -1199,8 +1210,9 @@
 					// (tanpa ini batas lama bisa menjepit tampilan ringkasan di layar yang lebih kecil).
 					mm.setMinZoom(0);
 					const cam = overviewCamera();
-					mm.setMinZoom(Math.max(0, Math.min(3, cam.zoom - 1)));
 					if (!dragged) mm.jumpTo(cam);
+					zoomBase = cam.zoom;
+					mm.setMinZoom(Math.max(0, zoomBase - LANDED_ZOOM_OUT));
 				}
 			});
 			ro.observe(el);
