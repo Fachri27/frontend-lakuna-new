@@ -237,6 +237,11 @@ img[src*="/watermark/"] {
     text-rendering: optimizeLegibility;
     scroll-behavior: auto; /* Lenis owns smoothing; reduced-motion keeps auto */
   }
+  /* Judul bukan teks yang diedit/dipilih: kursor panah biasa, bukan I-beam. Judul di dalam tautan
+     atau tombol (kartu yang bisa diklik) tetap mewarisi kursor tangan. */
+  :where(h1, h2, h3, h4, h5, h6):not(:is(a, button, [role="button"], label) *) {
+    cursor: default;
+  }
   /* Lenis smooth-scroll essentials (inlined to avoid bare-specifier @import) */
   html.lenis,
   html.lenis body {
@@ -1568,15 +1573,58 @@ a.ias-card:focus-visible {
 .im-dv-meta-clock {
   color: var(--color-safelight);
 }
-.im-dv-caption {
+.im-dv-cap {
   position: absolute;
   left: clamp(16px, 2vw, 30px);
   bottom: calc(clamp(92px, 13vh, 120px) + 0.6rem);
   max-width: min(52ch, 55vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  z-index: 10;
+}
+.im-dv-caption {
+  margin: 0;
   font-family: var(--font-body);
   font-size: clamp(0.85rem, 1.5vw, 1.05rem);
   line-height: 1.35;
   color: rgba(239, 231, 220, 0.9);
+}
+.im-dv-caption--link {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--safelight) 60%, transparent);
+  text-underline-offset: 4px;
+}
+.im-dv-caption--link:hover {
+  color: var(--safelight);
+}
+.im-dv-desc {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: clamp(0.75rem, 1.2vw, 0.88rem);
+  line-height: 1.5;
+  color: rgba(239, 231, 220, 0.65);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.im-dv-goto {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.55rem 1.2rem;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--im-ink);
+  transition: border-color 0.25s, color 0.25s;
+}
+.im-dv-goto:hover {
+  border-color: var(--safelight);
+  color: var(--safelight);
 }
 
 /* filmstrip */
