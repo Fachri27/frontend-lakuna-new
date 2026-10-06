@@ -264,7 +264,8 @@
 
 	<div class="mt-8 flex flex-col gap-2.5 sm:flex-row">
 		{#if kind === "paid"}
-			<a href="/profile" class="pr-btn pr-btn--primary">{isPlanOrder ? t.toProfile : t.toDownloads}</a>
+			<!-- Pembelian foto/video: langsung ke tab Unduhan di profil; langganan: profil biasa. -->
+			<a href={isPlanOrder ? "/profile" : "/profile?tab=downloads"} class="pr-btn pr-btn--primary">{isPlanOrder ? t.toProfile : t.toDownloads}</a>
 			<a href="/photos" class="pr-btn">{t.toPhotos}</a>
 		{:else if kind === "failed"}
 			<a href={retryHref} class="pr-btn pr-btn--primary">{t.payAgain}</a>
