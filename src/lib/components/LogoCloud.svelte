@@ -65,7 +65,8 @@
 
 	/** Jumlah petak: semua logo, paling banyak dua baris di layar lebar (4 kolom × 2). */
 	const MAX_CELLS = 8;
-	const FADE_MS = 420;
+	/** Lama memudar/menajam (ms) — harus sama dengan durasi transisi CSS `.lc-face`. */
+	const FADE_MS = 1000;
 
 	let slots = $state<Logo[]>([]);
 	let out = $state<boolean[]>([]);
@@ -137,7 +138,7 @@
 					}, FADE_MS);
 				}
 			}
-			timer = window.setTimeout(step, rnd(900, 1700));
+			timer = window.setTimeout(step, rnd(2200, 3800));
 		};
 
 		const io = new IntersectionObserver(
@@ -221,13 +222,14 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 0;
-		width: 85%;
-		height: 100%;
+		/* Logo diperkecil: ±55% tinggi dan 58% lebar ruangnya (sebelumnya penuh, terlalu besar). */
+		width: 58%;
+		height: 55%;
 		opacity: 1;
 		filter: blur(0);
 		transition:
-			opacity 0.42s ease,
-			filter 0.42s ease;
+			opacity 1s ease,
+			filter 1s ease;
 	}
 	.lc-face.is-out {
 		opacity: 0;
