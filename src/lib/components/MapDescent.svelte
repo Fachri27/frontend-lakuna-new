@@ -896,6 +896,17 @@
 		.md-sticky.is-hero .im-grain {
 			visibility: hidden;
 		}
+		/* Kebalikannya: begitu keluar dari hero (menyelam/mendarat/naik), teks & tombol hero tak boleh
+		   terlihat. Memudar lewat opacity bisa tertimpa tween lain (kemunculan intro / reveal) sehingga
+		   tombol "Mendarat" tertinggal di atas peta. !important karena reveal memasang visibility inline. */
+		.md-sticky:not(.is-hero) .md-eyebrow,
+		.md-sticky:not(.is-hero) .md-title,
+		.md-sticky:not(.is-hero) .md-sub,
+		.md-sticky:not(.is-hero) .md-meta,
+		.md-sticky:not(.is-hero) .md-cta {
+			visibility: hidden !important;
+			pointer-events: none !important;
+		}
 		/* Marker hanya ada di peta yang sudah mendarat — juga selama menukik,
 		   supaya tiap penyelaman sama dengan yang pertama. */
 		.md-sticky:not(.is-landed) .maplibregl-marker {
