@@ -155,6 +155,13 @@ import gsap from "gsap";
 		// orbit, 1 sudah keluar. null = belum dicatat (refresh di tengah
 		// section tidak boleh berbunyi tanpa gerakan).
 		let photoState: number[] | null = null;
+		// Pemulihan gulir (Back ke landing) melompat melewati galeri sehingga semua foto "berganti keadaan"
+		// sekaligus — itu bukan gerakan pengguna di galeri, jadi senyap: selama pemulihan dan sebentar sesudahnya.
+		let silentUntil = 0;
+		const onHomeRestored = () => {
+			silentUntil = performance.now() + 1500;
+		};
+		window.addEventListener("lakuna:home-restored", onHomeRestored);
 
 		const stageEl = pinNode.querySelector<HTMLElement>(".cg-stage");
 		const ctx = gsap.context(() => {
@@ -331,7 +338,12 @@ import gsap from "gsap";
 				// mulai terbang ikut berbunyi. Di tengah section (refresh) tetap
 				// hanya dicatat — tanpa gerakan, tanpa bunyi.
 				if (!photoState && progress < 0.04) photoState = now.map(() => -1);
-				if (photoState) {
+				const restoring =
+					document.documentElement.classList.contains("home-restoring") || performance.now() < silentUntil;
+				// Berbunyi hanya bila galeri benar-benar sedang di layar: belum membuka bagian ini = diam.
+				const gr = sectionNode.getBoundingClientRect();
+				const onScreen = gr.top < window.innerHeight && gr.bottom > 0;
+				if (photoState && !restoring && onScreen) {
 					// Dihitung PER FOTO: beberapa foto yang berganti keadaan dalam
 					// satu pembaruan (gulir cepat) masing-masing tetap berbunyi,
 					// berurutan dengan jeda pendek — bukan dilebur jadi satu.
@@ -430,6 +442,7 @@ import gsap from "gsap";
 		});
 
 		return () => {
+			window.removeEventListener("lakuna:home-restored", onHomeRestored);
 			ctx?.revert();
 		};
 	});
