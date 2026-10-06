@@ -113,7 +113,31 @@ import gsap from "gsap";
 
 	const count = $derived(Math.min(photos.length, MAX_IMG));
 
+	// Ukuran orbit diturunkan dari lebar layar SAAT dibangun. Tanpa ini, halaman yang dibuka di jendela
+	// sempit (atau dengan DevTools terbuka) lalu diperbesar tetap memakai kartu kecil. Dibangun ulang
+	// bila LEBAR berubah ≥ 60px (tinggi diabaikan: bilah alamat ponsel mengubahnya saat gulir).
+	let widthKey = $state(0);
 	$effect(() => {
+		let lastW = window.innerWidth;
+		let t: ReturnType<typeof setTimeout> | undefined;
+		const onResize = () => {
+			clearTimeout(t);
+			t = setTimeout(() => {
+				if (Math.abs(window.innerWidth - lastW) >= 60) {
+					lastW = window.innerWidth;
+					widthKey++;
+				}
+			}, 350);
+		};
+		window.addEventListener("resize", onResize);
+		return () => {
+			clearTimeout(t);
+			window.removeEventListener("resize", onResize);
+		};
+	});
+
+	$effect(() => {
+		void widthKey;
 		const sectionNode = sectionEl;
 		const pinNode = pinEl;
 		if (!sectionNode || !pinNode) return;
