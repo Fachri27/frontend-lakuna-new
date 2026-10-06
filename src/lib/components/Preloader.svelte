@@ -264,6 +264,9 @@
 		// saat diafragma membuka.
 		let lensAudio: HTMLAudioElement | null = null;
 		try {
+			// Suara dimatikan (bawaan): bunyi lensa tak dimuat/diputar, dan lensa tak menunggu ketukan
+			// "izin audio" (lihat `sound` di bawah).
+			if (!soundOn()) throw new Error("suara mati");
 			lensAudio = new Audio(LENS_OPEN_SRC);
 			lensAudio.preload = "auto";
 			lensAudio.volume = LENS_VOLUME;
@@ -275,7 +278,7 @@
 			lensAudio = null;
 		}
 
-		let sound: "checking" | "auto" | "blocked" = lensAudio ? "checking" : "blocked";
+		let sound: "checking" | "auto" | "blocked" = lensAudio ? "checking" : soundOn() ? "blocked" : "auto";
 		let opening = false;
 		let played = false;
 

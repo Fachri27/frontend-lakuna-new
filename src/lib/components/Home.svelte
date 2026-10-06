@@ -515,11 +515,13 @@
 	let heroMuted = $state(true);
 	/** Pilihan pengguna: "off" = sengaja dimatikan lewat tombol (diingat). */
 	const SOUND_KEY = "lakuna-hero-sound";
+	// Bawaan "off": video hero bisu. Hanya bersuara bila pengunjung sendiri menekan tombol suara
+	// (tersimpan "on"); penyalaan otomatis (gestur pertama / lensa membuka) tak lagi berlaku.
 	function soundPref(): "on" | "off" {
 		try {
-			return localStorage.getItem(SOUND_KEY) === "off" ? "off" : "on";
+			return localStorage.getItem(SOUND_KEY) === "on" ? "on" : "off";
 		} catch {
-			return "on";
+			return "off";
 		}
 	}
 	let heroInView = true;
@@ -530,9 +532,10 @@
 		gsap.to(v, { volume: to, duration: dur, ease: "power1.out", overwrite: true });
 	}
 	/** Coba nyalakan suara; kembalikan false bila browser menolak. */
-	async function unmuteHero(): Promise<boolean> {
+	async function unmuteHero(force = false): Promise<boolean> {
 		const v = heroVideoEl;
-		if (!v || soundPref() === "off" || !soundOn()) return false;
+		// `force` = klik tombol suara hero: pilihan sengaja pengunjung, tak ikut saklar global.
+		if (!v || (!force && (soundPref() === "off" || !soundOn()))) return false;
 		v.volume = 0;
 		v.muted = false;
 		try {
@@ -553,7 +556,7 @@
 			// Menyalakan suara video = preferensi hero sendiri; tidak
 			// menyentuh saklar suara UI navbar (keduanya independen).
 			try { localStorage.setItem(SOUND_KEY, "on"); } catch { /* abaikan */ }
-			void unmuteHero();
+			void unmuteHero(true);
 		} else {
 			try { localStorage.setItem(SOUND_KEY, "off"); } catch { /* abaikan */ }
 			v.muted = true;
