@@ -1390,6 +1390,9 @@
 								{/if}
 								<span class="dg-cap">
 									<span class="dg-title">{v.title[lang]}</span>
+									{#if v.author && v.author !== "Unknown"}
+										<span class="dg-by">{v.author}</span>
+									{/if}
 								</span>
 							</a>
 					{/each}
@@ -1968,6 +1971,18 @@
 		font-family: var(--font-display);
 		font-size: 1rem;
 		font-weight: 500;
+	}
+	/* Nama fotografer di bawah judul: lebih kecil & redup supaya judul tetap yang utama. */
+	.dg-by {
+		display: block;
+		margin-top: 0.2rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.78rem;
+		font-weight: 400;
+		letter-spacing: 0.01em;
+		color: rgba(255, 255, 255, 0.72);
 	}
 	/* Hover = satu garis ungu di tepi bawah yang memanjang dari kiri — sama dengan
 	   kartu foto di /photos (Masonry), bukan bingkai penuh. Fokus keyboard tetap
