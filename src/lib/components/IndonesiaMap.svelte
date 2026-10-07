@@ -200,6 +200,10 @@
 	const NUSANTARA: [[number, number], [number, number]] = [[-11.2, 94.6], [6.4, 141.4]];
 	// Zoom MapLibre = zoom Leaflet − 1 (ubin 512 vs 256 px) untuk skala yang sama.
 	const FOCUS_Z = 6;
+	/** Batas resolusi render peta (rasio piksel), lihat opsi `pixelRatio` pada pembuatan Map. */
+	const MAP_MAX_DPR = 1.5;
+	/** Jarak minimum antar gambar ulang globe di fase hero (ms) ≈ 30 fps. */
+	const HERO_FRAME_MS = 32;
 	/** Seberapa jauh peta boleh diperkecil dari tampilan ringkasan Nusantara (tingkat zoom). */
 	const LANDED_ZOOM_OUT = 0.3;
 	const CLUSTER_MAX_Z = 10;
@@ -677,6 +681,10 @@
 
 			const mm = new ml.Map({
 				container: el,
+				// Resolusi render globe dibatasi: di layar retina (DPR 2) globe layar penuh dirender 4× piksel
+				// (2880×1800), padahal citra satelit/ubin malamnya tak mendapat apa-apa dari itu; 1,5× memangkas
+				// piksel ±44% dan tetap tajam. Marker/HUD adalah DOM, tak terpengaruh.
+				pixelRatio: Math.min(window.devicePixelRatio || 1, MAP_MAX_DPR),
 				style: {
 					version: 8,
 					projection: { type: "globe" },
@@ -930,6 +938,7 @@
 				);
 				visIo.observe(sectionEl);
 			}
+			let lastJump = 0;
 			const roll = (now: number) => {
 				raf = requestAnimationFrame(roll);
 				const dt = Math.min(0.1, (now - last) / 1000);
@@ -944,6 +953,10 @@
 				const k = 1 - Math.exp(-dt / PTR_TAU);
 				ptrX += (ptrAimX - ptrX) * k;
 				ptrY += (ptrAimY - ptrY) * k;
+				// Gambar ulang globe hero ±30 fps: gelindingnya lambat dan meredam kursor, jadi 60 fps tak
+				// terlihat bedanya, tapi tiap render globe layar penuh itu mahal (terutama di laptop tanpa GPU kuat).
+				if (now - lastJump < HERO_FRAME_MS) return;
+				lastJump = now;
 				mm.jumpTo(heroCamera(el, heroLat, heroLift));
 			};
 			if (bare) raf = requestAnimationFrame(roll);
