@@ -764,7 +764,8 @@
 							layout: { visibility: "none" as const },
 							maxzoom: 4.4,
 							paint: {
-								"raster-fade-duration": 150,
+								// Ubin malam yang tiba belakangan (kamera bergulir) muncul memudar pelan, bukan "menyala" mendadak.
+								"raster-fade-duration": 700,
 								"raster-opacity": nightOpacityExpr(m.key),
 							},
 						})),
@@ -1351,14 +1352,39 @@
 	 */
 	let nightReveal = false;
 	let nightLast = "";
+	// Ubin malam dimuat dulu, baru dinaikkan opasitasnya. Siklus siang–malam dimulai dari malam penuh, sedangkan
+	// ubin malam baru mulai diunduh saat lapisan dinampakkan dan tiba SATU PER SATU: tanpa penahan ini tiap ubin
+	// yang tiba langsung tampil gelap pada opasitas penuh (kotak hitam muncul satu-satu di globe). Sekarang opasitas
+	// ditahan 0 sampai semua ubin malam di bingkai selesai (maks 6 dtk), lalu dinaikkan mulus dalam NIGHT_RAMP_MS.
+	const NIGHT_RAMP_MS = 1400;
+	const NIGHT_LOAD_MAX_MS = 6000;
+	const NIGHT_LOAD_MIN_MS = 500;
+	let nightRevealAt = 0;
+	let nightReadyAt = 0;
 	export function setNightMix(full: number, west: number, east: number) {
 		const mm = map;
 		if (!mm || !mm.getLayer("nightFull")) return;
+		const now = performance.now();
 		if (!nightReveal) {
 			nightReveal = true;
+			nightRevealAt = now;
 			for (const m of NIGHT_MODES) mm.setLayoutProperty(m.id, "visibility", "visible");
 		}
-		const v = [full, west, east].map((n) => Math.min(1, Math.max(0, n)));
+		if (!nightReadyAt) {
+			// isSourceLoaded bisa true sesaat sebelum permintaan ubin dikirim: beri waktu minimum dulu.
+			const loaded =
+				now - nightRevealAt > NIGHT_LOAD_MIN_MS &&
+				NIGHT_MODES.every((m) => {
+					try {
+						return mm.isSourceLoaded(m.id);
+					} catch {
+						return false;
+					}
+				});
+			if (loaded || now - nightRevealAt > NIGHT_LOAD_MAX_MS) nightReadyAt = now;
+		}
+		const ramp = nightReadyAt ? Math.min(1, (now - nightReadyAt) / NIGHT_RAMP_MS) : 0;
+		const v = [full, west, east].map((n) => Math.min(1, Math.max(0, n)) * ramp);
 		const sig = v.map((n) => n.toFixed(2)).join("|");
 		if (sig === nightLast) return;
 		nightLast = sig;
