@@ -629,6 +629,7 @@
 		let ro: ResizeObserver | null = null;
 		let raf = 0;
 		let nearIo: IntersectionObserver | null = null;
+		let visIo: IntersectionObserver | null = null;
 		ready = false;
 		(async () => {
 			// Peta (±800 KB JS, WebGL, ubin satelit, pramuat ubin) baru dibuat saat
@@ -914,11 +915,26 @@
 
 			// ── Kamera hero: gelinding bawah → atas yang melambat ────────────
 			let last = performance.now();
+			// Globe hanya digambar ulang tiap frame bila bagian peta dekat layar. Dulu loop ini memanggil
+			// mm.jumpTo SETIAP frame sejak peta dibuat — globe layar penuh terus dirender saat pengunjung
+			// melihat hero video, contact sheet, atau footer, dan itu sumber utama gulir berat di landing
+			// (uji A/B: tanpa kanvas peta median frame 33 → 17 ms, frame >50 ms 42 → 5).
+			let onScreen = true;
+			if (sectionEl && typeof IntersectionObserver !== "undefined") {
+				visIo = new IntersectionObserver(
+					(es) => {
+						onScreen = !!es.at(-1)?.isIntersecting;
+						if (onScreen) last = performance.now();
+					},
+					{ rootMargin: "40% 0px" },
+				);
+				visIo.observe(sectionEl);
+			}
 			const roll = (now: number) => {
 				raf = requestAnimationFrame(roll);
 				const dt = Math.min(0.1, (now - last) / 1000);
 				last = now;
-				if (phase !== "hero" || document.hidden) return;
+				if (phase !== "hero" || document.hidden || !onScreen) return;
 				if (rollOn && !reduced) {
 					rollT += dt;
 					heroLat = HERO_LAT_TO + (HERO_LAT_FROM - HERO_LAT_TO) * Math.exp(-rollT / HERO_ROLL_TAU);
@@ -1250,6 +1266,7 @@
 			disposed = true;
 			delete document.documentElement.dataset.mapIdle;
 			nearIo?.disconnect();
+			visIo?.disconnect();
 			cancelAnimationFrame(raf);
 			ro?.disconnect();
 			reclusterRef = null;
