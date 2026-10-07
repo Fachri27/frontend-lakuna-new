@@ -160,7 +160,8 @@
 		font-style: italic;
 		font-weight: 300;
 		font-variation-settings: normal;
-		font-size: 0.2em;
+		/* Batas bawah ±13px: di tablet 0,2em × 40px = 8px tak terbaca. */
+		font-size: max(0.2em, 0.8rem);
 		line-height: 1;
 		letter-spacing: 0;
 		color: var(--safelight);
@@ -174,8 +175,9 @@
 		.sl-row--in {
 			padding-left: 0.3em;
 		}
+		/* Sisipan italic tak boleh lebih kecil dari ±13px di ponsel (dulu 0,26em × 28px ≈ 7px: tak terbaca). */
 		.sl-small {
-			font-size: 0.26em;
+			font-size: max(0.26em, 0.8rem);
 		}
 	}
 </style>

@@ -83,7 +83,9 @@
 <!-- Tanpa garis atas: section di atas (etalase) larut ke --bg yang sama.
 	Seluruh footer zona senyap: tak ada bunyi hover/klik di tautan mana pun. -->
 <footer class="bg-bg" data-no-hover-sound data-no-click-sound>
-	<div class="mx-auto max-w-[1500px] px-6 pb-6 pt-20 lg:px-10">
+	<!-- pb-24 di ponsel: tombol Help (kiri) dan panah ke atas (kanan) melayang di dasar layar dan menimpa baris
+		hak cipta; ruang ekstra membuat baris itu bisa digulir ke atas mereka. -->
+	<div class="mx-auto max-w-[1500px] px-6 pb-24 pt-20 md:pb-6 lg:px-10">
 		<!-- Tagline besar di tengah koridor foto (khusus landing): dua rel foto
 			arsip melaju dari titik hilang ke arah penonton, tagline duduk di
 			atasnya. Label + judul memudar masuk/keluar bersama mengikuti gulir
@@ -196,6 +198,13 @@
 	   (9,4vw) supaya kartu di kiri-kanan tetap terbaca sebagai koridor. */
 	.ft-stream-copy :global(.sl) {
 		font-size: clamp(1.8rem, 5vw, 4.5rem);
+	}
+	/* Ponsel: 5vw hanya ±20px/28px — tagline jadi kecil sekali di layar 390px. Dibesarkan agar terbaca
+	   (±41px), sedangkan kartu koridor tetap terlihat di kiri-kanan. */
+	@media (max-width: 639px) {
+		.ft-stream-copy :global(.sl) {
+			font-size: clamp(2.2rem, 10.5vw, 2.9rem);
+		}
 	}
 	/* Genangan gelap lembut di belakang tagline: kartu yang lewat di tengah
 	   tak pernah menabrak keterbacaan huruf. */
