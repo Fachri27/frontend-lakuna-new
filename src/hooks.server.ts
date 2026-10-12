@@ -55,9 +55,9 @@ const CSP = [
 	// custom (/payment/pay) — data kartu dikirim langsung ke Midtrans.
 	"script-src 'self' 'unsafe-inline' https://accounts.google.com https://api.midtrans.com https://api.sandbox.midtrans.com",
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
- 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.trycloudflare.com https://*.googleusercontent.com https://api.midtrans.com https://api.sandbox.midtrans.com " +
+ 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.trycloudflare.com https://*.googleusercontent.com https://*.up.railway.app https://api.midtrans.com https://api.sandbox.midtrans.com " +
 		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
-	`media-src 'self' blob: https://*.trycloudflare.com ${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
+	`media-src 'self' blob: https://*.trycloudflare.com https://*.up.railway.app ${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
 	"font-src 'self' data: https://fonts.gstatic.com",
 	"connect-src 'self' https://gibs.earthdata.nasa.gov https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://api.midtrans.com https://api.sandbox.midtrans.com ws: wss: " +
 		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,

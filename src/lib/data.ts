@@ -950,7 +950,7 @@ const GEOCODE: GeoEntry[] = [
   { lat: -7.7, lng: 110.0, aliases: ["dieng", "sikunir", "telaga warna"] },
   { lat: -7.81, lng: 109.97, aliases: ["pengilon"] },
   { lat: 0.47, lng: 101.44, aliases: ["riau", "pekanbaru", "siak", "bukit tiga puluh"] },
-  { lat: -2.99, lng: 104.76, aliases: ["lampung", "kalianda", "krakatau", "anak krakatau"] },
+  { lat: -2.99, lng: 104.76, aliases: ["lampung", "lampung timur", "kalianda", "krakatau", "anak krakatau"] },
   { lat: 1.13, lng: 104.05, aliases: ["lingga", "singkep", "batam", "bintan", "riau islands"] },
   { lat: -0.5, lng: 130.5, aliases: ["raja ampat", "wayag", "fam", "piaynemo", "arborek", "waisai"] },
   { lat: -0.9, lng: 131.3, aliases: ["sorong", "maladumkata"] },
@@ -980,6 +980,34 @@ const GEOCODE: GeoEntry[] = [
   // Kalimantan
   { lat: -2.21, lng: 113.92, aliases: ["palangkaraya", "palangka raya"] },
   { lat: 3.3, lng: 117.63, aliases: ["tarakan"] },
+  // Tingkat provinsi (titik tengah): cadangan untuk foto yang lokasinya hanya nama provinsi. Diletakkan paling
+  // akhir supaya kota/tempat yang lebih spesifik di atas selalu menang.
+  { lat: -0.74, lng: 100.8, aliases: ["sumatera barat", "sumatra barat"] },
+  { lat: -1.6, lng: 103.6, aliases: ["jambi"] },
+  { lat: -3.8, lng: 102.3, aliases: ["bengkulu"] },
+  { lat: -2.7, lng: 106.4, aliases: ["bangka belitung", "kepulauan bangka belitung", "bangka", "belitung"] },
+  { lat: 3.9, lng: 108.2, aliases: ["kepulauan riau"] },
+  { lat: -6.4, lng: 106.1, aliases: ["banten"] },
+  { lat: -6.9, lng: 107.6, aliases: ["jawa barat"] },
+  { lat: -7.15, lng: 110.14, aliases: ["jawa tengah"] },
+  { lat: -7.54, lng: 112.24, aliases: ["jawa timur"] },
+  { lat: -8.65, lng: 117.36, aliases: ["nusa tenggara barat", "ntb"] },
+  { lat: -9.5, lng: 121.0, aliases: ["nusa tenggara timur", "ntt"] },
+  { lat: 0.0, lng: 111.5, aliases: ["kalimantan barat"] },
+  { lat: -1.7, lng: 113.4, aliases: ["kalimantan tengah"] },
+  { lat: -3.0, lng: 115.3, aliases: ["kalimantan selatan"] },
+  { lat: 0.5, lng: 116.4, aliases: ["kalimantan timur"] },
+  { lat: 2.8, lng: 116.5, aliases: ["kalimantan utara"] },
+  { lat: 0.9, lng: 124.1, aliases: ["sulawesi utara"] },
+  { lat: 0.7, lng: 122.5, aliases: ["gorontalo"] },
+  { lat: -1.4, lng: 121.4, aliases: ["sulawesi tengah"] },
+  { lat: -2.5, lng: 119.2, aliases: ["sulawesi barat"] },
+  { lat: -3.7, lng: 119.9, aliases: ["sulawesi selatan"] },
+  { lat: -4.1, lng: 122.1, aliases: ["sulawesi tenggara"] },
+  { lat: 1.6, lng: 127.8, aliases: ["maluku utara"] },
+  { lat: -3.2, lng: 129.5, aliases: ["maluku"] },
+  { lat: -1.3, lng: 132.8, aliases: ["papua barat", "papua barat daya"] },
+  { lat: -4.3, lng: 138.1, aliases: ["papua", "papua tengah", "papua pegunungan", "papua selatan"] },
 ];
 
 function normalizeLoc(s: string): string {
