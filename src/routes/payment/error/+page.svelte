@@ -4,7 +4,7 @@
 
 	const sp = page.url.searchParams;
 	// order_id di-embed backend saat create invoice (ORDER-<uuid>) — sumber utama.
-	// Fallback: Xendit `external_id` atau Midtrans `order_id`.
+	// DOKU mengembalikan ke sini dengan `order_id` (lihat callback_url di API); Xendit lama: `external_id`.
 	// CATATAN KEAMANAN: hanya orderId yang diambil dari query param. Param
 	// status / transaction_status sengaja DIABAIKAN — status LUNAS hanya boleh
 	// berasal dari backend `/api/payment/check/{orderId}` (lihat PaymentResult).

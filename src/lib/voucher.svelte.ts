@@ -1,4 +1,34 @@
+import { apiPost, ApiError } from "./api";
+import type { ApiResponse } from "./types";
+
 const KEY = "lakuna-voucher-deadline";
+
+/** Hasil cek kode voucher untuk UI. */
+export type VoucherCheck =
+	| { ok: true; code: string; amount: number }
+	| { ok: false; reason: "invalid" | "login" | "error"; message?: string };
+
+/**
+ * Cek kode voucher ke POST /api/vouchers/validate. Nominal potongan SELALU diambil dari `discountAmount` API —
+ * di sana ada pembulatan, batas maxDiscount, dan batas harga yang sama dengan yang ditagih. Dulu dihitung ulang
+ * di tiap komponen (Math.round, tanpa maxDiscount) sehingga potongan yang tampil bisa lebih besar dari tagihan.
+ */
+export async function checkVoucher(
+	code: string,
+	scope: "ORDER" | "SUBSCRIPTION",
+	amount: number,
+): Promise<VoucherCheck> {
+	try {
+		const res = await apiPost<
+			ApiResponse<{ valid: boolean; reason?: string; voucher?: { code: string }; discountAmount: number }>
+		>("/api/vouchers/validate", { code, scope, amount });
+		if (!res.data?.valid || !res.data.voucher) return { ok: false, reason: "invalid", message: res.data?.reason };
+		return { ok: true, code: res.data.voucher.code, amount: res.data.discountAmount };
+	} catch (err) {
+		if (err instanceof ApiError && err.status === 401) return { ok: false, reason: "login" };
+		return { ok: false, reason: "error", message: err instanceof ApiError ? err.message : undefined };
+	}
+}
 
 /** Voucher aktif dari GET /api/vouchers/active. */
 export type ActiveVoucher = {

@@ -3,11 +3,11 @@
 	import { page } from "$app/state";
 	import { i18n, type Lang } from "$lib/i18n.svelte";
 	import { fmtIDR } from "$lib/data";
-	import { ApiError, apiPost } from "$lib/api";
-	import type { ApiResponse } from "$lib/types";
+	import { ApiError } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import { subscribeModal } from "$lib/subscribeModal.svelte";
 	import { startSubscription, type Billing } from "$lib/subscribePay";
+	import { checkVoucher } from "$lib/voucher.svelte";
 
 	const copy: Record<Lang, {
 		title: string; sub: string; quota: string; month: string; year: string; perMonthEq: string;
@@ -88,28 +88,15 @@
 		if (!code || validating || billing !== "annual" || amount <= 0) return;
 		validating = true;
 		voucherError = "";
-		try {
-			const res = await apiPost<ApiResponse<{ valid: boolean; reason?: string; voucher: { code: string; valueType: "PERCENT" | "NOMINAL"; value: number } }>>(
-				"/api/vouchers/validate",
-				{ code, scope: "SUBSCRIPTION", amount },
-			);
-			if (!res.data?.valid) {
-				appliedVoucher = null;
-				voucherError = res.data?.reason || t.voucherBad;
-				return;
-			}
-			const amt = res.data.voucher.valueType === "PERCENT"
-				? Math.round(amount * res.data.voucher.value / 100)
-				: res.data.voucher.value;
-			appliedVoucher = { code: res.data.voucher.code, amount: amt };
+		const r = await checkVoucher(code, "SUBSCRIPTION", amount);
+		validating = false;
+		if (r.ok) {
+			appliedVoucher = { code: r.code, amount: r.amount };
 			voucherInput = "";
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 401) voucherError = t.voucherNeedLogin;
-			else if (err instanceof ApiError) voucherError = err.message || t.voucherBad;
-			else voucherError = t.voucherBad;
-		} finally {
-			validating = false;
+			return;
 		}
+		if (r.reason === "invalid") appliedVoucher = null;
+		voucherError = r.reason === "login" ? t.voucherNeedLogin : r.message || t.voucherBad;
 	}
 
 	async function subscribe() {

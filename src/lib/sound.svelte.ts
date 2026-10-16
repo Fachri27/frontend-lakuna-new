@@ -12,14 +12,12 @@
  *   dan tidak ikut bisu.
  */const KEY = "lakuna-sound-muted";
 
-// Bawaan MATI: lensa preloader, rana peta, dan balik halaman galeri di landing tak berbunyi kecuali
-// pengunjung sendiri menyalakannya (setMuted(false) menyimpan "0"). Tak ada UI untuk saklar ini sekarang.
 function initial(): boolean {
-	if (typeof window === "undefined") return true;
+	if (typeof window === "undefined") return false;
 	try {
-		return localStorage.getItem(KEY) !== "0";
+		return localStorage.getItem(KEY) === "1";
 	} catch {
-		return true;
+		return false;
 	}
 }
 

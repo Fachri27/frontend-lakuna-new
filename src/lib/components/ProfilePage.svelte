@@ -4,24 +4,27 @@
 	import { page } from "$app/state";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { fmtIDR, imgFor, fetchCategories, pickTitle, type ApiCatItem } from "$lib/data";
-	import { api, apiGet, apiPost, apiPatch, apiDelete, ApiError } from "$lib/api";
+	import { fmtIDR, imgFor, fetchCategories, catName, pickTitle, type ApiCatItem } from "$lib/data";
+	import { api, apiGet, apiPost, apiPatch, apiDelete, ApiError, setAccessToken, setRefreshToken } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiFavorite, ApiDownload, ApiOrder, ApiSubscription, ApiUser } from "$lib/types";
 	import ApiImage from "./ApiImage.svelte";
+	import PayoutAccountSection from "./PayoutAccountSection.svelte";
+	import { isScrambledUrl, scrambled } from "$lib/photoScramble";
 
 	const copy = {
 		id: {
-			kicker: "Profil", needLogin: "Masuk untuk melihat profil", needLoginBody: "Simpan favorit, lihat unduhan, dan kelola langgananmu di satu tempat",
-			goLogin: "Masuk", profile: "Profil Saya", favorites: "Favorit", downloads: "Unduhan Saya", cart: "Keranjang Saya",
-			upload: "Unggah",
-			orders: "Pesanan", subscription: "Langganan", premium: "Member Premium", free: "Member",
+		kicker: "Profil", needLogin: "Masuk untuk melihat profil", needLoginBody: "Simpan favorit, lihat unduhan, dan kelola langgananmu di satu tempat",
+		// Label tab menu profil — semua berpola "X Saya" (sama dengan judul bagiannya).
+		goLogin: "Masuk", profile: "Profil Saya", favorites: "Favorit Saya", downloads: "Unduhan Saya", cart: "Keranjang Saya",
+		upload: "Unggahan Saya", payout: "Rekening Saya",
+			orders: "Pesanan Saya", subscription: "Langganan", premium: "Member Premium", free: "Member",
 			avChange: "Ganti foto", avTooBig: "Foto maksimal 5 MB", avFail: "Gagal mengganti foto profil",
 			planLine: "Paket {plan} · aktif s/d {date}",
 			all: "Semua", photo: "Foto", video: "Video", save: "Simpan", saved: "Tersimpan",
 			nextPage: "Halaman berikutnya", prevPage: "Sebelumnya",
 			noFav: "Belum ada favorit", noFavCta: "Cari bingkai favoritmu", noFavFiltered: "Belum ada favorit di jenis ini", logout: "Keluar",
-			account: "Akun", username: "Nama pengguna", email: "Email",
+			account: "Akun", id: "ID", username: "Nama pengguna", email: "Email",
 			realName: "Nama asli", editProfile: "Ubah profil", saveProfile: "Simpan perubahan", saving: "Menyimpan…",
 			profileOk: "Profil diperbarui", profileFail: "Gagal menyimpan profil. Coba lagi",
 			changePw: "Ganti kata sandi", currentPw: "Kata sandi saat ini", newPw: "Kata sandi baru", confirmPw: "Konfirmasi kata sandi baru",
@@ -44,9 +47,10 @@
 			ordItems: "{n} item", ordPayNote: "Selesaikan pembayaran untuk mengunduh file tanpa watermark",
 			ordSeeDownloads: "Lihat unduhan", ordDiscount: "Potongan", ordCopy: "Salin ID pesanan", ordCopied: "ID tersalin",
 			licStandar: "Lisensi standar", licSubscribe: "Lisensi langganan",
-			downloadFull: "Unduh penuh", downloadLicense: "Lisensi PDF", preparing: "Menyiapkan…",
+			downloadFull: "Unduh", downloadLicense: "Lisensi", preparing: "Menyiapkan…",
 			upNew: "Unggah karya baru", upFile: "Berkas foto / video", upFileHint: "JPG, PNG, WebP, atau MP4 — maks 2 GB",
 			upTitle: "Judul", upPhotographer: "Nama fotografer", upDesc: "Deskripsi", upLoc: "Lokasi",
+			upTaken: "Tanggal & waktu pengambilan", upTakenErr: "Tanggal pengambilan harus setelah 1900 dan tidak di masa depan",
 			upSubmit: "Kirim untuk kurasi", upSending: "Mengunggah…",
 			upNote: "Karya kontributor tayang setelah disetujui admin",
 			upSoonTitle: "Unggah segera hadir",
@@ -78,15 +82,16 @@
 		},
 		en: {
 			kicker: "Profile", needLogin: "Sign in to view your profile", needLoginBody: "Save favourites, view downloads, and manage your membership in one place",
-			goLogin: "Sign in", profile: "My Profile", favorites: "Favorites", downloads: "My Downloads", cart: "My Cart",
-			upload: "Upload",
-			orders: "Orders", subscription: "Membership", premium: "Premium Member", free: "Member",
+		// Label tab menu profil — semua berpola "My X" (Title Case).
+		goLogin: "Sign in", profile: "My Profile", favorites: "My Favorites", downloads: "My Downloads", cart: "My Cart",
+		upload: "My Uploads", payout: "My Payouts",
+			orders: "My Orders", subscription: "Subscription", premium: "Premium Member", free: "Member",
 			avChange: "Change photo", avTooBig: "Photo must be 5 MB or less", avFail: "Couldn't change your profile photo",
 			planLine: "{plan} plan · active until {date}",
 			all: "All", photo: "Photo", video: "Video", save: "Save", saved: "Saved",
 			nextPage: "Next Page", prevPage: "Previous",
 			noFav: "No favourites yet", noFavCta: "Find your favourite frames", noFavFiltered: "No favourites of this type yet", logout: "Sign out",
-			account: "Account", username: "Username", email: "Email",
+			account: "Account", id: "ID", username: "Username", email: "Email",
 			realName: "Real name", editProfile: "Edit profile", saveProfile: "Save changes", saving: "Saving…",
 			profileOk: "Profile updated", profileFail: "Couldn't save profile. Try again",
 			changePw: "Change password", currentPw: "Current password", newPw: "New password", confirmPw: "Confirm new password",
@@ -109,9 +114,10 @@
 			ordItems: "{n} items", ordPayNote: "Finish payment to download the watermark-free files",
 			ordSeeDownloads: "See downloads", ordDiscount: "Discount", ordCopy: "Copy order ID", ordCopied: "ID copied",
 			licStandar: "Standard license", licSubscribe: "Subscription license",
-			downloadFull: "Download full", downloadLicense: "License PDF", preparing: "Preparing…",
+			downloadFull: "Download", downloadLicense: "License", preparing: "Preparing…",
 			upNew: "Upload new work", upFile: "Photo / video file", upFileHint: "JPG, PNG, WebP, or MP4 — max 2 GB",
 			upTitle: "Title", upPhotographer: "Photographer name", upDesc: "Description", upLoc: "Location",
+			upTaken: "Date & time taken", upTakenErr: "The date taken must be after 1900 and not in the future",
 			upSubmit: "Submit for review", upSending: "Uploading…",
 			upNote: "Contributor uploads go live after admin approval",
 			upSoonTitle: "Upload is coming soon",
@@ -143,8 +149,8 @@
 		},
 	};
 
-	type Section = "profile" | "favorites" | "downloads" | "cart" | "upload";
-	const SECTIONS: Section[] = ["profile", "favorites", "downloads", "cart"];
+	type Section = "profile" | "orders" | "favorites" | "downloads" | "cart" | "upload" | "payout";
+	const SECTIONS: Section[] = ["profile", "orders", "favorites", "downloads", "cart"];
 
 	type AssetFilter = "all" | "FOTO" | "VIDEO";
 	/** 6 baris × 3 kolom, sesuai grid favorit di desktop. */
@@ -201,7 +207,7 @@
 
 	// Bagian aktif ikut ?tab= supaya menu bisa ditautkan (mis. dari navbar ke Keranjang).
 	const initial = page.url.searchParams.get("tab") as Section | null;
-	const VALID_SECTIONS: Section[] = [...SECTIONS, "upload"];
+	const VALID_SECTIONS: Section[] = [...SECTIONS, "upload", "payout"];
 	let section = $state<Section>(initial && VALID_SECTIONS.includes(initial) ? initial : "favorites");
 
 	function selectSection(s: Section) {
@@ -267,6 +273,9 @@
 	let pwBusy = $state(false);
 	let pwMsg = $state("");
 	let pwErr = $state("");
+	// Rekening pencairan bagi hasil: hanya kontributor/admin yang menerima bagi hasil.
+	const canPayout = $derived(user?.role === "ADMIN" || user?.role === "CONTRIBUTOR");
+
 	let delInput = $state("");
 	let delBusy = $state(false);
 	let delErr = $state("");
@@ -337,7 +346,10 @@
 		}
 		pwBusy = true;
 		try {
-			await apiPost<ApiResponse<unknown>>("/api/users/me/password", { current: pwCur, new: pwNew });
+			const res = await apiPost<ApiResponse<{ accessToken?: string; refreshToken?: string }>>("/api/users/me/password", { current: pwCur, new: pwNew });
+			// Server mencabut semua sesi lama; perangkat ini memakai sesi baru dari respons.
+			if (res.data?.accessToken) setAccessToken(res.data.accessToken);
+			if (res.data?.refreshToken) setRefreshToken(res.data.refreshToken);
 			pwMsg = t.pwOk;
 			pwCur = "";
 			pwNew = "";
@@ -406,12 +418,30 @@
 	let upPhotographer = $state("");
 	let upDesc = $state("");
 	let upLoc = $state("");
+	// Tanggal & waktu pengambilan (opsional, berlaku untuk seluruh batch seperti lokasi). Nilai
+	// datetime-local = waktu lokal browser "YYYY-MM-DDTHH:mm"; dikirim ke API sebagai ISO (UTC).
+	let upTaken = $state("");
+	const UP_TAKEN_MIN = "1900-01-01T00:00";
+	const localInput = (d: Date) => {
+		const two = (n: number) => String(n).padStart(2, "0");
+		return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+	};
+	/** Batas atas pemilih = sekarang + 1 hari (sama dengan validasi API). */
+	const upTakenMax = localInput(new Date(Date.now() + 864e5));
+	/** "" = kosong; null = di luar batas wajar (ditolak sebelum mengunggah). */
+	function upTakenIso(): string | null {
+		if (!upTaken.trim()) return "";
+		const d = new Date(upTaken);
+		const ms = d.getTime();
+		if (Number.isNaN(ms) || ms < new Date(UP_TAKEN_MIN).getTime() || ms > Date.now() + 864e5) return null;
+		return d.toISOString();
+	}
 	let uploading = $state(false);
 	let upMsg = $state("");
 	let upErr = $state("");
 	// Kategori + keyword ala CMS (minimal 5 masing-masing): diambil sekali,
 	// dipakai untuk seluruh batch.
-	type TaxItem = { id: string; name: string };
+	type TaxItem = { id: string; name: string; nameEn?: string | null };
 	let catList = $state<TaxItem[]>([]);
 	let kwList = $state<TaxItem[]>([]);
 	// Daftar lokasi: gabungan terpakai + referensi geografi Indonesia
@@ -435,7 +465,7 @@
 	function loadTaxonomies() {
 		if (!UPLOAD_OPEN || !canUpload || (catList.length && kwList.length)) return;
 		fetchCategories().then((cats) => {
-			catList = cats.map((c) => ({ id: c.id, name: c.name }));
+			catList = cats.map((c) => ({ id: c.id, name: c.name, nameEn: c.nameEn }));
 		}).catch(() => {});
 		apiGet<ApiResponse<TaxItem[]>>("/api/keywords?limit=200").then((res) => {
 			if (res.success) kwList = res.data;
@@ -497,10 +527,15 @@
 		subBusy = true;
 		subMsg = "";
 		try {
-			const res = await apiPost<ApiResponse<{ snapToken: string; redirectUrl: string }>>(
+			const res = await apiPost<ApiResponse<{ snapToken: string; redirectUrl: string; orderId?: string }>>(
 				"/api/subscription/installments/pay-remaining",
 				{},
 			);
+			// Halaman bayar milik Lakuna (→ DOKU, sama dengan checkout & paket lain).
+			if (res.success && res.data?.orderId) {
+				void goto(`/payment/pay/${encodeURIComponent(res.data.orderId)}`);
+				return;
+			}
 			if (res.success && res.data?.redirectUrl && isSafePaymentUrl(res.data.redirectUrl)) {
 				window.location.href = res.data.redirectUrl;
 				return;
@@ -586,6 +621,11 @@
 			upErr = t.upNeedKws;
 			return;
 		}
+		const takenAt = upTakenIso();
+		if (takenAt === null) {
+			upErr = t.upTakenErr;
+			return;
+		}
 		uploading = true;
 		upProgress = 0;
 		let ok = 0;
@@ -625,6 +665,7 @@
 				fd.append("price", "0");
 				if (itemDesc) fd.append("description", itemDesc);
 				if (upLoc.trim()) fd.append("location", upLoc.trim());
+				if (takenAt) fd.append("takenAt", takenAt);
 				fd.append("type", isVideoFile(it.file) ? "VIDEO" : "FOTO");
 				if (batchId) fd.append("batchId", batchId);
 				const res = await apiPost<ApiResponse<{ id?: string }>>("/api/photos", fd);
@@ -671,6 +712,7 @@
 			upTitle = "";
 			upDesc = "";
 			upLoc = "";
+			upTaken = "";
 		} else {
 			// Sisakan hanya yang gagal untuk dikirim ulang.
 			upItems.filter((x) => x.status === "done").forEach((x) => URL.revokeObjectURL(x.url));
@@ -807,21 +849,20 @@
 
 	/**
 	 * Validasi `continuePaymentUrl` sebelum dirender sebagai link.
-	 * Allowlist sama dengan PaymentPage: host Xendit (`checkout.xendit.co`),
-	 * Midtrans snap (`app.midtrans.com` / sandbox), host backend sendiri +
+	 * Allowlist sama dengan PaymentPage: halaman bayar DOKU (`*.doku.com`), host Xendit lama
+	 * (`checkout.xendit.co`), host backend sendiri +
 	 * localhost dev. Tolak `javascript:`/skema non-https (kecuali http localhost).
 	 */
 	const PAYMENT_HOSTS = [
 		"checkout.xendit.co",
 		"invoice.xendit.co",
-		"app.midtrans.com",
-		"app.sandbox.midtrans.com",
 	];
 
 	function paymentHostAllowed(host: string): boolean {
 		const h = host.toLowerCase();
 		if ((PAYMENT_HOSTS as string[]).includes(h)) return true;
 		if (h.endsWith(".xendit.co")) return true;
+		if (h === "doku.com" || h.endsWith(".doku.com")) return true;
 		if (h === "localhost" || h === "127.0.0.1") return true;
 		try {
 			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
@@ -875,8 +916,12 @@
 			<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
 		{:else if name === "downloads"}
 			<path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3" />
+		{:else if name === "orders"}
+			<path d="M6 3h12v18H6z" /><path d="M9 8h6M9 12h6M9 16h4" />
 		{:else if name === "upload"}
 			<path d="M12 16V4M7 9l5-5 5 5M4 17v3h16v-3" />
+		{:else if name === "payout"}
+			<rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" />
 		{:else}
 			<path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.4" /><circle cx="9" cy="19" r="1.4" /><circle cx="17" cy="19" r="1.4" />
 		{/if}
@@ -994,6 +1039,17 @@
 							{/if}
 						</button>
 					{/if}
+					{#if canPayout}
+						<button
+							type="button"
+							class="pp-menu__item"
+							aria-current={section === "payout" ? "page" : undefined}
+							onclick={() => selectSection("payout")}
+						>
+							{@render icon("payout")}
+							<span>{t.payout}</span>
+						</button>
+					{/if}
 					<button
 						type="button"
 						class="pp-menu__item pp-menu__logout"
@@ -1024,8 +1080,8 @@
 							{#each pageItems as f (f.id)}
 								{@const fav = store.isFavorite(f.id)}
 								<li class="pp-tile on-darkroom group">
-									<a href={`/photos/${f.id}`} class="pp-tile__link">
-										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} alt={pickTitle(f.title, f.titleEn, lang)} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
+									<a href={f.type === "VIDEO" ? `/videos/${f.id}` : `/photos/${f.id}`} class="pp-tile__link">
+										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} photoId={f.type === "VIDEO" ? undefined : f.id} alt={pickTitle(f.title, f.titleEn, lang)} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
 										<span class="pp-tile__title">{pickTitle(f.title, f.titleEn, lang)}</span>
 										<span class="pp-tile__tag">{f.type === "VIDEO" ? t.video : "HD"}</span>
 									</a>
@@ -1064,63 +1120,59 @@
 				{#if section === "profile"}
 					<h2 class="pp-title">{t.profile}</h2>
 
-					<dl class="mt-8 max-w-lg border-t border-hair">
-						<div class="up-row">
-							<dt class="kicker shrink-0 text-fg-muted">{t.username}</dt>
-							<dd class="min-w-0 flex-1 truncate text-fg">{user.name}</dd>
-						</div>
-						<div class="up-row">
-							<dt class="kicker shrink-0 text-fg-muted">{t.email}</dt>
-							<dd class="min-w-0 flex-1 truncate text-fg" title={user.email}>{user.email}</dd>
-						</div>
-					</dl>
-
-					<h3 class="pp-sub">{t.editProfile}</h3>
 					<form
-						class="max-w-lg"
-						onsubmit={(e) => {
-							e.preventDefault();
-							void saveProfile();
-						}}
-					>
-						{#if profMsg}<p role="status" class="rounded-[10px] bg-green-500/10 px-4 py-3 text-sm text-green-400">{profMsg}</p>{/if}
-						{#if profErr}<p role="alert" class="rounded-[10px] bg-red-500/10 px-4 py-3 text-sm text-red-400">{profErr}</p>{/if}
-						<div class="border-t border-hair">
-							<label class="up-row">
-								<span class="kicker shrink-0 text-fg-muted">{t.username}</span>
-								<input
-									type="text"
-									bind:value={profName}
-									minlength={3}
-									maxlength={30}
-									autocomplete="username"
-									class="up-input"
-									placeholder={user.name}
-								/>
-							</label>
-							<label class="up-row">
-								<span class="kicker shrink-0 text-fg-muted">{t.realName}</span>
-								<input
-									type="text"
-									bind:value={profReal}
-									maxlength={100}
-									autocomplete="name"
-									class="up-input"
-									placeholder="—"
-								/>
-							</label>
+					class="w-full"
+					onsubmit={(e) => {
+						e.preventDefault();
+						void saveProfile();
+					}}
+				>
+					{#if profMsg}<p role="status" class="rounded-[10px] bg-green-500/10 px-4 py-3 text-sm text-green-400">{profMsg}</p>{/if}
+					{#if profErr}<p role="alert" class="rounded-[10px] bg-red-500/10 px-4 py-3 text-sm text-red-400">{profErr}</p>{/if}
+					<div class="mt-8 border-t border-hair">
+						<div class="up-row">
+							<span class="kicker shrink-0 text-fg-muted">{t.id}</span>
+							<span class="min-w-0 flex-1 truncate font-mono text-sm text-fg-muted" title={user.id}>{user.id}</span>
 						</div>
-						<button
-							type="submit"
-							disabled={profBusy}
-							class="press mt-5 rounded-full bg-safelight px-7 py-3 text-sm font-medium text-ivory disabled:opacity-60"
-						>
-							{profBusy ? t.saving : t.saveProfile}
-						</button>
-					</form>
+						<label class="up-row">
+							<span class="kicker shrink-0 text-fg-muted">{t.username}</span>
+							<input
+								type="text"
+								bind:value={profName}
+								minlength={3}
+								maxlength={30}
+								autocomplete="username"
+								class="up-input"
+								placeholder={user.name}
+							/>
+						</label>
+						<div class="up-row">
+							<span class="kicker shrink-0 text-fg-muted">{t.email}</span>
+							<span class="min-w-0 flex-1 truncate text-fg" title={user.email}>{user.email}</span>
+						</div>
+						<label class="up-row">
+							<span class="kicker shrink-0 text-fg-muted">{t.realName}</span>
+							<input
+								type="text"
+								bind:value={profReal}
+								maxlength={100}
+								autocomplete="name"
+								class="up-input"
+								placeholder="—"
+							/>
+						</label>
+					</div>
+					<button
+						type="submit"
+						disabled={profBusy}
+						class="press mt-5 rounded-full bg-safelight px-7 py-3 text-sm font-medium text-ivory disabled:opacity-60"
+					>
+						{profBusy ? t.saving : t.saveProfile}
+					</button>
+				</form>
 
 					<h3 class="pp-sub">{t.changePw}</h3>
-					<form class="max-w-lg" onsubmit={changePassword}>
+					<form class="w-full" onsubmit={changePassword}>
 						{#if pwMsg}<p role="status" class="rounded-[10px] bg-green-500/10 px-4 py-3 text-sm text-green-400">{pwMsg}</p>{/if}
 						{#if pwErr}<p role="alert" class="rounded-[10px] bg-red-500/10 px-4 py-3 text-sm text-red-400">{pwErr}</p>{/if}
 						<div class="border-t border-hair">
@@ -1172,7 +1224,7 @@
 					</form>
 
 					<h3 class="pp-sub">{t.nlTitle}</h3>
-					<div class="pp-box flex max-w-lg flex-wrap items-center justify-between gap-4">
+					<div class="pp-box flex flex-wrap items-center justify-between gap-4">
 						<p class="min-w-0 flex-1 text-sm text-fg-muted">{t.nlBody}</p>
 						<button
 							type="button"
@@ -1186,31 +1238,7 @@
 							{nlActive ? t.nlOn : t.nlOff}
 						</button>
 					</div>
-					{#if nlErr}<p role="alert" class="mt-3 max-w-lg text-sm text-red-400">{nlErr}</p>{/if}
-
-					<h3 class="pp-sub">{t.delTitle}</h3>
-					<div class="pp-box max-w-lg">
-						<p class="text-sm leading-relaxed text-fg-muted">{t.delBody}</p>
-						<label class="mt-4 block">
-							<span class="kicker text-fg-muted">{t.delType}</span>
-							<input
-								type="text"
-								bind:value={delInput}
-								placeholder="DELETE"
-								autocomplete="off"
-								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
-							/>
-						</label>
-						{#if delErr}<p role="alert" class="mt-3 text-sm text-red-400">{delErr}</p>{/if}
-						<button
-							type="button"
-							disabled={!delArmed || delBusy}
-							onclick={deleteAccount}
-							class="press mt-4 w-full rounded-full border border-red-500/40 py-3 text-sm font-medium text-red-400 transition-transform hover:scale-[1.01] disabled:opacity-40"
-						>
-							{delBusy ? t.saving : t.delGo}
-						</button>
-					</div>
+					{#if nlErr}<p role="alert" class="mt-3 text-sm text-red-400">{nlErr}</p>{/if}
 
 					<h3 class="pp-sub">{t.subscription}</h3>
 					{#if !hasSub || !sub}
@@ -1225,7 +1253,7 @@
 						{@const quota = sub.quota || 0}
 						{@const used = Math.min(sub.used || 0, quota)}
 						{@const pct = quota > 0 ? Math.round((used / quota) * 100) : 0}
-						<div class="pp-box relative max-w-lg">
+						<div class="pp-box relative">
 							<div class="flex items-center justify-between gap-3">
 								<p class="font-display text-3xl font-light tracking-[-0.02em] text-fg">{quota} <span class="text-fg-muted">{t.frames}</span></p>
 								{#if sub.status === "ACTIVE"}
@@ -1257,7 +1285,7 @@
 							{/if}
 						</div>
 						<!-- Aksi kelola ala pembayaran umum -->
-						<div class="mt-4 flex max-w-lg flex-wrap items-center gap-3">
+						<div class="mt-4 flex flex-wrap items-center gap-3">
 							{#if sub.status === "ACTIVE"}
 								<a href="/pricing" class="pp-ghost">{t.changePlan}</a>
 								<button
@@ -1271,10 +1299,10 @@
 							{/if}
 						</div>
 						{#if subMsg}
-							<p role="status" class="mt-3 max-w-lg text-sm text-fg-muted">{subMsg}</p>
+							<p role="status" class="mt-3 text-sm text-fg-muted">{subMsg}</p>
 						{/if}
 						{#if sub.payOption === "monthly" && installments.length}
-							<div class="mt-6 max-w-lg rounded-[10px] border border-hair p-5">
+							<div class="mt-6 rounded-[10px] border border-hair p-5">
 								<p class="kicker text-fg-muted">{t.instTitle}</p>
 								<ul class="mt-3 space-y-2">
 									{#each installments as inst (inst.monthNumber)}
@@ -1301,7 +1329,37 @@
 						{/if}
 					{/if}
 
-					<h3 class="pp-sub">{t.orders}</h3>
+					<h3 class="pp-sub">{t.delTitle}</h3>
+					<div class="pp-box">
+						<p class="text-sm leading-relaxed text-fg-muted">{t.delBody}</p>
+						<label class="mt-4 block">
+							<span class="kicker text-fg-muted">{t.delType}</span>
+							<input
+								type="text"
+								bind:value={delInput}
+								placeholder="DELETE"
+								autocomplete="off"
+								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
+							/>
+						</label>
+						{#if delErr}<p role="alert" class="mt-3 text-sm text-red-400">{delErr}</p>{/if}
+						<button
+							type="button"
+							disabled={!delArmed || delBusy}
+							onclick={deleteAccount}
+							class="press mt-4 w-full rounded-full border border-red-500/40 py-3 text-sm font-medium text-red-400 transition-transform hover:scale-[1.01] disabled:opacity-40"
+						>
+							{delBusy ? t.saving : t.delGo}
+						</button>
+					</div>
+				{/if}
+
+				{#if section === "payout" && canPayout}
+					<PayoutAccountSection defaultName={profReal} />
+				{/if}
+
+				{#if section === "orders"}
+					<h2 class="pp-title">{t.orders}</h2>
 					{#if orders.length}
 						<ul class="space-y-4">
 							{#each ordPageItems as o (o.id)}
@@ -1332,7 +1390,12 @@
 										<ul class="ord-items">
 											{#each o.items as it (it.id)}
 												<li class="ord-item">
-													<img src={imgFor(it.photo.id, 160, 120, it.photo.thumbUrl)} alt="" class="ord-thumb" loading="lazy" />
+													<!-- Thumbnail API teracak → <canvas> yang disusun ulang; dummy tetap <img>. -->
+													{#if isScrambledUrl(imgFor(it.photo.id, 160, 120, it.photo.thumbUrl))}
+														<canvas use:scrambled={imgFor(it.photo.id, 160, 120, it.photo.thumbUrl)} class="ord-thumb"></canvas>
+													{:else}
+														<img src={imgFor(it.photo.id, 160, 120, it.photo.thumbUrl)} alt="" class="ord-thumb" loading="lazy" />
+													{/if}
 													<div class="min-w-0 flex-1">
 														<p class="truncate text-sm text-fg">{pickTitle(it.photo.title, it.photo.titleEn, lang)}</p>
 														<p class="mt-0.5 text-xs text-fg-muted">{licenseLabel(it.licenseType)}</p>
@@ -1394,7 +1457,11 @@
 							<ul class="space-y-3">
 								{#each downloads as d (d.id)}
 									<li class="pp-box flex flex-wrap items-center gap-4">
-										<img src={imgFor(d.photo.id, 320, 240, d.photo.thumbUrl)} alt="" loading="lazy" class="ord-thumb" />
+										{#if isScrambledUrl(imgFor(d.photo.id, 320, 240, d.photo.thumbUrl))}
+											<canvas use:scrambled={imgFor(d.photo.id, 320, 240, d.photo.thumbUrl)} class="ord-thumb"></canvas>
+										{:else}
+											<img src={imgFor(d.photo.id, 320, 240, d.photo.thumbUrl)} alt="" loading="lazy" class="ord-thumb" />
+										{/if}
 										<div class="min-w-0 flex-1">
 											<p class="truncate font-display text-lg font-light text-fg">{pickTitle(d.photo.title, d.photo.titleEn, lang)}</p>
 											<p class="mt-1 text-xs text-fg-muted">{fmtDate(d.createdAt)} · {d.type}</p>
@@ -1632,6 +1699,17 @@
 									{/if}
 								</div>
 							</div>
+							<!-- Opsional; tampil di halaman detail foto/video setelah disetujui. -->
+							<label class="up-row">
+								<span class="kicker shrink-0 text-fg-muted">{t.upTaken}</span>
+								<input
+									type="datetime-local"
+									bind:value={upTaken}
+									min={UP_TAKEN_MIN}
+									max={upTakenMax}
+									class="up-input tabular-nums"
+								/>
+							</label>
 							<label class="up-row up-row--top">
 								<span class="kicker shrink-0 pt-1 text-fg-muted">{t.upDesc}</span>
 								<textarea
@@ -1656,7 +1734,7 @@
 												aria-pressed={on}
 												class="kicker rounded-full border px-3 py-1.5 transition-colors {on ? 'border-safelight text-safelight' : 'border-hair text-fg-muted hover:border-fg-muted hover:text-fg'}"
 											>
-												{c.name}
+												{catName(c, lang)}
 											</button>
 										{/each}
 										{#if !catList.length}
@@ -1733,7 +1811,11 @@
 						<ul class="space-y-3">
 							{#each myPageItems as p (p.id)}
 								<li class="pp-box flex flex-wrap items-center gap-4" class:mw-rejected={p.status === "REJECTED"}>
-									<img src={imgFor(p.id, 160, 120, p.thumbUrl)} alt={p.title} class="h-10 w-14 rounded-sm object-cover" />
+									{#if isScrambledUrl(imgFor(p.id, 160, 120, p.thumbUrl))}
+										<canvas use:scrambled={{ src: imgFor(p.id, 160, 120, p.thumbUrl), eager: true }} aria-label={p.title} class="h-10 w-14 rounded-sm object-cover"></canvas>
+									{:else}
+										<img src={imgFor(p.id, 160, 120, p.thumbUrl)} alt={p.title} class="h-10 w-14 rounded-sm object-cover" />
+									{/if}
 									<div class="min-w-0 flex-1">
 										<p class="truncate font-display text-lg font-light text-fg">{p.title}</p>
 										<p class="mt-1 text-xs text-fg-muted">{p.type} · {fmtDate(p.createdAt)}</p>
@@ -2029,6 +2111,44 @@
 	}
 	.pp-menu__item[aria-current="page"] .pp-menu__count {
 		background: var(--surface);
+	}
+	/* Ikon jangan ikut menyusut saat label panjang. */
+	.pp-menu__item :global(svg) {
+		flex-shrink: 0;
+	}
+	/* Ponsel: label tab "X Saya" / "My X" lebih panjang — menu dua kolom
+	   dirapatkan supaya label tetap satu baris di layar 375–390px, dan
+	   angka pindah ke pojok ikon (seperti lencana keranjang di navbar). */
+	@media (max-width: 559px) {
+		.pp-menu {
+			gap: 0.2rem;
+			padding: 0.45rem;
+		}
+		.pp-menu__item {
+			gap: 0.5rem;
+			padding-inline: 0.65rem;
+			font-size: 0.86rem;
+			line-height: 1.2;
+		}
+		.pp-menu__count,
+		.pp-menu__item[aria-current="page"] .pp-menu__count {
+			position: absolute;
+			left: calc(0.65rem + 6px);
+			top: calc(50% - 16px);
+			min-width: 0.95rem;
+			height: 0.95rem;
+			margin: 0;
+			padding: 0 0.22rem;
+			background: var(--safelight);
+			color: var(--color-ivory);
+			font-size: 0.58rem;
+			font-weight: 600;
+			line-height: 0.95rem;
+			box-shadow: 0 0 0 2px var(--surface);
+		}
+		.pp-menu__item[aria-current="page"] .pp-menu__count {
+			box-shadow: 0 0 0 2px var(--wash);
+		}
 	}
 
 	/* --- panel utama --- */

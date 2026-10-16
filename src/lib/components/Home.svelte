@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { tick, untrack } from "svelte";
 	import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
 	import { i18n } from "$lib/i18n.svelte";
@@ -8,6 +9,7 @@
 	import { apiGet } from "$lib/api";
 	import { calmRefresh } from "$lib/scrollCalm";
 	import { getLenis } from "$lib/lenis";
+	import { holdReady } from "$lib/ready.svelte";
 	import { soundOn } from "$lib/sound.svelte";
 	import type { ApiResponse } from "$lib/types";
 	import Reveal from "./Reveal.svelte";
@@ -22,9 +24,13 @@
 	import MapDescent from "./MapDescent.svelte";
 	import ApiImage from "./ApiImage.svelte";
 	import { rippleOnce } from "$lib/heroRipple";
+	import { pickHeroRungs, ladderFrom, type HeroPlan } from "$lib/heroRungs";
+	import type { HeroVideoVariant } from "$lib/types";
 	import { access } from "$lib/access.svelte";
 	import { mailto } from "$lib/contact";
 	import { scrambleHover } from "$lib/scramble";
+	// Foto dari API datang TERACAK (mozaik ubin) → disusun ulang di <canvas>, tak pernah lewat <img>/poster.
+	import { isScrambledUrl, loadScrambledCached, scrambled } from "$lib/photoScramble";
 	import LogoCloud from "./LogoCloud.svelte";
 	import Seam from "./Seam.svelte";
 	import { authModal } from "$lib/authModal.svelte";
@@ -52,9 +58,8 @@
 		subscribe: "Premium",
 		subscribeDesc: "Kuota per bulan untuk seluruh aset.\n24 jam support system",
 			subscribeCta: "Pilih paket",
-			custom: "Custom",
-			customDesc: "Volume besar, lisensi tim, atau kebutuhan lain.\nCeritakan, kami kirim penawarannya",
-			customPrice: "Custom",
+			custom: "Tujuan Pendidikan",
+			customDesc: "Kami mendukung kegiatan nonkomersial untuk mengumpulkan pengetahuan, menguji teori, dan menyempurnakan praktik di lingkungan akademik atau ilmiah",
 			customCta: "Hubungi kami",
 			customSubject: "Permintaan harga custom",
 			subscribeTag: "Paling hemat",
@@ -97,6 +102,7 @@
 			from: "mulai",
 			perItem: "/bingkai",
 			perMonth: "/bulan",
+			perYear: "/tahun",
 			closingAuthed: {
 				kicker: "Akunmu",
 				title: "Darkroommu menunggu,",
@@ -123,9 +129,8 @@
 		subscribe: "Premium",
 		subscribeDesc: "Monthly quota for the archives.\n24 hours customer service",
 			subscribeCta: "Choose a plan",
-			custom: "Custom",
-			customDesc: "Large volume, team licence, or other needs.\nTell us and we will send a quote",
-			customPrice: "Custom",
+			custom: "Educational Purposes",
+			customDesc: "We support a non-commercial activities dedicated to gathering knowledge, testing theories, and improving practices within academic or scientific settings",
 			customCta: "Contact us",
 			customSubject: "Custom pricing request",
 			subscribeTag: "Best value",
@@ -168,6 +173,7 @@
 			from: "from",
 			perItem: "/frame",
 			perMonth: "/month",
+			perYear: "/year",
 			closingAuthed: {
 				kicker: "Your account",
 				title: "Your darkroom awaits,",
@@ -211,9 +217,11 @@
 	const standarShown = $derived(
 		standarType === "VIDEO" ? videoFrom : (fotoFrom ?? standarPrice),
 	);
-	const subscribeFrom = $derived(
-		plans.length > 0 ? Math.min(...plans.map((p) => p.priceMonthly)) : null,
-	);
+	// Harga Premium di beranda = harga TAHUNAN (sama dengan halaman Pricing, mode annual bawaan).
+	const subscribeFrom = $derived.by(() => {
+		const prices = plans.map((p) => p.priceAnnual).filter((v) => v > 0);
+		return prices.length ? Math.min(...prices) : null;
+	});
 	// Kuota pilihan pada baris Premium: harga di sampingnya mengikuti kuota yang dipilih.
 	let pickedQuota = $state<number | null>(null);
 
@@ -222,7 +230,11 @@
 	const klipVids = $derived(
 		hp["klip"]?.photos?.length ? hp["klip"].photos.map(adaptVideo) : null,
 	);
-	const shownVids = $derived(klipVids ?? videos);
+	// Otomatis (tanpa kurasi CMS): kartu rel drone besar (±600×800 px CSS = ±1.600 px tinggi di retina) —
+	// video yang aslinya lebih kecil (mis. 1080p) pasti diperbesar & buram di sana. Dahulukan yang aslinya
+	// ≥ 2560 px bila cukup banyak; yang lebih kecil tetap tajam di /videos & halaman detail (kartunya kecil).
+	const sharpVids = $derived(videos.filter((v) => (v.nativeW ?? 0) >= 2560));
+	const shownVids = $derived(klipVids ?? (sharpVids.length >= 4 ? sharpVids : videos));
 	const shownTotal = $derived(klipVids ? klipVids.length : videoTotal);
 
 	// ── Strip drone: teks kiri + rel kanan digeser GULIR vertikal ──
@@ -242,6 +254,69 @@
 	let dragViewEl = $state<HTMLDivElement | null>(null);
 	let reelLgEl = $state<HTMLDivElement | null>(null);
 	let droneH = $state(0);
+	/** Section drone benar-benar ada di layar. Klip kartu aktif hanya diputar selama ini — dulu tetap
+	    berjalan saat pengunjung sudah di hero/peta/galeri: dekoder video + kompositor bekerja terus tanpa terlihat. */
+	let droneOnScreen = $state(false);
+	$effect(() => {
+		const el = dronePinEl;
+		if (!el) return;
+		// -2px: globe hero di bawahnya berhenti tepat di tepi section ini, dan IntersectionObserver menghitung
+		// "bersentuhan" sebagai terlihat — tanpa ini klip 4K tetap diputar selama pengunjung menatap globe.
+		const io = new IntersectionObserver(([e]) => (droneOnScreen = !!e?.isIntersecting), { rootMargin: "-2px 0px" });
+		io.observe(el);
+		return () => io.disconnect();
+	});
+	/**
+	 * Klip kartu pertama "Collection of videos" diunduh SEBELUM pengunjung menggulir ke sana: begitu versi
+	 * pembuka hero selesai terunduh (bandwidth sudah lega), bukan menunggu section mendekat — saat section
+	 * terlihat, klipnya sudah siap diputar.
+	 */
+	let droneEarly = $state(false);
+	$effect(() => {
+		if (droneEarly) return;
+		if (!heroIsVideo) {
+			const t = window.setTimeout(() => (droneEarly = true), 3000);
+			return () => window.clearTimeout(t);
+		}
+		const v = heroVideoEl;
+		if (!v || !heroPlaying) return;
+		const check = () => {
+			const d = v.duration;
+			const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+			if (Number.isFinite(d) && d > 0 && end >= d - 0.25) {
+				// Versi pembuka terunduh penuh → kecepatan nyata (konservatif: ikut berbagi dengan isi halaman lain).
+				const starter = heroPlan?.pool.find((x) => x.id === heroLayers[0]?.id);
+				const secs = (performance.now() - heroStarterT0) / 1000;
+				if (netMBps === null && starter?.bytes && secs > 0.2) netMBps = starter.bytes / 1e6 / secs;
+				droneEarly = true;
+			}
+		};
+		const iv = window.setInterval(check, 500);
+		const fb = window.setTimeout(() => (droneEarly = true), 12000);
+		check();
+		return () => {
+			window.clearInterval(iv);
+			window.clearTimeout(fb);
+		};
+	});
+	/** Klip kartu yang sedang dipanaskan lebih awal belum selesai terunduh (hero menunda naik versi). */
+	function droneWarmPending(): boolean {
+		const v = document.querySelector<HTMLVideoElement>(".dg-card[data-active] video[data-preview], .dg-card video[data-preview][src]");
+		if (!v || !v.getAttribute("src")) return false;
+		const d = v.duration;
+		const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+		return !(Number.isFinite(d) && d > 0 && end >= d - 0.25);
+	}
+	/** Section drone tinggal ±1 layar lagi: klip kartu aktif mulai dipasang & di-buffer (belum diputar) —
+	    dulu baru diunduh setelah section terlihat, jadi kartu pertama diam 10+ dtk di koneksi biasa. */
+	let droneNear = $state(false);
+	$effect(() => {
+		const el = dronePinEl;
+		if (!el) return;
+		const io = new IntersectionObserver(([e]) => (droneNear = !!e?.isIntersecting), { rootMargin: "100% 0px" });
+		io.observe(el);
+		return () => io.disconnect();
+	});
 	/** Cukup kartu supaya strip terasa penuh; daftar pendek diulang sekali. */
 	const droneItems = $derived.by(() => {
 		const v = shownVids;
@@ -268,7 +343,7 @@
 			view.style.marginInline = "";
 			view.style.clipPath = "";
 			view.style.transform = "";
-			track.querySelectorAll<HTMLElement>(".dg-card > img, .dg-card > video").forEach((el) => (el.style.objectPosition = ""));
+			track.querySelectorAll<HTMLElement>(".dg-card > img, .dg-card > canvas, .dg-card > video").forEach((el) => (el.style.objectPosition = ""));
 			if (copy) {
 				copy.style.transform = "";
 				copy.style.opacity = "";
@@ -293,7 +368,10 @@
 		let centers: number[] = [];
 		let plxEls: HTMLElement[][] = [];
 		let activeIdx = -1;
-		const maxShift = () => Math.max(0, track.scrollWidth - fullW);
+		// Geser maksimum rel: diukur di measure() (dipanggil ulang saat refresh / ResizeObserver rel), bukan
+		// dibaca tiap frame gulir — membaca scrollWidth di onUpdate memaksa browser menghitung ulang style &
+		// tata letak di tengah frame (semua transform yang baru ditulis trigger lain ikut dihitung saat itu).
+		let maxShift = 0;
 		const measure = () => {
 			// Bidang dibuat selebar layar SEKALI; melebar = membuka clip-path, jadi
 			// tidak ada layout ulang per frame (margin/width) saat gulir.
@@ -322,20 +400,27 @@
 			// Parallax isi kartu lewat object-position: foto tetap memenuhi kartu
 			// (tanpa transform, jadi tepi kartu TIDAK mungkin terbuka); yang
 			// bergeser hanya jendela crop-nya. Sumber yang lebih lebar dari kartu
-			// (16:9) punya ruang geser; yang portrait diam saja.
-			plxEls = cardEls.map((el) => Array.from(el.querySelectorAll<HTMLElement>(":scope > img, :scope > video")));
+			// (16:9) punya ruang geser; yang portrait diam saja. (Thumbnail teracak = <canvas>; object-position sama.)
+			plxEls = cardEls.map((el) => Array.from(el.querySelectorAll<HTMLElement>(":scope > img, :scope > canvas, :scope > video")));
 			expandLen = Math.round(window.innerHeight * 0.9);
-			panLen = Math.round(maxShift() + window.innerHeight * 0.6);
+			maxShift = Math.max(0, track.scrollWidth - fullW);
+			panLen = Math.round(maxShift + window.innerHeight * 0.6);
 			droneH = window.innerHeight + expandLen + panLen;
 		};
 		const apply = (scrolled: number) => {
 			if (!ready) return;
 			const e = ease(clamp01(scrolled / expandLen));
 			const pan = clamp01((scrolled - expandLen) / panLen);
-			const shift = pan * maxShift();
+			const shift = pan * maxShift;
 			const gapL = (1 - e) * padL;
 			const gapR = (1 - e) * padR;
-			view.style.clipPath = `inset(0 ${gapR.toFixed(1)}px 0 ${gapL.toFixed(1)}px)`;
+			const insetL = gapL.toFixed(1);
+			const insetR = gapR.toFixed(1);
+			// Bidang sudah selebar layar (seluruh fase geser — fase terpanjang section ini): clip-path DILEPAS,
+			// bukan ditulis "inset(0 0.0px 0 0.0px)". Tampilannya sama (.dg-view sudah overflow: hidden ke kotak
+			// yang sama), tetapi clip-path di atas lapisan komposit (rel + klip kartu yang sedang diputar) dibentuk
+			// Chrome lewat lapisan masker = seluruh bidang dirender lewat permukaan offscreen tiap frame video.
+			view.style.clipPath = insetL === "0.0" && insetR === "0.0" ? "" : `inset(0 ${insetR}px 0 ${insetL}px)`;
 			copy.style.transform = `translate3d(${(-e * copyOut).toFixed(1)}px, 0, 0)`;
 			copy.style.opacity = String(1 - clamp01(e * 1.25));
 			const tx = gapL - shift;
@@ -388,7 +473,11 @@
 				else if (self.progress >= 0.995 && self.direction === 1 && !globeSnapped) {
 					globeSnapped = true;
 					const globe = document.querySelector("[data-globe]");
-					if (globe) {
+					// Hanya MAJU ke globe yang masih di depan, dan tidak selama Back dipulihkan. Pengukuran ulang
+					// trigger (mis. Back ke peta: posisi jauh di bawah rel) juga melapor progres 1 + arah turun —
+					// tanpa syarat ini halaman ditarik mundur ke awal globe dan peta yang sudah mendarat berantakan.
+					const ahead = !!globe && globe.getBoundingClientRect().top > 2;
+					if (globe && ahead && !document.documentElement.classList.contains("home-restoring")) {
 						const lenis = getLenis();
 						if (lenis) lenis.scrollTo(globe as HTMLElement, { duration: 1.1 });
 						else globe.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -455,8 +544,8 @@
 	const arsipSec = $derived(hp["arsip"]);
 	const videoSec = $derived(hp["video"]);
 	const hargaSec = $derived(hp["harga"]);
-	const trustSec = $derived(hp["percaya"]);
-	const etalaseSec = $derived(hp["etalase"]);
+	const bandingSec = $derived(hp["banding"]);
+	const trustSec = $derived(hp["percaya"]);	const etalaseSec = $derived(hp["etalase"]);
 	// Logo pelanggan dari CMS: tiap foto terpilih (thumb 800px, bersih) jadi
 	// satu logo. Kosong = wordmark dummy di LogoCloud.
 	const trustLogos = $derived(
@@ -509,14 +598,348 @@
 	);
 	const heroIsVideo = $derived(!!heroVideoUrl && heroMediaVideo && motionOk && !heroDead);
 	let heroVideoOk = $state(false);
+	/** Versi video hero yang tampak sudah benar-benar berputar (bukan sekadar siap). */
+	let heroPlaying = $state(false);
 	// ── Suara video hero ────────────────────────────────────────────────
 	let heroVideoEl = $state<HTMLVideoElement | null>(null);
+
+	// ── Versi bertingkat video hero (lihat $lib/heroRungs & API heroVariants.ts) ──
+	// Dulu satu berkas 4K50 (31 MB, ±13 Mbps) langsung diputar: di koneksi biasa baru bergerak 5–15 dtk setelah
+	// halaman dibuka lalu macet, dan perangkat lemah membuang frame. Kini: versi pembuka kecil (1080p / potongan
+	// tegak ponsel) langsung diputar; versi lebih tajam dimuat di belakang dan baru ditukar (crossfade, waktu
+	// tersinkron di keyframe) setelah bisa diputar sampai habis — video yang tampak tak pernah menunggu jaringan.
+	// Perangkat membuang frame → turun satu versi (dulu: video dibekukan).
+	type HeroLayer = { id: string; url: string; shown: boolean; el: HTMLVideoElement | null };
+	let heroLayers = $state<HeroLayer[]>([]);
+	let heroPlan: HeroPlan | null = null;
+	/** Ukuran acuan tata letak = versi terbesar kelompoknya: bingkai hero tak berubah saat versi berganti. */
+	let heroNative = $state<{ w: number; h: number } | null>(null);
+	/** Naik dihentikan (perangkat sudah membuang frame di versi lebih tinggi). */
+	let heroCapped = false;
+	let heroGen = 0;
+	/**
+	 * Kecepatan unduh nyata (MB/dtk), diukur dari lamanya versi pembuka hero terunduh penuh; null = belum
+	 * diketahui. Dipakai untuk: naik versi hero hanya bila sanggup, dan klip kartu kecil di koneksi lambat.
+	 */
+	let netMBps: number | null = null;
+	let heroStarterT0 = 0;
+	function connInfo() {
+		const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string; downlink?: number } }).connection;
+		return { saveData: !!c?.saveData, slow: /(^|-)2g|3g/.test(c?.effectiveType ?? ""), downlinkMBps: c?.downlink ? c.downlink / 8 : null };
+	}
+	/** Koneksi lambat (< ±5 Mbps) / hemat data → klip kartu versi kecil. */
+	function preferSmallClip(): boolean {
+		const c = connInfo();
+		if (c.saveData || c.slow) return true;
+		const mbps = netMBps ?? c.downlinkMBps;
+		return mbps !== null && mbps < 0.6;
+	}
+	$effect(() => {
+		const url = heroIsVideo ? heroVideoUrl : null;
+		const variants = hero?.videoVariants ?? null;
+		untrack(() => {
+			heroGen++;
+			heroCapped = false;
+			if (!url) {
+				heroLayers = [];
+				heroPlan = null;
+				heroNative = null;
+				return;
+			}
+			heroPlan = pickHeroRungs(variants);
+			heroNative = heroPlan?.native ?? null;
+			heroStarterT0 = performance.now();
+			const first = heroPlan?.starter;
+			heroLayers = [{ id: first?.id ?? "master", url: first?.url ?? url, shown: true, el: null }];
+		});
+	});
+	// Elemen yang sedang tampak = sumber suara, jeda di luar layar, pemantau frame.
+	$effect(() => {
+		heroVideoEl = heroLayers.findLast((l) => l.shown)?.el ?? null;
+	});
+	const waitMedia = (el: HTMLMediaElement, ev: string, ms: number) =>
+		new Promise<boolean>((res) => {
+			const on = () => {
+				window.clearTimeout(t);
+				res(true);
+			};
+			const t = window.setTimeout(() => {
+				el.removeEventListener(ev, on);
+				res(false);
+			}, ms);
+			el.addEventListener(ev, on, { once: true });
+		});
+	/** Detik ter-buffer di depan posisi putar. */
+	function bufferedAhead(v: HTMLMediaElement): number {
+		const t = v.currentTime;
+		for (let i = 0; i < v.buffered.length; i++) {
+			if (v.buffered.start(i) <= t + 0.05 && v.buffered.end(i) > t) return v.buffered.end(i) - t;
+		}
+		return 0;
+	}
+	/** Video pembuka sudah dimulai (gerbang buffer lewat) — sebelum itu jangan ada yang memanggil play(). */
+	let heroStarted = $state(false);
+	// Mulai memutar versi pembuka hanya setelah ≥ 3 dtk ter-buffer (atau browser yakin bisa sampai habis):
+	// autoplay memutar begitu SATU frame siap, lalu macet di detik pertama selagi halaman masih mengunduh.
+	// Selama menunggu, poster (frame pertama) yang tampak.
+	$effect(() => {
+		const first = heroLayers[0];
+		const v = first?.el;
+		if (!v || !first.shown) return;
+		heroStarted = false;
+		let done = false;
+		const tryStart = () => {
+			if (done) return;
+			const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 20;
+			if (v.readyState >= 4 || (v.readyState >= 3 && bufferedAhead(v) >= Math.min(3, dur - v.currentTime - 0.1))) {
+				done = true;
+				heroStarted = true;
+				cleanup();
+				void v.play().catch(() => {});
+			}
+		};
+		const evs = ["progress", "canplay", "canplaythrough", "loadeddata"] as const;
+		const cleanup = () => {
+			evs.forEach((e) => v.removeEventListener(e, tryStart));
+			window.clearTimeout(fallback);
+			window.clearTimeout(retry);
+		};
+		evs.forEach((e) => v.addEventListener(e, tryStart));
+		// Koneksi yang macet total (sering di tunnel/jaringan seluler): 3,5 dtk tanpa data sama sekali → ganti ke
+		// versi TERKECIL lewat permintaan baru (biasanya langsung jalan; naik lagi nanti seperti biasa). Sudah
+		// terkecil → minta ulang berkas yang sama.
+		const retry = window.setTimeout(() => {
+			if (done || v.readyState > 0) return;
+			const plan = heroPlan;
+			const lowest = plan?.pool[0];
+			if (plan && lowest && lowest.id !== first.id) {
+				plan.ladder = ladderFrom(plan, lowest);
+				heroLayers = [{ id: lowest.id, url: lowest.url, shown: true, el: null }];
+				return;
+			}
+			const src = v.getAttribute("src");
+			if (src) {
+				v.setAttribute("src", src);
+				v.load();
+			}
+		}, 3500);
+		// Pengaman: jaringan sangat lambat — putar apa adanya setelah 10 dtk.
+		const fallback = window.setTimeout(() => {
+			if (done) return;
+			done = true;
+			heroStarted = true;
+			cleanup();
+			void v.play().catch(() => {});
+		}, 10000);
+		tryStart();
+		return cleanup;
+	});
+	function dropHeroLayer(id: string) {
+		const L = heroLayers.find((l) => l.id === id);
+		const el = L?.el;
+		if (el) {
+			el.pause();
+			el.removeAttribute("src");
+			el.load(); // lepas buffer & dekoder
+		}
+		heroLayers = heroLayers.filter((l) => l.id !== id);
+	}
+	/** Tukar ke versi `next`: muat di belakang, tunggu siap, sinkron di keyframe, crossfade. */
+	async function swapHeroLayer(next: HeroVideoVariant, gen: number): Promise<boolean> {
+		const front = heroLayers.findLast((l) => l.shown);
+		const fv = front?.el;
+		if (!front || !fv || heroLayers.some((l) => l.id === next.id)) return false;
+		heroLayers.push({ id: next.id, url: next.url, shown: false, el: null });
+		await tick();
+		const L = heroLayers.find((l) => l.id === next.id);
+		const nv = L?.el;
+		const alive = () => gen === heroGen && !!L && heroLayers.includes(L);
+		if (!L || !nv) return false;
+		nv.muted = true;
+		const dur = Number.isFinite(fv.duration) && fv.duration > 0 ? fv.duration : 20;
+		// Siap = browser yakin bisa memutar sampai habis DAN ≥ 10 dtk (atau seluruh video) sudah ter-buffer.
+		const deadline = performance.now() + Math.max(15000, dur * 1500);
+		const buffered = () => (nv.buffered.length ? nv.buffered.end(nv.buffered.length - 1) : 0);
+		while (alive() && performance.now() < deadline && !(nv.readyState >= 4 && buffered() >= Math.min(dur - 0.2, 10))) {
+			await new Promise((r) => window.setTimeout(r, 250));
+		}
+		if (!alive() || !(nv.readyState >= 4)) {
+			if (L && heroLayers.includes(L)) dropHeroLayer(next.id);
+			return false;
+		}
+		// Keyframe berikutnya (versi dienkode keyframe tiap 2 dtk) cukup jauh di depan video yang tampak.
+		let k = Math.ceil((fv.currentTime + 0.8) / 2) * 2;
+		if (k >= dur - 0.3) k = 0;
+		nv.currentTime = k;
+		await waitMedia(nv, "seeked", 4000);
+		// Tunggu video yang tampak tiba di k (k = 0: tunggu ia berputar ke awal).
+		const reached = await new Promise<boolean>((res) => {
+			const until = performance.now() + (dur + 3) * 1000;
+			let prev = fv.currentTime;
+			const step = () => {
+				if (!alive() || performance.now() > until) return res(false);
+				const t = fv.currentTime;
+				if (k === 0 ? t < prev - 1 : t >= k - 0.02) return res(true);
+				prev = t;
+				requestAnimationFrame(step);
+			};
+			requestAnimationFrame(step);
+		});
+		if (!reached || !alive()) {
+			if (L && heroLayers.includes(L)) dropHeroLayer(next.id);
+			return false;
+		}
+		const audible = !fv.muted;
+		if (audible) {
+			nv.volume = 0;
+			nv.muted = false;
+		}
+		await nv.play().catch(() => {});
+		await new Promise<void>((res) => {
+			const rvfc = (nv as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback;
+			if (rvfc) rvfc.call(nv, () => res());
+			else void waitMedia(nv, "playing", 2000).then(() => res());
+		});
+		if (!alive()) return false;
+		if (import.meta.env.DEV) console.debug(`[hero] tukar → ${next.id}, selisih waktu ${((nv.currentTime - fv.currentTime) * 1000).toFixed(0)} ms`);
+		L.shown = true; // lapisan baru di atas → opacity 0 → 1 (transisi CSS) = crossfade
+		if (audible) {
+			gsap.to(nv, { volume: heroInView ? HERO_VOL : 0, duration: 0.6, ease: "power1.out" });
+			gsap.to(fv, { volume: 0, duration: 0.6, ease: "power1.out" });
+		}
+		await new Promise((r) => window.setTimeout(r, 750));
+		if (heroLayers.includes(front)) dropHeroLayer(front.id);
+		return true;
+	}
+	// Naik versi satu per satu setelah video pembuka berputar & halaman tenang. Gagal siap tepat waktu
+	// (jaringan tak sanggup bitrate versi itu) = berhenti di versi sekarang.
+	let heroClimbFor = -1;
+	$effect(() => {
+		const ok = heroVideoOk;
+		const gen = heroGen;
+		if (!ok || heroClimbFor === gen) return;
+		const ladder = heroPlan?.ladder ?? [];
+		if (!ladder.length) return;
+		heroClimbFor = gen;
+		void (async () => {
+			await new Promise((r) => window.setTimeout(r, 1500));
+			for (const r of ladder) {
+				if (gen !== heroGen || heroCapped) return;
+				// Unduh versi berikutnya hanya setelah versi yang tampak SELESAI terunduh: keduanya berebut
+				// bandwidth = versi yang tampak macet.
+				const until = performance.now() + 60000;
+				while (gen === heroGen && performance.now() < until) {
+					const fv = heroLayers.findLast((l) => l.shown)?.el;
+					if (!fv) return;
+					const dur = Number.isFinite(fv.duration) && fv.duration > 0 ? fv.duration : 0;
+					const end = fv.buffered.length ? fv.buffered.end(fv.buffered.length - 1) : 0;
+					if (dur && end >= dur - 0.25 && fv.buffered.start(0) <= 0.1) break;
+					await new Promise((res) => window.setTimeout(res, 500));
+				}
+				// Versi ini butuh > 1,5× durasinya untuk terunduh di koneksi ini → berhenti di versi sekarang (tak
+				// memonopoli bandwidth untuk ketajaman yang lama sekali tiba). Pertukaran tetap menunggu siap.
+				const fvNow = heroLayers.findLast((l) => l.shown)?.el;
+				const durNow = fvNow && Number.isFinite(fvNow.duration) && fvNow.duration > 0 ? fvNow.duration : 20;
+				if (netMBps !== null && r.bytes && r.bytes / 1e6 / netMBps > durNow * 1.5) return;
+				// Klip kartu "Collection of videos" yang dipanaskan lebih awal didahulukan (maks 8 dtk).
+				const warmUntil = performance.now() + 8000;
+				while (gen === heroGen && droneEarly && droneWarmPending() && performance.now() < warmUntil) {
+					await new Promise((res) => window.setTimeout(res, 400));
+				}
+				if (gen !== heroGen || heroCapped) return;
+				if (!(await swapHeroLayer(r, gen))) return;
+			}
+		})();
+	});
+	/** Perangkat membuang frame: turun satu versi (true) — tak ada yang lebih rendah = false. */
+	function heroStepDown(): boolean {
+		const pool = heroPlan?.pool ?? [];
+		const front = heroLayers.findLast((l) => l.shown);
+		const i = pool.findIndex((v) => v.id === front?.id);
+		if (i <= 0) return false;
+		heroCapped = true;
+		void swapHeroLayer(pool[i - 1]!, heroGen);
+		return true;
+	}
+	// Video hero TAK PERNAH tampil lebih besar dari piksel aslinya (saat diam maupun saat zoom gulir):
+	//  1. Muat dengan cadangan parallax (lapisan .hero-img-scrub 105/109% tinggi) → menutup penuh + parallax;
+	//     zoom gulir dibatasi sampai 1:1 (heroZoom).
+	//  2. Hanya muat tanpa cadangan (mis. monitor 4K): tetap menutup penuh, tetapi lapisan seukuran hero,
+	//     tanpa geser/zoom parallax (heroTight).
+	//  3. Layar butuh lebih dari sumbernya (MacBook Pro 16, iMac, 5K): video tampil sebagai bingkai di tengah
+	//     latar hero, paling besar 1:1 (heroFrame). Ukuran dipasang di pembungkus video — elemen video sendiri
+	//     dipakai animasi pembuka (transform).
+	//  heroBase = perbesaran tampil (piksel layar ÷ piksel video) saat zoom 1.
+	let heroBase = $state(0);
+	let heroTight = $state(false);
+	let heroFrame = $state<string | null>(null);
+	function heroZoom(z: number) {
+		if (heroTight) return 1;
+		return heroBase > 0 ? Math.max(1, Math.min(z, 1 / heroBase)) : z;
+	}
+	$effect(() => {
+		const v = heroVideoEl;
+		if (!v) return;
+		const fit = () => {
+			const box = v.closest<HTMLElement>(".hero-img-scrub");
+			const area = v.closest<HTMLElement>("section");
+			// Ukuran acuan versi terbesar (bukan versi yang sedang diputar): bingkai tetap saat versi berganti.
+			const vw = heroNative?.w ?? v.videoWidth;
+			const vh = heroNative?.h ?? v.videoHeight;
+			if (!box || !area || !vw || !vh) return;
+			const dpr = window.devicePixelRatio || 1;
+			const W = box.offsetWidth;
+			const H = area.clientHeight;
+			// Cadangan parallax lapisan (kelas -top/h di markup): 9% (sm ke atas) / 5% (ponsel).
+			const over = window.innerWidth >= 640 ? 1.09 : 1.05;
+			const coverLoose = Math.max(W / vw, (H * over) / vh) * dpr;
+			const coverTight = Math.max(W / vw, H / vh) * dpr;
+			let base: number;
+			let tight = false;
+			let frame: string | null = null;
+			if (coverLoose <= 1.005) base = coverLoose;
+			else if (coverTight <= 1.005) {
+				base = coverTight;
+				tight = true;
+			} else {
+				// Bingkai (video tetap object-cover di dalamnya) paling besar seukuran piksel sumber:
+				//  - lebar layar masih tercakup (MacBook Pro 16, ponsel 3×): selebar hero, hanya tingginya dibatasi;
+				//    sisa tinggi yang kecil jadi pita gelap di ATAS (di balik navbar & scrim), yang besar dibagi rata;
+				//  - lebar pun tak tercakup (5K/iMac): bingkai di tengah dengan tepi untuk navbar.
+				const maxW = Math.floor(vw / dpr);
+				const maxH = Math.floor(vh / dpr);
+				const top0 = -box.offsetTop; // puncak AREA HERO dalam koordinat lapisan (yang menjorok untuk parallax)
+				if (W <= maxW) {
+					const fh = Math.min(H, maxH);
+					const band = H - fh;
+					const y = Math.round(top0 + (band <= H * 0.16 ? band : band / 2));
+					base = Math.max(W / vw, fh / vh) * dpr;
+					frame = `inset:auto;left:0;top:${y}px;width:100%;height:${fh}px`;
+				} else {
+					const fw = Math.floor(Math.min(maxW, W - 2 * Math.max(24, W * 0.05)));
+					const fh = Math.floor(Math.min(maxH, H - 2 * Math.max(72, H * 0.08), (fw * vh) / vw));
+					base = Math.max(fw / vw, fh / vh) * dpr;
+					frame = `inset:auto;left:50%;top:${Math.round(top0 + H / 2)}px;width:${fw}px;height:${fh}px;transform:translate(-50%,-50%)`;
+				}
+			}
+			if (Math.abs(base - heroBase) < 0.001 && frame === heroFrame && tight === heroTight) return;
+			heroBase = base;
+			heroTight = tight;
+			heroFrame = frame;
+			calmRefresh(); // nilai zoom/geser scrub (fungsi) dihitung ulang saat refresh
+		};
+		fit();
+		v.addEventListener("loadedmetadata", fit);
+		window.addEventListener("resize", fit);
+		return () => {
+			v.removeEventListener("loadedmetadata", fit);
+			window.removeEventListener("resize", fit);
+		};
+	});
 	/** Yang terdengar sekarang (video.muted). */
 	let heroMuted = $state(true);
-	/** Pilihan pengguna: "off" = sengaja dimatikan lewat tombol (diingat). */
+	/** Pilihan pengguna: bawaan "off"; "on" hanya bila sengaja dinyalakan lewat tombol (diingat). */
 	const SOUND_KEY = "lakuna-hero-sound";
-	// Bawaan "off": video hero bisu. Hanya bersuara bila pengunjung sendiri menekan tombol suara
-	// (tersimpan "on"); penyalaan otomatis (gestur pertama / lensa membuka) tak lagi berlaku.
 	function soundPref(): "on" | "off" {
 		try {
 			return localStorage.getItem(SOUND_KEY) === "on" ? "on" : "off";
@@ -532,10 +955,11 @@
 		gsap.to(v, { volume: to, duration: dur, ease: "power1.out", overwrite: true });
 	}
 	/** Coba nyalakan suara; kembalikan false bila browser menolak. */
-	async function unmuteHero(force = false): Promise<boolean> {
+	async function unmuteHero(): Promise<boolean> {
 		const v = heroVideoEl;
-		// `force` = klik tombol suara hero: pilihan sengaja pengunjung, tak ikut saklar global.
-		if (!v || (!force && (soundPref() === "off" || !soundOn()))) return false;
+		if (!v || soundPref() === "off" || !soundOn()) return false;
+		// Sudah bersuara (mis. versi baru hasil crossfade mewarisi suara): jangan diredam lalu dinaikkan lagi.
+		if (!v.muted && !heroMuted) return true;
 		v.volume = 0;
 		v.muted = false;
 		try {
@@ -556,7 +980,7 @@
 			// Menyalakan suara video = preferensi hero sendiri; tidak
 			// menyentuh saklar suara UI navbar (keduanya independen).
 			try { localStorage.setItem(SOUND_KEY, "on"); } catch { /* abaikan */ }
-			void unmuteHero(true);
+			void unmuteHero();
 		} else {
 			try { localStorage.setItem(SOUND_KEY, "off"); } catch { /* abaikan */ }
 			v.muted = true;
@@ -598,7 +1022,7 @@
 			if (muted) {
 				v.muted = true;
 				heroMuted = true;
-			} else if (soundPref() !== "off") {
+			} else if (soundPref() === "on") {
 				void unmuteHero();
 			}
 		};
@@ -630,25 +1054,47 @@
 	//     yang berbagi GPU/CPU yang sama.
 	let heroFrozen = false;
 	let heroOnScreen = true;
+	let heroEndEl = $state<HTMLElement | null>(null);
+	/** Hitung ulang heroOnScreen dari keadaan observer terakhir (dipasang effect di bawah). */
+	let heroSyncNow: () => void = () => {};
+	$effect(() => {
+		void heroMuted; // suara dinyalakan/dimatikan → aturan "terlihat" berganti
+		heroSyncNow();
+	});
 	function syncHeroPlayback() {
 		const v = heroVideoEl;
 		if (!v || heroFrozen) return;
-		if (heroOnScreen && v.paused && v.readyState >= 2) void v.play().catch(() => {});
+		if (heroOnScreen && v.paused && v.readyState >= 2 && heroStarted) void v.play().catch(() => {});
 		else if (!heroOnScreen && !v.paused) v.pause();
 	}
 	$effect(() => {
 		const v = heroVideoEl;
 		const cover = heroSection?.parentElement;
-		if (!v || !cover || !heroVideoOk) return;
+		const end = heroEndEl;
+		if (!v || !cover || !end || !heroVideoOk) return;
 		heroFrozen = false;
+		// Dua ukuran "terlihat": hero benar-benar tampak (penanda batas belum lewat atas layar), dan wadahnya
+		// masih di layar. Tanpa suara cukup yang pertama — selagi strip arsip menutupi hero, dekoder 1440p
+		// tak perlu jalan. Bersuara: tetap putar selama wadahnya ada, supaya suaranya tak terpotong.
+		let coverIn = true;
+		let uncovered = true;
+		const sync = () => {
+			heroOnScreen = heroMuted ? uncovered : coverIn;
+			syncHeroPlayback();
+		};
 		const io = new IntersectionObserver(
-			([e]) => {
-				heroOnScreen = !!e?.isIntersecting;
-				syncHeroPlayback();
+			(entries) => {
+				for (const e of entries) {
+					if (e.target === cover) coverIn = e.isIntersecting;
+					else uncovered = e.isIntersecting || e.boundingClientRect.top > 0;
+				}
+				sync();
 			},
 			{ threshold: 0 },
 		);
 		io.observe(cover);
+		io.observe(end);
+		heroSyncNow = sync;
 		// Pantau kualitas pemutaran per detik; jendela 4 detik, dua jendela buruk berturut-turut.
 		let prevDropped = 0;
 		let prevTotal = 0;
@@ -666,6 +1112,10 @@
 			const t = win.reduce((n, x) => n + x.t, 0);
 			bad = t >= 60 && d / t > 0.15 ? bad + 1 : 0;
 			if (bad >= 2) {
+				bad = 0;
+				win.length = 0;
+				// Turun satu versi (lebih ringan, tetap bergerak); sudah paling rendah → bekukan di frame terakhir.
+				if (heroStepDown()) return;
 				heroFrozen = true;
 				v.pause();
 				v.muted = true;
@@ -674,6 +1124,7 @@
 		}, 1000);
 		return () => {
 			io.disconnect();
+			heroSyncNow = () => {};
 			window.clearInterval(timer);
 		};
 	});
@@ -682,6 +1133,7 @@
 	$effect(() => {
 		void heroVideoUrl;
 		heroVideoOk = false;
+		heroPlaying = false;
 	});
 	const heroSrc = $derived(heroDead ? HERO_FALLBACK : heroImg);
 	async function onHeroError() {
@@ -722,7 +1174,26 @@
 	// Harga custom: email dari konfigurasi kontak bersama ($lib/contact). Selama
 	// belum diisi, tombol menuju halaman Customer service.
 	const customHref = $derived(mailto(s.customSubject));
-	const rateImg = $derived(imgFor("rate-sheet", 2400, 1400, hargaSec?.imageUrl || hp["manifesto"]?.imageUrl));
+	// Gambar contoh (bila CMS belum mengisi foto) dipesan seukuran kotaknya: di ponsel papan tarif tegak
+	// (±360 × 950 px CSS, layar 3×) — versi lanskap 3400 × 1984 di sana direntangkan ±1,4×.
+	let rateNarrow = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia("(max-width: 639px)");
+		const upd = () => (rateNarrow = mq.matches);
+		upd();
+		mq.addEventListener("change", upd);
+		return () => mq.removeEventListener("change", upd);
+	});
+	const rateImg = $derived(
+		rateNarrow
+			? imgFor("rate-sheet", 1400, 3400, hargaSec?.imageUrl || hp["manifesto"]?.imageUrl)
+			: imgFor("rate-sheet", 3400, 1984, hargaSec?.imageUrl || hp["manifesto"]?.imageUrl),
+	);
+	// Section asal latar papan tarif → ApiImage menaikkan tingkat resolusinya (/api/homepage/:key/image).
+	// Gambar contoh (dummy) tanpa key: jangan sampai ditukar ke gambar CMS.
+	const rateKey = $derived(
+		USE_DUMMY_IMAGES ? undefined : hargaSec?.imageUrl ? "harga" : hp["manifesto"]?.imageUrl ? "manifesto" : undefined,
+	);
 	// Tangga kuota langganan — angka asli dari API, tiga tingkat teratas.
 	const quotaLadder = $derived([...new Set(plans.map((p) => p.quota))].sort((a, b) => a - b).slice(0, 3));
 	// Belum dipilih = tingkat terendah (yang menjadi harga "mulai dari"). Pilihan yang sudah tak ada di
@@ -732,7 +1203,7 @@
 	);
 	const quotaPrice = $derived.by(() => {
 		if (quotaSel == null) return null;
-		const prices = plans.filter((p) => p.quota === quotaSel).map((p) => p.priceMonthly);
+		const prices = plans.filter((p) => p.quota === quotaSel && p.priceAnnual > 0).map((p) => p.priceAnnual);
 		return prices.length ? Math.min(...prices) : null;
 	});
 	// Tiga bingkai contoh: yang dibayar per bingkai memang isi arsip ini.
@@ -761,11 +1232,26 @@
 	$effect(() => {
 		const id = compareShot?.id;
 		if (!id || id in compareOrig) return;
-		void fetchPhotoOriginal(id).then((url) => {
+		// Bingkai bandingkan ±1.100 × 780 px CSS (cover) di desktop = ±2.400 px fisik di retina → 3200; ponsel 2048.
+		// Versi asli yang diperkecil di server (bukan file 20 MP), tak pernah tampil lebih besar dari pikselnya.
+		const width = window.innerWidth >= 640 ? 3200 : 2048;
+		void fetchPhotoOriginal(id, width).then((url) => {
 			compareOrig[id] = url;
 		});
+		// Sisi "pratinjau" seukuran yang sama tapi ber-watermark: bedanya hanya watermark, bukan ketajaman
+		// (pratinjau publik 1000 px dulu direntangkan ±2× di layar retina → buram).
+		void fetchPhotoOriginal(id, width, { watermark: true }).then((url) => {
+			if (url) compareWm[id] = url;
+		});
 	});
+	let compareWm = $state<Record<string, string>>({});
 	const compareOrigUrl = $derived(compareShot ? (compareOrig[compareShot.id] ?? null) : null);
+	const comparePrevUrl = $derived(compareShot ? (compareWm[compareShot.id] ?? compareShot.watermarkUrl) : null);
+	// Gambar custom CMS untuk panel banding: bila diisi, gantikan slider arsip
+	// otomatis dengan gambar statis. Kosong = perilaku lama (slider geser).
+	const bandingImg = $derived(
+		bandingSec?.imageUrl && !bandingSec.imageUrl.includes("picsum.photos") ? bandingSec.imageUrl : null,
+	);
 
 	// Lensa preloader membuka ke foto hero, jadi ia menunggu gambar hero yang
 	// FINAL: data homepage sudah dijawab (berhasil atau gagal) DAN src yang sedang
@@ -776,10 +1262,99 @@
 	// gambar dari cache yang sudah complete, lalu reset di sini menimpanya — dan
 	// karena event load tidak datang lagi, lensa tertahan sampai batas tunggu.
 	let hpSettled = $state(false);
+	// Lensa preloader menunggu data beranda (bersama ubin awal peta).
+	$effect(() => {
+		if (hpSettled) return;
+		const release = holdReady("home-data");
+		return release;
+	});
 	let heroLoadedSrc = $state("");
+	// Poster video hero = frame pertamanya: begitu termuat, lensa boleh membuka ke sana — video mulai
+	// bergerak dari frame yang sama begitu datanya cukup (dulu preloader menunggu video, sampai 12 dtk).
+	let heroPosterOk = $state(false);
+	// Poster lapisan video pertama. Poster TERACAK tak boleh masuk atribut `poster` (berkasnya hanya mozaik):
+	// disusun di <canvas> tepat di belakang video (lihat markup) dan dilepas begitu video berputar.
+	const heroPoster = $derived(hero?.posterUrl ?? HERO_FALLBACK ?? null);
+	const heroPosterScr = $derived(isScrambledUrl(heroPoster));
+	$effect(() => {
+		const url = heroIsVideo ? (hero?.posterUrl ?? null) : null;
+		heroPosterOk = false;
+		if (!url) return;
+		let alive = true;
+		if (isScrambledUrl(url)) {
+			// Cache yang sama dengan kanvas posternya (satu unduhan); kanvas tersusun di tick yang sama.
+			loadScrambledCached(url, "high").then(
+				() => {
+					if (alive) heroPosterOk = true;
+				},
+				() => {},
+			);
+			return () => {
+				alive = false;
+			};
+		}
+		const im = new Image();
+		im.src = url;
+		im.decode()
+			.then(() => {
+				if (alive) heroPosterOk = true;
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	});
 	const heroReady = $derived(
-		hpSettled && (heroLoadedSrc === heroSrc || heroVideoOk || heroDead || (!heroSrc && !heroIsVideo)),
+		hpSettled && (heroLoadedSrc === heroSrc || heroVideoOk || heroPosterOk || heroDead || (!heroSrc && !heroIsVideo)),
 	);
+
+	// Foto hero dari CMS naik tingkat resolusi lewat ApiImage (sectionKey "hero"). ApiImage mengukur ukuran
+	// DIAM (getBoundingClientRect + ResizeObserver; transform animasi tak memicunya), padahal foto ini tampil
+	// lebih besar selama animasi: zoom pembuka .hero-img-anim 1,09 (app.css) × blitz lensa 1,14 (onOpen) ×
+	// zoom gulir .hero-img-scrub 1,04 / 1,06 (ponsel) — bisa bertumpuk. Kebutuhan puncaknya dinilai di sini.
+	const heroSectionKey = $derived(heroSrc && heroSrc === hero?.imageUrl ? "hero" : undefined);
+	function heroPeak(): number {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 1;
+		return 1.09 * 1.14 * (window.innerWidth < 640 ? 1.06 : 1.04);
+	}
+	let peakChecking = false;
+	/**
+	 * Minta ApiImage menilai ulang tingkatnya seolah kanvas sedang di skala `peak` (relatif ukuran tata
+	 * letaknya): skala sementara dipasang, event `load` (pemicu penilaian ApiImage, sinkron) dikirim, lalu
+	 * skala dilepas di tugas yang sama — tak pernah tergambar.
+	 */
+	function recheckAtPeak(el: Element | null | undefined, peak: number) {
+		if (peakChecking || !(el instanceof HTMLCanvasElement) || el.dataset.scr !== "ok" || !el.offsetWidth) return;
+		const now = el.getBoundingClientRect().width / el.offsetWidth;
+		const prev = el.style.scale;
+		peakChecking = true;
+		try {
+			if (peak > now * 1.001) el.style.scale = String(((parseFloat(prev) || 1) * peak) / now);
+			el.dispatchEvent(new Event("load"));
+		} finally {
+			el.style.scale = prev;
+			peakChecking = false;
+		}
+	}
+	const heroImgEl = () => heroSection?.querySelector<HTMLElement>(".hero-img-scrub > canvas");
+	function onHeroImgLoad() {
+		heroLoadedSrc = heroSrc ?? "";
+		// Sebelum penilaian diam ApiImage di event yang sama (pendengarnya terpasang belakangan) → satu unduhan.
+		if (heroSectionKey) recheckAtPeak(heroImgEl(), heroPeak());
+	}
+	$effect(() => {
+		if (!heroSectionKey) return;
+		let t = 0;
+		const onResize = () => {
+			window.clearTimeout(t);
+			t = window.setTimeout(() => recheckAtPeak(heroImgEl(), heroPeak()), 250);
+		};
+		window.addEventListener("resize", onResize);
+		return () => {
+			window.clearTimeout(t);
+			window.removeEventListener("resize", onResize);
+		};
+	});
 
 	// Lensa preloader membuka → foto hero "tercetak" ala 21hrs on the Moon
 	// (sama dengan bukaan foto di peta): lingkaran bertepi lembut melebar dari
@@ -793,7 +1368,9 @@
 			const layer = section.querySelector<HTMLElement>(".hero-img-anim");
 			// Gambar DI DALAM .hero-img-scrub: scrub parallax sudah memakai
 			// `scale` wrapper itu — dua tween di satu elemen saling berebut.
-			const img = section.querySelector<HTMLElement>(".hero-img-scrub img") ?? section.querySelector<HTMLElement>(".hero-img-scrub > *");
+			// Video: pembungkus .hero-media (semua versi di dalamnya) — versi yang berganti di tengah animasi ikut
+			// tersorot dan terskala, tak meloncat. Foto teracak dirender ApiImage sebagai <canvas>.
+			const img = section.querySelector<HTMLElement>(".hero-img-scrub .hero-media, .hero-img-scrub img, .hero-img-scrub canvas") ?? section.querySelector<HTMLElement>(".hero-img-scrub > *");
 			if (!layer || !img) return;
 			// Blitz kamera menerangi adegan: lensa membuka ke hero yang masih
 			// gelap, lalu flash menyala (putih hangat, serangan ±60 ms) dan
@@ -809,6 +1386,8 @@
 			};
 			paint();
 			gsap.set(img, { scale: 1.14 });
+			// Pengaman: bila penilaian puncak saat foto tersusun terlewat (belum terlihat), nilai sekarang.
+			if (heroSectionKey) recheckAtPeak(img, heroPeak());
 			if (flash) gsap.set(flash, { opacity: 0 });
 			gsap.fromTo(
 				section.querySelectorAll(".hero-anim"),
@@ -859,7 +1438,11 @@
 	let warmBelow = $state(false);
 	$effect(() => {
 		if (warmBelow) return;
-		const id = window.setTimeout(() => (warmBelow = true), heroReady ? 400 : 4000);
+		// Video hero: tunggu ia berputar dulu (+3 dtk) — gambar bandingkan 3200 px (±3,6 MB) dulu merebut
+		// bandwidth di detik-detik pertama sehingga video hero baru bergerak belasan detik kemudian.
+		const id = heroIsVideo
+			? window.setTimeout(() => (warmBelow = true), heroPlaying ? 3000 : 9000)
+			: window.setTimeout(() => (warmBelow = true), heroReady ? 400 : 4000);
 		return () => window.clearTimeout(id);
 	});
 	// File asli sisi "unduhan" bisa berukuran MB; selagi dimuat, sisi itu
@@ -992,11 +1575,15 @@
 			// .hero-img-anim: entrance di atas juga menulis `scale` elemen luar
 			// selama 2,2 detik — dua tween berebut satu properti = kedutan
 			// pada guliran pertama. Elemen berbeda = tidak pernah berkelahi.
+			// Zoom desktop 1.04 (dulu 1.12): lapisan sudah 124% tinggi layar untuk ruang parallax; tambahan 1.12
+			// membuat video hero 4K diperbesar ±1,23× di layar retina (buram) saat menggulir keluar.
 			gsap.to(".hero-img-scrub", {
-				yPercent: isMobile ? 4 : 8,
-				scale: isMobile ? 1.06 : 1.12,
+				// heroTight: lapisan tanpa cadangan → tak boleh bergeser (celah) atau diperbesar.
+				yPercent: () => (heroTight ? 0 : isMobile ? 4 : 8),
+				// Zoom dibatasi supaya video hero tak pernah tampil lebih besar dari pikselnya (lihat heroBase).
+				scale: () => heroZoom(isMobile ? 1.06 : 1.04),
 				ease: "none",
-				scrollTrigger: { trigger: section, start: "top top", end: "bottom top", scrub: 0.6 },
+				scrollTrigger: { trigger: section, start: "top top", end: "bottom top", scrub: 0.6, invalidateOnRefresh: true },
 			});
 			gsap.to(".hero-content", {
 				yPercent: isMobile ? -10 : -16,
@@ -1011,7 +1598,7 @@
 	function onHeroSearch(e: SubmitEvent) {
 		e.preventDefault();
 		const v = q.trim();
-		goto(v ? `/photos?q=${encodeURIComponent(v)}` : "/photos");
+		goto(v ? `/archives?q=${encodeURIComponent(v)}` : "/archives");
 	}
 
 	// Hover-preview video drone: mainkan mp4 asli (originalUrl API) saat
@@ -1032,13 +1619,25 @@
 			v.closest("a")?.removeAttribute("data-playing");
 		});
 	}
+	// Ekor inersia Lenis (duration 1,3 dtk, easing expo) terus mengirim event scroll padahal ±0,8 dtk
+	// terakhirnya hanya bergeser beberapa px/frame — rel sudah praktis diam, tapi klip kartu aktif dulu
+	// baru dipasang setelah ekor itu habis (+160 ms). Kini gulir dianggap tenang begitu kecepatan Lenis
+	// di bawah CALM_V, dan baru dianggap bergerak lagi di atas MOVE_V (histeresis: tak berkedip di ambang).
+	// Tanpa Lenis (sentuh / hemat gerak) tetap memakai jeda 160 ms.
+	const CALM_V = 1.5; // px per frame
+	const MOVE_V = 4;
 	$effect(() => {
 		const onScroll = () => {
+			window.clearTimeout(scrollSettleT);
+			const l = getLenis();
+			if (l && Math.abs(l.velocity) < (pageScrolling ? CALM_V : MOVE_V)) {
+				pageScrolling = false;
+				return;
+			}
 			if (!pageScrolling) {
 				pageScrolling = true;
 				pauseSheetVideos();
 			}
-			window.clearTimeout(scrollSettleT);
 			scrollSettleT = window.setTimeout(() => {
 				pageScrolling = false;
 			}, 160);
@@ -1078,13 +1677,69 @@
 			window.clearTimeout(fallback);
 		};
 	});
+	// Klip kartu baru dipasang (`src`) saat dibutuhkan — aktif/tetangga di strip drone, di-hover, atau terlihat
+	// di HP — dan kartu yang jauh dilepas lagi. Klip kartu beresolusi asli (sering 4K): tiap pemutar yang hidup
+	// menahan dekoder + belasan frame 4K (±12 MB per frame) di memori GPU. Dulu keenam kartu memasang src sejak
+	// halaman dimuat dan yang pernah aktif tetap ter-buffer → lebih dari 1 GB memori GPU di sekitar globe.
+	/**
+	 * Putar klip kartu hanya setelah ≥ 2,5 dtk ter-buffer (atau browser yakin bisa sampai habis): diputar begitu
+	 * satu frame siap = macet di detik pertama dan tampak beku. Selama menunggu, poster kartu yang tampak.
+	 */
+	function playClipBuffered(vid: HTMLVideoElement) {
+		if (vid.dataset.gate === "1") return;
+		const ok = () => {
+			const dur = Number.isFinite(vid.duration) && vid.duration > 0 ? vid.duration : 8;
+			return vid.readyState >= 4 || (vid.readyState >= 3 && bufferedAhead(vid) >= Math.min(2.5, dur - vid.currentTime - 0.1));
+		};
+		if (ok()) {
+			void vid.play().catch(() => {});
+			return;
+		}
+		vid.dataset.gate = "1";
+		const evs = ["progress", "canplay", "canplaythrough", "loadeddata"] as const;
+		const go = () => {
+			evs.forEach((e) => vid.removeEventListener(e, check));
+			window.clearTimeout(t);
+			delete vid.dataset.gate;
+			// Sudah dilepas / tak lagi diminta selama menunggu → jangan diputar.
+			if (vid.getAttribute("src") && vid.dataset.want === "1") void vid.play().catch(() => {});
+		};
+		const check = () => {
+			if (ok()) go();
+		};
+		evs.forEach((e) => vid.addEventListener(e, check));
+		const t = window.setTimeout(go, 6000);
+	}
+	function armClip(vid: HTMLVideoElement): boolean {
+		if (!vid.getAttribute("src")) {
+			// Koneksi lambat: versi kecil (600 × 800) — sudah pernah dipasang versi lain = pakai yang sama lagi.
+			const src = vid.dataset.armed ?? (preferSmallClip() && vid.dataset.srcSm ? vid.dataset.srcSm : vid.dataset.src);
+			if (src) {
+				vid.dataset.armed = src;
+				vid.setAttribute("src", src);
+			}
+		}
+		return !!vid.getAttribute("src");
+	}
+	function releaseClip(vid: HTMLVideoElement) {
+		const src = vid.getAttribute("src");
+		if (!src) return;
+		// Simpan src yang terakhir dipakai (bisa cadangan dari previewFallback) untuk dipasang ulang.
+		vid.dataset.src = src;
+		delete vid.dataset.want;
+		delete vid.dataset.armed;
+		vid.pause();
+		vid.removeAttribute("src");
+		vid.load(); // melepas buffer & dekoder
+		vid.closest("a")?.removeAttribute("data-playing");
+	}
 	function playPreview(e: Event) {
 		if (railGliding || pageScrolling) return;
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 		const card = e.currentTarget as HTMLElement | null;
 		const vid = card?.querySelector<HTMLVideoElement>("video[data-preview]");
 		if (!vid) return;
-		if (!vid.src) return;
+		if (!armClip(vid)) return;
 		document.querySelectorAll<HTMLVideoElement>("video[data-preview]").forEach((o) => {
 			if (o !== vid && !o.paused && !o.closest("[data-active]")) o.pause();
 		});
@@ -1120,25 +1775,77 @@
 		const a = dragActive;
 		void droneItems.length;
 		const track = reelLgEl;
+		const visible = droneOnScreen;
+		const near = droneNear || droneEarly;
+		const scrolling = pageScrolling;
 		if (!track || reduceMotion() || window.innerWidth < 900) return;
+		let activeVid: HTMLVideoElement | null = null;
+		const neighbors: HTMLVideoElement[] = [];
 		track.querySelectorAll<HTMLElement>(".dg-card").forEach((card, i) => {
 			const vid = card.querySelector<HTMLVideoElement>("video[data-preview]");
 			if (!vid) return;
+			if (!near || Math.abs(i - a) > 1) {
+				// Section di luar layar / kartu jauh dari yang aktif: lepas klipnya. Thumbnail di bawahnya
+				// adalah adegan yang sama, jadi tak ada yang hilang; klip dipasang lagi begitu dibutuhkan.
+				releaseClip(vid);
+				return;
+			}
 			if (i === a) {
-				if (!vid.src) return;
+				// Yang mahal di tengah guliran adalah MEMASANG klip 4K (src → demux + dekoder menyala) = frame
+				// patah — itu tetap menunggu gulir tenang (lihat pageScrolling). Klip yang SUDAH terpasang
+				// (dimuat sebagai tetangga) dekodernya sudah siap; play() saja nyaris tanpa biaya, jadi langsung
+				// diputar begitu kartunya aktif — dulu menunggu momentum trackpad habis (0,5–1,5 dtk) padahal
+				// datanya sudah lama siap. Yang sudah berputar dibiarkan jalan.
+				if (scrolling && vid.paused && !vid.getAttribute("src")) return;
 				vid.preload = "auto";
+				if (!armClip(vid)) return;
+				activeVid = vid;
+				if (!visible) {
+					// Pemanasan sebelum section terlihat: di-buffer saja, belum diputar.
+					delete vid.dataset.want;
+					if (!vid.paused) vid.pause();
+					card.removeAttribute("data-playing");
+					return;
+				}
 				const mark = () => {
 					if (!vid.paused && card.hasAttribute("data-active")) card.setAttribute("data-playing", "");
 				};
 				if (vid.paused) vid.addEventListener("playing", mark, { once: true });
 				else mark();
-				void vid.play().catch(() => {});
+				vid.dataset.want = "1";
+				playClipBuffered(vid);
 			} else {
-				if (Math.abs(i - a) === 1) vid.preload = "auto";
+				delete vid.dataset.want;
 				if (!vid.paused) vid.pause();
 				card.removeAttribute("data-playing");
+				// Tetangga: dimuat lebih awal supaya saat jadi aktif tak menunggu unduh — juga setelah gulir tenang,
+				// dan baru setelah section terlihat (sebelumnya bandwidth untuk klip aktif saja).
+				if (scrolling || !visible) return;
+				neighbors.push(vid);
 			}
 		});
+		// Tetangga baru diunduh SETELAH klip aktif berputar. Dulu ketiganya dipasang serentak, jadi klip
+		// aktif (sering 4K, 7–12 MB lewat tunnel) hanya kebagian ±⅓ bandwidth dan lama baru berputar.
+		// Cadangan waktu: klip aktif yang gagal/macet tak boleh menahan tetangganya selamanya.
+		const warm = () => {
+			for (const v of neighbors) {
+				v.preload = "auto";
+				armClip(v);
+			}
+		};
+		const pending = activeVid as HTMLVideoElement | null;
+		if (!neighbors.length) return;
+		// Bukan `!paused`: play() di atas langsung membuat paused=false sebelum satu frame pun siap.
+		if (!pending || (!pending.paused && pending.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA)) {
+			warm();
+			return;
+		}
+		pending.addEventListener("playing", warm, { once: true });
+		const fallback = window.setTimeout(warm, 2500);
+		return () => {
+			pending.removeEventListener("playing", warm);
+			window.clearTimeout(fallback);
+		};
 	});
 
 	// Mobile (layar sentuh sempit): tidak ada hover, jadi klip contact sheet
@@ -1155,21 +1862,33 @@
 		if (!window.matchMedia("(pointer: coarse) and (max-width: 639px)").matches) return;
 		const vids = [...document.querySelectorAll<HTMLVideoElement>("video[data-preview]")];
 		if (!vids.length) return;
+		// Klip kartu pertama dipanaskan lebih awal (lihat droneEarly) — sudah siap saat kartunya terlihat.
+		if (droneEarly) {
+			const first = document.querySelector<HTMLVideoElement>(".dg-card video[data-preview]");
+			if (first) {
+				first.preload = "auto";
+				armClip(first);
+			}
+		}
 		const io = new IntersectionObserver(
 			(entries) => {
 				for (const en of entries) {
 					const vid = en.target as HTMLVideoElement;
 					const card = vid.closest("a");
 					if (en.isIntersecting) {
-						if (!vid.src) continue;
+						if (!armClip(vid)) continue;
 						if (mobileVid && mobileVid !== vid && !mobileVid.paused) {
 							mobileVid.pause();
 							mobileVid.closest("a")?.removeAttribute("data-playing");
 						}
 						mobileVid = vid;
-						card?.setAttribute("data-playing", "");
-						void vid.play().catch(() => {});
-					} else if (!vid.paused) {
+						vid.preload = "auto";
+						vid.addEventListener("playing", () => {
+							if (mobileVid === vid && !vid.paused) card?.setAttribute("data-playing", "");
+						}, { once: true });
+						vid.dataset.want = "1";
+						playClipBuffered(vid);
+					} else if ((delete vid.dataset.want, !vid.paused)) {
 						// Jeda saja tanpa reset: masuk lagi = lanjut, bukan
 						// unduh ulang dari awal (hemat kuota; test menunjukkan
 						// puluhan abort saat reset+putar berulang).
@@ -1203,7 +1922,14 @@
 					bukan di luar: entrance scale di lapisan luar yang seukuran
 					bingkai persis jadi terbaca penuh di empat sisi, bukan
 					hanya kiri-kanan. -->
-				<div class="hero-img-scrub absolute inset-x-0 -top-[6%] h-[112%] will-change-transform sm:-top-[12%] sm:h-[124%]">
+				<!-- Ruang lebih HANYA di atas, seukuran geseran parallax (lapisan bergeser TURUN yPercent 4/8 → 4,2%/8,7%
+					tinggi layar): cadangan lebih besar tak pernah terlihat tetapi membuat lapisan (dan video hero 4K di
+					dalamnya) diperbesar lebih jauh dari perlu — dulu ±1,3× di MacBook Pro 16. -->
+				<div
+					class="hero-img-scrub absolute inset-x-0 -top-[5%] h-[105%] will-change-transform sm:-top-[9%] sm:h-[109%]"
+					style:top={heroTight ? "0" : undefined}
+					style:height={heroTight ? "100%" : undefined}
+				>
 				<!-- alt kosong: ini foto latar yang bisa diganti lewat CMS jadi apa
 					saja, sementara pesannya sudah dipikul judul di sebelahnya.
 					Deskripsi yang di-hardcode ("Pemandangan Nusantara") akan salah
@@ -1211,31 +1937,54 @@
 					daripada tidak ada. Bila CMS memasang klip video + gerakan
 					diizinkan, latarnya video autoplay bisu (menyeluruh, bukan
 					kotak video): bungkus parallax/entrance tetap sama. -->
-				{#if heroIsVideo && heroVideoUrl}
-					{#key heroVideoUrl}
-						<video
-							bind:this={heroVideoEl}
-							src={heroVideoUrl}
-							autoplay
-							muted
-							loop
-							playsinline
-							preload="auto"
-							poster={HERO_FALLBACK ?? undefined}
-							aria-hidden="true"
-							tabindex="-1"
-							class="h-full w-full object-cover object-center"
-							oncanplaythrough={() => (heroVideoOk = true)}
-							onloadeddata={() => {
-								// Lensa membuka hanya bila video sudah bisa diputar lancar
-								// (tanpa poster, buffering = hero hitam). Pengaman: 2,5 dtk.
-								window.setTimeout(() => (heroVideoOk = true), 2500);
-							}}
-							onerror={onHeroError}
-						></video>
-					{/key}
+				{#if heroIsVideo && heroLayers.length}
+					<div class="absolute inset-0" style={heroFrame ?? undefined}>
+						<div class="hero-media absolute inset-0">
+							{#if heroPosterScr && !heroPlaying}
+								<!-- Poster teracak (pengganti atribut `poster`): disusun di kanvas tepat di belakang video —
+									video yang belum punya frame transparan, jadi tampilannya sama. Dilepas begitu video berputar. -->
+								<canvas
+									use:scrambled={{ src: heroPoster, eager: true, priority: "high" }}
+									aria-hidden="true"
+									class="absolute inset-0 h-full w-full object-cover object-center"
+								></canvas>
+							{/if}
+							{#each heroLayers as L, i (L.id)}
+								<!-- Lapisan pertama = versi pembuka (autoplay + poster); lapisan berikutnya = versi lebih
+									tajam yang sedang dimuat (tak tampak) sampai siap ditukar. -->
+								<video
+									bind:this={L.el}
+									src={L.url}
+									muted
+									loop
+									playsinline
+									preload="auto"
+									poster={i === 0 && !heroPosterScr ? (heroPoster ?? undefined) : undefined}
+									aria-hidden="true"
+									tabindex="-1"
+									class="hero-layer absolute inset-0 h-full w-full object-cover object-center"
+									style:opacity={L.shown ? 1 : 0}
+									oncanplaythrough={() => {
+										if (L.shown) heroVideoOk = true;
+									}}
+									onplaying={() => {
+										if (L.shown) heroPlaying = true;
+									}}
+									onloadeddata={() => {
+										// Lensa membuka hanya bila video sudah bisa diputar lancar
+										// (tanpa poster, buffering = hero hitam). Pengaman: 2,5 dtk.
+										if (L.shown) window.setTimeout(() => (heroVideoOk = true), 2500);
+									}}
+									onerror={() => {
+										if (L.shown) void onHeroError();
+										else dropHeroLayer(L.id);
+									}}
+								></video>
+							{/each}
+						</div>
+					</div>
 				{:else if heroSrc}
-					<ApiImage src={heroSrc} alt="" fill eager class="object-cover object-center" onload={() => (heroLoadedSrc = heroSrc)} onerror={onHeroError} />
+					<ApiImage src={heroSrc} alt="" fill eager sectionKey={heroSectionKey} class="object-cover object-center" onload={onHeroImgLoad} onerror={onHeroError} />
 				{/if}
 				</div>
 			</div>
@@ -1315,6 +2064,9 @@
 		</section>
 
 		<div class="relative z-10">
+			<!-- Penanda batas pandang hero: setinggi Seam di bawah (bagian yang masih tembus). Begitu ia lewat
+				di atas layar, hero tertutup penuh oleh strip arsip — video latar dijeda (lihat heroUncovered). -->
+			<div bind:this={heroEndEl} aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-[clamp(180px,30vh,340px)]"></div>
 			<!-- Hero itu lapisan sticky: sambungan ini lewat DI ATASNYA, jadi tepi
 				atasnya harus transparan. Kalau legam, ia memotong foto dan judul
 				hero di tengah huruf. -->
@@ -1374,6 +2126,7 @@
 			<div bind:this={dragViewEl} class="dg-view" role="region" aria-label="Contact sheet" data-no-hover-sound data-no-click-sound>
 				<div bind:this={reelLgEl} class="dg-track">
 					{#each droneItems as v, i (v.id + "-" + i)}
+								{@const thumb = imgFor(v.seed, 600, 800, v.thumbUrl)}
 								<a
 								href={`/videos/${v.id}`}
 								class="dg-card group"
@@ -1383,17 +2136,25 @@
 								onfocus={playPreview}
 								onblur={stopPreview}
 							>
-								<img
-									src={imgFor(v.seed, 600, 800, v.thumbUrl)}
-									alt={v.title[lang]}
-									loading="eager"
-									decoding="async"
-									draggable="false"
-								/>
-								{#if v.previewUrl}
+								{#if isScrambledUrl(thumb)}
+									<!-- Thumbnail teracak → disusun di kanvas (lazy seperti <img loading="lazy">). -->
+									<canvas use:scrambled={thumb} aria-label={v.title[lang]}></canvas>
+								{:else}
+									<img
+										src={thumb}
+										alt={v.title[lang]}
+										loading="lazy"
+										decoding="async"
+										draggable="false"
+									/>
+								{/if}
+								{#if v.cardClipUrl || v.previewUrl}
+									<!-- src dipasang belakangan oleh armClip (lihat di atas), bukan saat render. Klip potret 3:4
+										seukuran kartu (±¼ piksel klip lanskap 4K) bila sudah dibuat. -->
 									<video
 										data-preview
-										src={v.previewUrl}
+										data-src={v.cardClipUrl ?? v.previewUrl}
+										data-src-sm={v.cardClipSmUrl ?? undefined}
 										muted
 										loop
 										playsinline
@@ -1471,6 +2232,7 @@
 				class="pointer-events-none absolute inset-0"
 				amount={16}
 				imgClassName="rate-img"
+				sectionKey={rateKey}
 			/>
 			<div aria-hidden="true" class="rate-scrim"></div>
 			<Reveal stagger={0.08} class="relative z-10">
@@ -1550,7 +2312,7 @@
 				{/if}
 				<p class="rate-price" aria-live="polite">
 					{#if quotaPrice != null}
-						<span class="rate-num">{fmtIDR(quotaPrice)}</span><span class="rate-unit">{s.perMonth}</span>
+						<span class="rate-num">{fmtIDR(quotaPrice)}</span><span class="rate-unit">{s.perYear}</span>
 					{:else}
 						<span class="rate-num text-fg-muted">…</span>
 					{/if}
@@ -1566,32 +2328,36 @@
 					<p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-fg-muted">{s.customDesc}</p>
 				</div>
 				<span aria-hidden="true" class="rate-lead"></span>
-				<p class="rate-price"><span class="rate-num">{s.customPrice}</span></p>
+				<!-- Tanpa angka harga; kolomnya tetap ada supaya tombol sejajar dengan baris lain. -->
+				<span class="rate-price rate-price--empty" aria-hidden="true"></span>
 				<a class="rate-cta" href={customHref}>{s.customCta}</a>
 			</div>
 			</Reveal>
 		</div>
 
-		{#if compareShot && compareOrigUrl}
+		{#if bandingImg || (compareShot && compareOrigUrl)}
 			<!-- Perbandingan pratinjau vs unduhan: pertanyaan pertama pembeli stok
 				adalah "watermark-nya hilang tidak?", jadi dijawab dengan file
 				sungguhan, bukan kalimat. Digeser sendiri oleh pembaca — gerak yang
 				menjawab aksi, bukan animasi yang jalan sendiri. -->
 		<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:items-stretch lg:gap-12">
 			<figure data-reveal class="cmp @container relative flex flex-col lg:col-span-7 lg:mb-10 lg:h-full">
-				<div class="cmp-stage lg:flex-auto">
-						<img class="cmp-img" src={compareShot.watermarkUrl} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
+				{#if bandingImg}
+					<div class="cmp-stage lg:flex-auto">
+						<!-- Gambar CMS teracak → ApiImage (kanvas) yang naik tingkat lewat /api/homepage/banding/image; dua
+							lapis berbagi satu unduhan per tingkat. Skala 1,35 .cmp-img statis → sudah ikut terukur. -->
+						{#if isScrambledUrl(bandingImg)}
+							<ApiImage src={bandingImg} eager={warmBelow} priority="low" sectionKey="banding" class="cmp-img" />
+						{:else}
+							<img class="cmp-img" src={bandingImg} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
+						{/if}
+						<div class="cmp-wm" aria-hidden="true"></div>
 						<div class="cmp-clean" style={`clip-path: inset(0 0 0 ${comparePos}%)`}>
-							<img
-								class="cmp-img cmp-orig"
-								class:is-ready={cmpOrigLoaded === compareOrigUrl}
-								src={compareOrigUrl}
-								alt=""
-								loading={warmBelow ? "eager" : "lazy"}
-								fetchpriority="low"
-								decoding="async"
-								onload={() => (cmpOrigLoaded = compareOrigUrl ?? "")}
-							/>
+							{#if isScrambledUrl(bandingImg)}
+								<ApiImage src={bandingImg} eager={warmBelow} priority="low" sectionKey="banding" class="cmp-img" />
+							{:else}
+								<img class="cmp-img" src={bandingImg} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
+							{/if}
 						</div>
 						<span class="cmp-line" style={`left: ${comparePos}%`} aria-hidden="true"></span>
 						<span class="cmp-tag cmp-tag-left" style={`opacity: ${(comparePos / 100).toFixed(2)}`}>{s.comparePreview}</span>
@@ -1605,6 +2371,49 @@
 							aria-label={s.compareSlider}
 						/>
 					</div>
+				{:else}
+				<div class="cmp-stage lg:flex-auto">
+						<!-- /view teracak (w=3200|2048, kiri ber-watermark) → kanvas seukuran tingkat yang diminta. -->
+						{#if isScrambledUrl(comparePrevUrl)}
+							<canvas class="cmp-img" use:scrambled={{ src: comparePrevUrl, eager: warmBelow, priority: "low" }}></canvas>
+						{:else}
+							<img class="cmp-img" src={comparePrevUrl} alt="" loading={warmBelow ? "eager" : "lazy"} fetchpriority="low" decoding="async" />
+						{/if}
+						<div class="cmp-clean" style={`clip-path: inset(0 0 0 ${comparePos}%)`}>
+							{#if isScrambledUrl(compareOrigUrl)}
+								<!-- Kanvas mengirim event `load` sesudah tersusun → is-ready sama seperti <img>. -->
+								<canvas
+									class="cmp-img cmp-orig"
+									class:is-ready={cmpOrigLoaded === compareOrigUrl}
+									use:scrambled={{ src: compareOrigUrl, eager: warmBelow, priority: "low" }}
+									onload={() => (cmpOrigLoaded = compareOrigUrl ?? "")}
+								></canvas>
+							{:else}
+								<img
+									class="cmp-img cmp-orig"
+									class:is-ready={cmpOrigLoaded === compareOrigUrl}
+									src={compareOrigUrl}
+									alt=""
+									loading={warmBelow ? "eager" : "lazy"}
+									fetchpriority="low"
+									decoding="async"
+									onload={() => (cmpOrigLoaded = compareOrigUrl ?? "")}
+								/>
+							{/if}
+						</div>
+						<span class="cmp-line" style={`left: ${comparePos}%`} aria-hidden="true"></span>
+						<span class="cmp-tag cmp-tag-left" style={`opacity: ${(comparePos / 100).toFixed(2)}`}>{s.comparePreview}</span>
+						<span class="cmp-tag cmp-tag-right" style={`opacity: ${(1 - comparePos / 100).toFixed(2)}`}>{s.compareClean}</span>
+						<input
+							class="cmp-range"
+							type="range"
+							min="0"
+							max="100"
+							bind:value={comparePos}
+							aria-label={s.compareSlider}
+						/>
+					</div>
+				{/if}
 					<!-- Di layar lebar keterangan DILEPAS dari aliran tinggi (tepat di bawah gambar): kolom kanan
 						sejajar dengan dasar GAMBAR, bukan dasar keterangan. `lg:mb-10` menyisakan ruangnya. -->
 					<figcaption class="mt-3 overflow-hidden text-ellipsis whitespace-nowrap text-[min(0.78rem,2.3cqi)] leading-relaxed text-fg-muted/80 lg:absolute lg:inset-x-0 lg:top-full">{s.compareRes}</figcaption>
@@ -1641,7 +2450,7 @@
 						<p class="ben-when">{benefitPlan === "PREMIUM" ? s.subscribeWhen : s.standarWhen}</p>
 						<p class="ben-price">
 							{#if (benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) != null}
-								<span class="rate-from">{s.from}</span><span class="ben-num">{fmtIDR((benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) ?? 0)}</span><span class="rate-unit">{benefitPlan === "PREMIUM" ? s.perMonth : standarType === "VIDEO" ? s.perClip : s.perItem}</span>
+								<span class="rate-from">{s.from}</span><span class="ben-num">{fmtIDR((benefitPlan === "PREMIUM" ? subscribeFrom : standarShown) ?? 0)}</span><span class="rate-unit">{benefitPlan === "PREMIUM" ? s.perYear : standarType === "VIDEO" ? s.perClip : s.perItem}</span>
 							{:else}
 								<span class="ben-num text-fg-muted">…</span>
 							{/if}
@@ -1808,7 +2617,7 @@
 	}
 	.ben-list li {
 		position: relative;
-		padding-left: 1.6rem;
+		padding-left: 0;
 	}
 	.ben-list li + li {
 		margin-top: 0.4rem;
@@ -1816,7 +2625,7 @@
 	.ben-list li::before {
 		content: "";
 		position: absolute;
-		left: 0.2rem;
+		left: -1.15rem;
 		top: 0.38em;
 		width: 0.42rem;
 		height: 0.78rem;
@@ -1875,7 +2684,8 @@
 			aspect-ratio: 4 / 3;
 		}
 	}
-	.cmp-img {
+	/* :global — gambar CMS banding dirender ApiImage (komponen anak); tetap dibatasi ke panggung banding. */
+	.cmp-stage :global(.cmp-img) {
 		position: absolute;
 		inset: 0;
 		width: 100%;
@@ -1961,6 +2771,7 @@
 		isolation: isolate;
 	}
 	.dg-card img,
+	.dg-card canvas,
 	.dg-card video {
 		position: absolute;
 		inset: 0;
@@ -2096,6 +2907,19 @@
 		/* Sebelum sisi bersih terlukis, jangan biarkan watermark di bawahnya
 		   mengintip — tampilkan gelap saja. */
 		background: var(--base);
+	}
+	/* Watermark overlay untuk gambar custom CMS (tak ada versi ber-watermark
+	   dari server seperti foto arsip): tile logo yang SAMA dengan watermark
+	   foto arsip (static/cmp-wm-tile.svg, dibuat dari logo backend
+	   watermarkLogo.ts — tile 12% lebar, skew -30°, opacity 0.45, sel 1.2x).
+	   Lapis bersih menutupinya di sisi kanan karena datang belakangan di DOM. */
+	.cmp-wm {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background-image: url("/cmp-wm-tile.svg");
+		background-repeat: repeat;
+		background-size: 14.4% auto;
 	}
 	.cmp-line {
 		position: absolute;
@@ -2242,6 +3066,10 @@
 		line-height: 1.2;
 		color: var(--safelight);
 	}
+	/* Kolom harga kosong (baris Educational Purposes): hanya penjaga kolom di grid desktop. */
+	.rate-price--empty {
+		display: none;
+	}
 	.rate-price {
 		margin: 0;
 		white-space: nowrap;
@@ -2364,6 +3192,9 @@
 			background-size: 9px 1px;
 			opacity: 0.55;
 		}
+		.rate-price.rate-price--empty {
+			display: block;
+		}
 		.rate-row {
 			grid-template-columns: minmax(0, 1fr) minmax(2rem, 1fr) auto 11rem;
 			/* Tengah vertikal (bukan baseline): sejak kedua kotak disamakan
@@ -2388,5 +3219,9 @@
 		.rate-cta {
 			transition: none;
 		}
+	}
+	/* Pergantian versi video hero: lapisan baru memudar masuk di atas yang lama. */
+	.hero-layer {
+		transition: opacity 0.6s ease;
 	}
 </style>

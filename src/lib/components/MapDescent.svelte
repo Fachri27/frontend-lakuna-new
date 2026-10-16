@@ -9,6 +9,9 @@
 	import { scrambleHover } from "$lib/scramble";
 	import IndonesiaMap from "./IndonesiaMap.svelte";
 
+	/** Kanvas WebGL bumi. Jangan "canvas" saja: langit bintang (backdrop) juga kanvas dan lebih dulu di DOM. */
+	const GLOBE_CANVAS = "canvas.maplibregl-canvas";
+
 	gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
 	/**
@@ -36,7 +39,7 @@
 			land: "Mendarat",
 		},
 		en: {
-			eyebrow: "Start exploring",
+			eyebrow: "Top stories",
 			title: "Nusantara",
 			sub: "Each point is a frame from the Lakunastock archive. Deep dive the hidden depths",
 			frames: "Frames",
@@ -77,10 +80,12 @@
 		dive: (ms: number) => void;
 		rise: (ms: number) => void;
 		landed: () => void;
+		cameraPhase: () => "hero" | "diving" | "landed" | "rising" | null;
 		setSpin: (on: boolean) => void;
 		setPointer: (nx: number, ny: number) => void;
 		setHeroLift: (px: number) => void;
 		setNightMix: (full: number, west: number, east: number) => void;
+		globeDisc: (w: number, h: number) => { cx: number; cy: number; r: number } | null;
 	} | null>(null);
 	// Lama kamera menukik (ms) dari bumi utuh ke bingkai Nusantara.
 	// Menutup (diukur dari rekaman) ±1.9 dtk: zoom keluar 0–0.8 dtk lalu
@@ -96,33 +101,96 @@
 		mapRef?.setSpin(spin);
 	});
 
-	// Langit bintang — dibuat di klien agar SSR/hydration identik. Dua lapis
-	// kedalaman: bintang kecil (jauh) dan besar (dekat) bergeser beda jauh
-	// saat kursor bergerak, jadi langitnya terasa punya ruang.
+	// Langit bintang — dibuat di klien agar SSR/hydration identik. Dua lapis kedalaman: bintang kecil (jauh)
+	// dan besar (dekat) bergeser beda jauh saat kursor bergerak, jadi langitnya terasa punya ruang.
+	//
+	// Digambar di KANVAS, bukan ±950 elemen <span> beranimasi: dulu tiap frame browser menghitung ulang style
+	// ±1.000 elemen (≈3 ms tiap event gulir, di seluruh halaman, juga saat peta tak terlihat) — penyebab utama
+	// landing terasa patah-patah. Kini tiap lapis berisi 3 kanvas (kelompok kelip) yang opasitasnya dianimasikan
+	// CSS dengan durasi & fase berbeda: dikerjakan compositor, hampir tanpa biaya di thread utama.
 	$effect(() => {
 		const far = starsFarEl;
 		const near = starsNearEl;
 		if (!far || !near || far.childElementCount) return;
-		// Langit padat: ±950 bintang. Kebanyakan debu 1px redup (lapis jauh),
-		// sebagian 1,5–2px, dan segelintir bintang terang bercahaya yang
-		// berkilau lebih kuat (lapis dekat). Fragment → satu kali sisip DOM.
-		const farFrag = document.createDocumentFragment();
-		const nearFrag = document.createDocumentFragment();
 		const COUNT = window.innerWidth < 640 ? 420 : 950;
+		const GROUPS = 3;
+		type Star = { x: number; y: number; size: number; bright: boolean; g: number };
+		const farStars: Star[] = [];
+		const nearStars: Star[] = [];
 		for (let i = 0; i < COUNT; i++) {
-			const s = document.createElement("span");
 			const r = Math.random();
 			const size = r < 0.78 ? 1 : r < 0.95 ? 1.5 : r < 0.985 ? 2 : 2.6;
-			s.className = size >= 2.6 ? "md-star is-bright" : "md-star";
-			s.style.left = `${(Math.random() * 100).toFixed(2)}%`;
-			s.style.top = `${(Math.random() * 100).toFixed(2)}%`;
-			s.style.width = s.style.height = `${size}px`;
-			s.style.animationDelay = `${(Math.random() * 6).toFixed(2)}s`;
-			s.style.animationDuration = `${(3 + Math.random() * 5).toFixed(2)}s`;
-			(size <= 1 ? farFrag : nearFrag).appendChild(s);
+			const star = { x: Math.random(), y: Math.random(), size, bright: size >= 2.6, g: i % GROUPS };
+			(size <= 1 ? farStars : nearStars).push(star);
 		}
-		far.appendChild(farFrag);
-		near.appendChild(nearFrag);
+		// Resolusi kanvas dibatasi: 6 kanvas selayar di DPR 2 = ±150 MB memori (tiap kanvas 4 byte × lebar ×
+		// tinggi × 4). Bintang jauh hanya titik 1 px → DPR 1 tak terbedakan; bintang dekat (berpendar) 1,5.
+		// Total ±60 MB — di laptop yang memorinya sesak, selisih ini terasa.
+		const make = (host: HTMLElement, stars: Star[], maxDpr: number) => {
+			const canvases = Array.from({ length: GROUPS }, (_, g) => {
+				const c = document.createElement("canvas");
+				c.className = `md-star-layer md-star-g${g}`;
+				host.appendChild(c);
+				return c;
+			});
+			const draw = () => {
+				const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+				const w = host.clientWidth;
+				const h = host.clientHeight;
+				if (!w || !h) return;
+				canvases.forEach((c, g) => {
+					c.width = Math.round(w * dpr);
+					c.height = Math.round(h * dpr);
+					const ctx = c.getContext("2d");
+					if (!ctx) return;
+					ctx.scale(dpr, dpr);
+					for (const st of stars) {
+						if (st.g !== g) continue;
+						if (st.size <= 1 && dpr < 1.5) {
+							// Titik 1 px di kanvas DPR 1: lingkaran di posisi pecahan terpecah ke 4 piksel redup
+							// (bintang nyaris hilang). Satu piksel penuh di posisi bulat = setara titik 1 px tajam dulu.
+							ctx.shadowBlur = 0;
+							ctx.fillStyle = "rgba(205, 216, 230, 0.85)";
+							ctx.fillRect(Math.floor(st.x * w), Math.floor(st.y * h), 1, 1);
+							continue;
+						}
+						ctx.beginPath();
+						ctx.arc(st.x * w, st.y * h, st.size / 2, 0, Math.PI * 2);
+						if (st.bright) {
+							ctx.shadowColor = "rgba(210, 225, 255, 0.55)";
+							ctx.shadowBlur = 6;
+							ctx.fillStyle = "#f2f6ff";
+						} else {
+							ctx.shadowBlur = 0;
+							ctx.fillStyle = "#cdd8e6";
+						}
+						ctx.fill();
+					}
+				});
+			};
+			draw();
+			let lastW = host.clientWidth;
+			let lastH = host.clientHeight;
+			const ro = new ResizeObserver(() => {
+				if (host.clientWidth === lastW && host.clientHeight === lastH) return;
+				lastW = host.clientWidth;
+				lastH = host.clientHeight;
+				draw();
+			});
+			ro.observe(host);
+			return () => ro.disconnect();
+		};
+		const offFar = make(far, farStars, 1);
+		const offNear = make(near, nearStars, 1.5);
+		// Kelip hanya saat langit terlihat (di bagian halaman lain animasinya dijeda).
+		const sky = far.parentElement!;
+		const io = new IntersectionObserver(([e]) => sky.classList.toggle("md-stars-paused", !e?.isIntersecting));
+		io.observe(sky);
+		return () => {
+			offFar();
+			offNear();
+			io.disconnect();
+		};
 	});
 
 	$effect(() => {
@@ -188,20 +256,35 @@
 		const tl = gsap.timeline({
 			paused: true,
 			onComplete: markLanded,
-			onReverseComplete: () => {
-				mode = "hero";
-				stage.classList.add("is-hero");
-				playReveal();
-				// Kembali dari peta: siklus siang–malam menyala lagi pelan-pelan.
-				// Kembali dari peta: jam siklus lanjut dari titik beku, atmosfer
-				// menyala lagi pelan-pelan.
-				if (frozenAt !== null) {
-					clockShift += performance.now() - frozenAt;
-					frozenAt = null;
-				}
-				gsap.to(rimWeight, { w: 1, duration: 1.4, ease: "power2.inOut", overwrite: true });
-			},
+			onReverseComplete: () => risen(),
 		});
+		// Kamera & antarmuka sudah kembali ke globe hero.
+		function risen() {
+			setMode("hero");
+			stage!.classList.add("is-hero");
+			// Pengaman: antarmuka kembali ke globe tapi kamera peta masih mendarat/menyelam (gerak kamera terlewat
+			// karena urutan event yang tak lazim) → lompatkan kamera ke globe hero, jangan biarkan judul globe
+			// menumpuk di atas peta yang mendarat.
+			const camPhase = cam!.cameraPhase();
+			if (camPhase === "landed" || camPhase === "diving") {
+				if (import.meta.env.DEV) console.warn("[peta] kamera tertinggal saat kembali ke globe:", camPhase, modeLog.join(" → "));
+				cam!.rise(0);
+			}
+			// Section sudah lewat ke bawah layar (logo / tombol "ke atas" menggulir jauh melewati globe selagi
+			// kamera masih naik): replayST.onLeaveBack terlewat karena mode belum "hero". Siapkan kemunculan penuh
+			// untuk diputar lagi saat section digulir masuk — dulu teks dinyalakan di luar layar, jadi saat
+			// digulir turun lagi globe sudah tampil tanpa animasi.
+			if (track!.getBoundingClientRect().top >= window.innerHeight) resetIntro();
+			else playReveal();
+			// Kembali dari peta: jam siklus lanjut dari titik beku, atmosfer
+			// menyala lagi pelan-pelan.
+			if (frozenAt !== null) {
+				clockShift += performance.now() - frozenAt;
+				frozenAt = null;
+			}
+			gsap.to(rimWeight, { w: 1, duration: 1.4, ease: "power2.inOut", overwrite: true });
+			wakeTone(); // jam & atmosfer bergerak lagi → kembali ke 60 fps
+		}
 		// 1 — undangan memudar; judul tetap di tempat (bumi yang naik
 		// menutupinya dari bawah, karena judul ada di belakang kanvas).
 		// Teks pergi BERURUTAN dari atas ke bawah: eyebrow → judul → sub →
@@ -267,9 +350,13 @@
 		// melukis, bukan sekali di awal.
 		let globeCanvas: HTMLCanvasElement | null = null;
 		const lift = { px: window.innerHeight * 0.55 };
+		/** Salin transform kanvas ke cincin atmosfer (diisi di bagian siklus siang–malam di bawah). */
+		let rimSync: (() => void) | null = null;
 		const paintLift = () => {
-			globeCanvas ??= map.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas, canvas");
+			globeCanvas ??=map.querySelector<HTMLCanvasElement>(GLOBE_CANVAS);
 			if (globeCanvas) globeCanvas.style.transform = lift.px > 0.5 ? `translate3d(0, ${lift.px.toFixed(1)}px, 0)` : "";
+			// Satu-satunya penulis transform kanvas → cincin ikut di frame yang SAMA (dulu disalin loop rAF tiap frame).
+			rimSync?.();
 		};
 		// Kanvas muncul sebelum kemunculan diputar → pasang posisi awalnya.
 		const liftWatch = new MutationObserver(() => {
@@ -310,43 +397,22 @@
 		function playReveal() {
 			reveal?.kill();
 			gsap.set(textEls, { opacity: 0 });
-			gsap.set(q(".md-title"), { y: titleRise * 0.5, filter: "brightness(0.35)" });
-			gsap.set(metaBlocks, { y: 6 });
+			// Teks DIAM di tempatnya (y 0) — hanya menyala dari gelap. Dulu judul
+			// naik ±8% layar & langit bintang di-scale 0→1 (sejak bintang jadi
+			// kanvas selayar, itu berarti seluruh langit ter-zoom) → teks terasa
+			// ikut bergerak bersama latar hitam berbintang.
+			gsap.set(q(".md-title"), { y: 0, filter: "brightness(0.35)" });
+			gsap.set(metaBlocks, { y: 0 });
 			gsap.set(textEls, { visibility: "visible" });
 			rule.s = 0;
 			paintRule();
 			reveal = gsap.timeline();
-			// Bintang lahir kembali: tiap bintang meletup dari nol dengan
-			// jeda acak (bukan fade merata) — langit terasa menyala saat
-			// kembali dari peta. Hanya transform scale: opacity milik animasi
-			// CSS twinkle, jangan direbut. Diam bila hemat gerak.
-			if (!reduced && starsFarEl && starsNearEl) {
-				const births = [
-					...Array.from(starsFarEl.children),
-					...Array.from(starsNearEl.children),
-				];
-				if (births.length) {
-					reveal.fromTo(
-						births,
-						{ scale: 0 },
-						{
-							scale: 1,
-							duration: 0.7,
-							ease: "back.out(2.2)",
-							stagger: { each: 0.0012, from: "random" },
-							overwrite: "auto",
-							clearProps: "scale",
-						},
-						0.1,
-					);
-				}
-			}
 			reveal.to(rule, { s: 1, duration: 1.1, ease: "power3.inOut", onUpdate: paintRule }, 0);
 			reveal.to(eyebrowEl, { opacity: 1, duration: 0.7, ease: "power1.out" }, 0.15);
-			reveal.to(q(".md-title"), { opacity: 1, y: 0, duration: 1.4, ease: "power3.out" }, 0.5);
+			reveal.to(q(".md-title"), { opacity: 1, duration: 0.9, ease: "power1.out" }, 0.5);
 			reveal.to(q(".md-title"), { filter: "brightness(1)", duration: 1.2, ease: "power1.inOut" }, 0.55);
 			reveal.to(subEl, { opacity: 1, duration: 0.7, ease: "power1.out" }, 1.0);
-			reveal.to(metaBlocks, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out", stagger: 0.08 }, 1.25);
+			reveal.to(metaBlocks, { opacity: 1, duration: 0.7, ease: "power2.out", stagger: 0.08 }, 1.25);
 			reveal.to(tailEls, { opacity: 1, duration: 0.7, ease: "power1.out", stagger: 0.06 }, 1.45);
 		}
 		// ── Siklus siang–malam bumi (hero saja) ───────────────────────────
@@ -390,7 +456,8 @@
 		// dari 60 — tapi tiap pembaruan menulis filter CSS lima lapis ke kanvas WebGL
 		// layar penuh dan state global peta (MapLibre menilai ulang style & menggambar
 		// ulang), yang mahal di GPU lemah. Tulis hanya bila nilainya berubah.
-		const TONE_STEP_MS = 48;
+		// 10×/dtk: satu fase ±5,5 dtk, jadi perbedaannya dengan 20×/dtk tak terlihat — separuh render ulang peta.
+		const TONE_STEP_MS = 100;
 		let lastToneAt = -1e9;
 		let lastFilter = "";
 		let toneCv: HTMLCanvasElement | null = null;
@@ -399,22 +466,61 @@
 		let cvW = 0;
 		let cvH = 0;
 		let sizeAt = -1e9;
-		const paintTone = (now: number) => {
+		// Loop berhenti total saat section tak terlihat (toneIo menyalakannya lagi). Saat peta sudah mendarat
+		// (jam dibekukan, atmosfer tersembunyi) tak ada yang berubah tiap frame → cek 5×/dtk, bukan 60.
+		let toneTimer = 0;
+		// Di hero pun loop ini tak perlu rAF tiap frame: kerjanya hanya tiap TONE_STEP_MS, dan transform cincin kini
+		// disalin langsung oleh paintLift (satu-satunya penulis transform kanvas). Dulu rAF tiap frame yang hanya
+		// keluar lebih awal → thread utama menyiapkan frame 60×/dtk walau globe diam. Kini bangun tepat di jadwal
+		// langkah berikutnya (timer → rAF, tetap selaras frame) — tempo pembaruan warna sama.
+		const scheduleTone = (now: number) => {
+			if (!toneVisible) {
+				toneRaf = 0;
+				return;
+			}
+			if (frozenAt !== null && rimWeight.w <= 0.001) {
+				toneRaf = 0;
+				toneTimer = window.setTimeout(() => {
+					toneTimer = 0;
+					paintTone(performance.now());
+				}, 200);
+			} else {
+				toneRaf = 0;
+				const next = (now - lastToneAt >= TONE_STEP_MS ? now : lastToneAt) + TONE_STEP_MS;
+				toneTimer = window.setTimeout(
+					() => {
+						toneTimer = 0;
+						toneRaf = requestAnimationFrame(paintTone);
+					},
+					Math.max(0, next - now),
+				);
+			}
+		};
+		const wakeTone = () => {
+			if (toneRaf) return;
+			if (toneTimer) window.clearTimeout(toneTimer);
+			toneTimer = 0;
 			toneRaf = requestAnimationFrame(paintTone);
-			if (now - lastToneAt < TONE_STEP_MS) {
-				// Cincin atmosfer menempel pada kanvas yang bergeser mengikuti kursor:
-				// salin transform tiap frame (hanya tulis, tanpa membaca layout).
-				if (rim && rimShown && toneCv) {
-					const tf = toneCv.style.transform || "";
-					if (tf !== lastRimTf) {
-						lastRimTf = tf;
-						rim.style.transform = tf;
-					}
+		};
+		// Cincin atmosfer menempel pada kanvas yang bergeser (terbit/lift): salin transform (hanya tulis, tanpa
+		// membaca layout). Dipanggil paintLift tiap kali kanvas digeser.
+		rimSync = () => {
+			if (rim && rimShown && toneCv) {
+				const tf = toneCv.style.transform || "";
+				if (tf !== lastRimTf) {
+					lastRimTf = tf;
+					rim.style.transform = tf;
 				}
+			}
+		};
+		const paintTone = (now: number) => {
+			scheduleTone(now);
+			if (now - lastToneAt < TONE_STEP_MS) {
+				rimSync?.();
 				return;
 			}
 			lastToneAt = now;
-			const cv = (toneCv && toneCv.isConnected ? toneCv : (toneCv = map.querySelector<HTMLCanvasElement>("canvas")));
+			const cv = (toneCv && toneCv.isConnected ? toneCv : (toneCv = map.querySelector<HTMLCanvasElement>(GLOBE_CANVAS)));
 			if (!cv) return;
 			// Bobot dipudarkan oleh dive()/kembali ke hero — bukan dipotong
 			// langsung oleh `mode`, supaya warna tak meloncat saat menyelam.
@@ -425,8 +531,7 @@
 			const t = smooth(f - i);
 			const A = TONES[i];
 			const B = TONES[(i + 1) % TONES.length];
-			// Atmosfer: bulatan globe hero = pusat (w/2, cy), jari-jari R
-			// (rumus sama dengan heroCamera di IndonesiaMap), ikut geser terbit.
+			// Atmosfer: menempel di siluet bumi, ikut geser terbit.
 			if (rim) {
 				if (!toneVisible || rimWeight.w <= 0.001) {
 					rim.style.opacity = "0";
@@ -442,13 +547,15 @@
 					const W = cvW;
 					const H = cvH;
 					const vmin = Math.min(W, H);
-					// Jari-jari bulatan yang BENAR-BENAR tergambar ≈ 0,657·R (diukur
-					// dari tepi globe di layar; proyeksi globe MapLibre lebih kecil
-					// dari R nominal heroCamera). Tepi bawah tetap h − 0,66·vmin.
-					const R = Math.min(vmin, 1000) * 0.657;
-					const cy = H - 0.66 * vmin + R;
+					// Siluet bumi yang BENAR-BENAR tergambar, diukur dari kamera MapLibre (globeDisc) — tepat di
+					// ukuran layar apa pun dan ikut gerak kursor. Dulu perkiraan 0,657·R dengan tepi atas
+					// h − 0,66·vmin: meleset belasan px di layar besar. Perkiraan itu tinggal cadangan.
+					const disc = cam.globeDisc(W, H);
+					const R = disc ? disc.r : Math.min(vmin, 1000) * 0.657;
+					const cx = disc ? disc.cx : W / 2;
+					const cy = disc ? disc.cy : H - 0.66 * vmin + R;
 					rim.style.width = rim.style.height = `${(R * 2).toFixed(1)}px`;
-					rim.style.left = `${(W / 2 - R).toFixed(1)}px`;
+					rim.style.left = `${(cx - R).toFixed(1)}px`;
 					rim.style.top = `${(cy - R).toFixed(1)}px`;
 					lastRimTf = cv.style.transform || "";
 					rim.style.transform = lastRimTf;
@@ -460,7 +567,9 @@
 			// Sisi malam mengikuti jam yang sama; hanya saat section terlihat (panggilan
 			// pertama menampakkan lapisan sehingga ubin baru mulai dimuat).
 			if (toneVisible) {
-				const nm = (j: number) => mix(A.n[j] as number, B.n[j] as number, t) * w;
+				// Linear, bukan smoothstep: peta menerapkan sisi malam ±5×/dtk (tiap perubahan = dua gambar ulang
+				// globe), dan laju yang rata menjaga tiap langkah opasitas tetap kecil (≤ ±3,6%) — tak terlihat bertangga.
+				const nm = (j: number) => mix(A.n[j] as number, B.n[j] as number, f - i) * w;
 				cam.setNightMix(nm(0), nm(1), nm(2));
 			}
 			if (w <= 0.001 || !toneVisible) {
@@ -478,8 +587,14 @@
 			}
 		};
 		toneRaf = requestAnimationFrame(paintTone);
-		// Di luar layar: jangan melukis ulang tiap frame.
-		const toneIo = new IntersectionObserver(([e]) => (toneVisible = !!e?.isIntersecting), { threshold: 0 });
+		// Di luar layar: loop berhenti; terlihat lagi → jalan lagi.
+		const toneIo = new IntersectionObserver(
+			([e]) => {
+				toneVisible = !!e?.isIntersecting;
+				if (toneVisible) wakeTone();
+			},
+			{ threshold: 0 },
+		);
 		toneIo.observe(track);
 
 		// ── Gestur kursor (hero saja) ─────────────────────────────────────
@@ -571,6 +686,15 @@
 
 		type Mode = "hero" | "landing" | "landed" | "rising";
 		let mode: Mode = "hero";
+		// Riwayat perpindahan mode (12 terakhir, mode dev) — untuk diagnosis bila pengaman di risen/markLanded bekerja.
+		const modeLog: string[] = [];
+		const setMode = (m: Mode) => {
+			if (import.meta.env.DEV) {
+				modeLog.push(`${m}@${Math.round(performance.now())}(cam:${cam.cameraPhase() ?? "-"})`);
+				if (modeLog.length > 12) modeLog.shift();
+			}
+			mode = m;
+		};
 		const RISE_SPEED = 1.3;
 
 		// Kembali dari ATAS (section sempat keluar layar ke bawah): kemunculan
@@ -579,20 +703,25 @@
 			trigger: track,
 			start: "top bottom",
 			onLeaveBack: () => {
+				// Masih naik dari peta (mode "rising"): risen() yang menyiapkan ulang begitu kamera tiba.
 				if (!introStarted || mode !== "hero") return;
-				reveal?.kill();
-				gsap.set(textEls, { visibility: "visible" });
-				// pause(0) menekan callback onUpdate → posisi bumi (geser kanvas)
-				// & garis TIDAK digambar ulang: bumi tetap di posisi akhir lalu
-				// meloncat turun saat kemunculan mulai, garis tertinggal penuh.
-				// Lukis keadaan awal secara eksplisit.
-				intro.pause(0, false);
-				paintLift();
-				paintRule();
-				introStarted = false;
-				window.addEventListener("scroll", ensureIntro, { passive: true });
+				resetIntro();
 			},
 		});
+		/** Kembalikan section ke keadaan sebelum muncul; kemunculan penuh diputar lagi saat digulir masuk. */
+		function resetIntro() {
+			reveal?.kill();
+			gsap.set(textEls, { visibility: "visible" });
+			// pause(0) menekan callback onUpdate → posisi bumi (geser kanvas)
+			// & garis TIDAK digambar ulang: bumi tetap di posisi akhir lalu
+			// meloncat turun saat kemunculan mulai, garis tertinggal penuh.
+			// Lukis keadaan awal secara eksplisit.
+			intro.pause(0, false);
+			paintLift();
+			paintRule();
+			introStarted = false;
+			window.addEventListener("scroll", ensureIntro, { passive: true });
+		}
 
 
 		function announceLanded() {
@@ -607,7 +736,17 @@
 		}
 
 		function markLanded() {
-			mode = "landed";
+			setMode("landed");
+			// Pengaman kebalikannya: kamera masih di globe hero / sedang naik → lompatkan ke bingkai Nusantara.
+			const camPhase = cam!.cameraPhase();
+			if (camPhase === "hero" || camPhase === "rising") {
+				if (import.meta.env.DEV) console.warn("[peta] kamera tertinggal saat mendarat:", camPhase, modeLog.join(" → "));
+				cam!.dive(0);
+			}
+			// Sisa inersia gestur yang ditelan selama menyelam tak boleh langsung menerbangkan peta kembali ke globe
+			// (peta mendarat lalu 0,3 dtk kemudian naik lagi): tahan sampai input diam sejenak, seperti catchLanded.
+			catchStart = performance.now();
+			catchUntil = catchStart + 350;
 			stage!.classList.add("is-landed");
 			overlay!.style.display = "none";
 			cam!.landed();
@@ -640,7 +779,7 @@
 
 		function dive() {
 			if (mode === "landing" || mode === "landed") return;
-			mode = "landing";
+			setMode("landing");
 			// Bintang kembali ke tempatnya selagi memudar.
 			if (finePointer) aimPointer(0, 0);
 			// Warna "waktu" bumi pulih ke asli selagi kamera menyelam.
@@ -661,6 +800,9 @@
 			overlay!.style.display = "";
 			const speed = isTouch ? TOUCH_SPEED : 1;
 			const play = () => {
+				// Naik lagi sebelum penundaan perapat selesai (rise() membatalkannya; ini pengaman kedua): jangan
+				// menyelamkan kamera — dulu kamera tetap mendarat sementara panggung sudah kembali ke globe hero.
+				if (mode !== "landing") return;
 				cam!.dive(DIVE_MS / speed);
 				tl.timeScale(speed).play();
 				scrollToY(trackEnd(), (tl.duration() - tl.time()) / speed);
@@ -678,7 +820,9 @@
 
 		function rise(opts?: { noScroll?: boolean }) {
 			if (mode === "rising" || mode === "hero") return;
-			mode = "rising";
+			// Penyelaman yang masih menunggu perapat posisi (alignT) dibatalkan.
+			clearTimeout(alignT);
+			setMode("rising");
 			lastRiseAt = performance.now();
 			holdText();
 			stage!.classList.remove("is-landed");
@@ -687,7 +831,13 @@
 			const speed = isTouch ? RISE_SPEED * TOUCH_SPEED : RISE_SPEED;
 			// Kamera kembali selama sisa timeline yang diputar mundur.
 			cam!.rise((tl.time() / speed) * 1000);
-			tl.timeScale(speed).reverse();
+			// Timeline belum sempat berjalan (naik tepat setelah menyelam dipicu): reverse() dari awal tak memanggil
+			// onReverseComplete, jadi mode tertahan "rising" — selesaikan langsung (kamera sudah dilompatkan ke hero).
+			if (tl.time() > 0) tl.timeScale(speed).reverse();
+			else {
+				tl.pause(0);
+				risen();
+			}
 			// Tombol "ke atas" sedang menggulir melewati sini: jangan rebut gulirnya (dulu berhenti di awal globe).
 			if (!opts?.noScroll) scrollToY(trackStart(), tl.time() / speed);
 		}
@@ -703,11 +853,29 @@
 			markLanded();
 		}
 
+		// Kapan terakhir halaman berada DI BAWAH track (panggung peta sudah lewat ke atas layar).
+		let belowAt = -Infinity;
+		let catchUntil = 0;
+		let catchStart = 0;
+		function catchLanded() {
+			belowAt = -Infinity;
+			catchStart = performance.now();
+			catchUntil = catchStart + 900;
+			scrollToY(trackEnd(), 0.45);
+		}
+
 		// Selama transisi, gulir pengguna ditelan supaya tak melawan kamera.
-		const busy = () => mode === "landing" || mode === "rising" || performance.now() < introLockUntil;
+		const busy = () =>
+			mode === "landing" || mode === "rising" || performance.now() < introLockUntil || performance.now() < catchUntil;
 		const swallow = (e: Event) => {
 			if (!busy()) return;
-			e.preventDefault();
+			// Penahan di peta bertahan selama inersia trackpad / usapan masih mengalir (maks 4 dtk), baru lepas
+			// setelah input diam 0,3 dtk (gestur baru) — dulu sisa inersia sesudah 0,9 dtk tetap menerbangkan peta ke globe.
+			const now = performance.now();
+			if (now < catchUntil) catchUntil = Math.min(catchStart + 4000, Math.max(catchUntil, now + 300));
+			// touchmove di tengah guliran yang sudah berjalan tak bisa dibatalkan (peramban menolak & mencatat
+			// peringatan di console) — cukup hentikan penyebarannya.
+			if (e.cancelable) e.preventDefault();
 			// preventDefault saja tidak menghentikan Lenis (ia tetap membaca
 			// roda) → gulir tetap merayap selama kunci. Hentikan penyebarannya.
 			e.stopPropagation();
@@ -746,6 +914,8 @@
 					// (p kecil, arah balik) tidak boleh langsung menyelam lagi.
 					else if (p > 0.02 && performance.now() - lastRiseAt > 900 && performance.now() >= introLockUntil) dive();
 				} else if (self.direction === -1) {
+					// Sedang ditahan di peta (catchLanded): sisa inersia ke atas tak boleh langsung naik ke globe.
+					if (performance.now() < catchUntil) return;
 					// Datang dari bawah tanpa pernah menyelam (mis. lompat lewat
 					// anchor): anggap sudah mendarat, lalu naik — HANYA bila
 					// posisinya benar-benar dalam di track (p > 0.5), supaya gulir
@@ -753,7 +923,13 @@
 					if (mode === "hero" && tl.progress() === 0 && p > 0.5 && performance.now() - lastRiseAt > 900) {
 						jumpLanded();
 					}
-					if (mode === "landed" && p < 0.999) rise();
+					if (mode === "landed" && p < 0.999) {
+						// Naik dari BAWAH (galeri): berhenti dulu di peta yang mendarat, seperti datang dari atas
+						// berhenti dulu di globe. Dulu gulir/inersia yang membawa peta masuk layar langsung memicu
+						// rise() — peta tak pernah bisa disinggahi dari bawah, langsung terbang ke globe.
+						if (performance.now() - belowAt < 700) catchLanded();
+						else rise();
+					}
 				}
 			},
 		});
@@ -763,6 +939,22 @@
 			if (mode === "hero" && st.progress > 0.5) jumpLanded();
 		};
 		window.addEventListener("lakuna:home-restored", onHomeRestored);
+		// Pengaman terakhir: peta berstatus "landed" tetapi track-nya sudah di bawah layar (halaman digulir ke ATAS
+		// track) → kembalikan ke globe. ScrollTrigger bisa kehilangan pemicu naik bila tinggi halaman berubah
+		// belakangan (mis. setelah Back) sehingga batas start/end-nya basi; peta lalu tertinggal zoom-in di bawah
+		// bagian klip. Pemeriksaan ini hanya membaca posisi track sungguhan.
+		let guardRaf = 0;
+		const aboveGuard = () => {
+			guardRaf = 0;
+			if (track.getBoundingClientRect().bottom < window.innerHeight - 2) belowAt = performance.now();
+			if (mode !== "landed") return;
+			if (document.documentElement.classList.contains("home-restoring") || performance.now() - restoredAt < 1500) return;
+			if (track.getBoundingClientRect().top > 24) rise({ noScroll: true });
+		};
+		const onGuardScroll = () => {
+			if (!guardRaf) guardRaf = requestAnimationFrame(aboveGuard);
+		};
+		window.addEventListener("scroll", onGuardScroll, { passive: true });
 		// Ukur ulang yang sopan: tunda sampai gulir tenang supaya tidak
 		// menendang posisi pin di tengah guliran pertama.
 		const refresh = () => calmRefresh();
@@ -783,6 +975,8 @@
 		return () => {
 			window.removeEventListener("load", refresh);
 			window.removeEventListener("lakuna:home-restored", onHomeRestored);
+			window.removeEventListener("scroll", onGuardScroll);
+			if (guardRaf) cancelAnimationFrame(guardRaf);
 			ro.disconnect();
 			clearTimeout(rt);
 			clearTimeout(alignT);
@@ -802,9 +996,10 @@
 			liftWatch.disconnect();
 			if (globeCanvas) globeCanvas.style.transform = "";
 			cancelAnimationFrame(toneRaf);
+			window.clearTimeout(toneTimer);
 			toneIo.disconnect();
 			gsap.killTweensOf(rimWeight);
-			const cvEnd = map.querySelector<HTMLCanvasElement>("canvas");
+			const cvEnd = map.querySelector<HTMLCanvasElement>(GLOBE_CANVAS);
 			if (cvEnd) cvEnd.style.filter = "";
 			tl.kill();
 		};
@@ -943,24 +1138,41 @@
 		.im-stage .md-title {
 			z-index: 0;
 		}
-		.md-star {
+		/* Bintang di kanvas (lihat effect langit bintang): tiap kanvas = satu kelompok kelip. Lapis jauh redup
+		   (0,12–0,65 seperti dulu per bintang), lapis dekat lebih terang. */
+		.md-stars .md-star-layer {
 			position: absolute;
-			border-radius: 9999px;
-			background: #cdd8e6;
-			opacity: 0.5;
-			animation: md-twinkle 4s ease-in-out infinite;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			/* Bertangga (±5 perubahan/dtk per lapis), bukan halus 60 fps: kelip selambat ini tak terlihat bedanya,
+			   tapi tiap frame animasi = 6 kanvas selayar + globe dikomposit ulang (GPU ±14% → ±9% di globe diam). */
+			animation: md-twinkle 4.2s steps(10, jump-none) infinite;
 		}
-		.md-star.is-bright {
-			background: #f2f6ff;
-			box-shadow: 0 0 6px 1px rgba(210, 225, 255, 0.55);
+		.md-stars-near .md-star-layer {
 			animation-name: md-twinkle-bright;
 		}
+		.md-stars .md-star-g1 {
+			animation-duration: 5.6s;
+			animation-delay: -1.9s;
+		}
+		.md-stars .md-star-g2 {
+			animation-duration: 7.1s;
+			animation-delay: -4.3s;
+		}
+		/* Dijeda di luar layar, dan juga begitu kamera meninggalkan hero: bintang sudah dipudarkan ke 0 dan
+		   tertutup peta, tapi 6 lapis kanvas selayar yang terus berkelip memaksa kompositor menggambar ulang
+		   tiap frame (GPU tak pernah istirahat di peta yang diam). Paused, bukan none: tanpa lompatan opasitas. */
+		.md-stars-paused .md-stars .md-star-layer,
+		.md-sticky:not(.is-hero) .md-star-layer {
+			animation-play-state: paused;
+		}
 		@keyframes md-twinkle-bright {
-			0%, 100% { opacity: 0.45; }
+			0%, 100% { opacity: 0.5; }
 			50% { opacity: 1; }
 		}
 		@keyframes md-twinkle {
-			0%, 100% { opacity: 0.12; }
+			0%, 100% { opacity: 0.18; }
 			50% { opacity: 0.65; }
 		}
 		/* Satu lebar untuk garis eyebrow (atas) dan garis statistik (bawah):
@@ -1044,7 +1256,7 @@
 			z-index: 3;
 			left: 50%;
 			transform: translateX(-50%);
-			top: 50svh;
+			top: 64svh;
 			width: var(--md-rule-w);
 			display: flex;
 			justify-content: space-between;
@@ -1140,7 +1352,7 @@
 		@media (prefers-reduced-motion: reduce) {
 			.md-track { height: auto; }
 			.md-sticky { position: relative; height: 100svh; }
-			.md-star { animation: none; }
+			.md-stars .md-star-layer { animation: none; opacity: 0.6; }
 		}
 	</style>
 </svelte:head>
@@ -1184,7 +1396,7 @@
 
 			<div class="md-cta">
 				<span class="md-cta-box">
-					<button type="button" use:scrambleHover onclick={land}>{t.land}</button><i class="tl" aria-hidden="true"></i><i class="tr" aria-hidden="true"></i><i class="bl" aria-hidden="true"></i><i class="br" aria-hidden="true"></i>
+					<button type="button" use:scrambleHover onclick={land} data-sound>{t.land}</button><i class="tl" aria-hidden="true"></i><i class="tr" aria-hidden="true"></i><i class="bl" aria-hidden="true"></i><i class="br" aria-hidden="true"></i>
 				</span>
 			</div>
 		</div>

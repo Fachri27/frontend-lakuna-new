@@ -1,7 +1,7 @@
 export type Lang = "id" | "en";
 
 export type Copy = {
-  nav: { tagline: string; photos: string; videos: string; categories: string; pricing: string; signin: string; langLabel: string; searchPlaceholder: string };
+  nav: { tagline: string; photos: string; videos: string; categories: string; allCategories: string; allCategoriesKicker: string; pricing: string; signin: string; langLabel: string; searchPlaceholder: string };
   hero: { kicker: string; titleA: string; titleEm: string; titleB: string; sub: string; cta: string; scroll: string; searchLabel: string; count: string };
   manifesto: { kicker: string; title: string; body: string; link: string };
   makers: {
@@ -58,7 +58,7 @@ export type Copy = {
 
 export const dict: Record<Lang, Copy> = {
   id: {
-    nav: { tagline: "Jelajahi Nusantara", photos: "Foto", videos: "Video", categories: "Kategori", pricing: "Harga", signin: "Masuk", langLabel: "ID", searchPlaceholder: "Cari gambar dan video" },
+    nav: { tagline: "Jelajahi Nusantara", photos: "Foto", videos: "Video", categories: "Kategori", allCategories: "Semua kategori", allCategoriesKicker: "Arsip lengkap", pricing: "Harga", signin: "Masuk", langLabel: "ID", searchPlaceholder: "Cari gambar dan video" },
     hero: {
       kicker: "Lakuna — Arsip Visual Nusantara",
       titleA: "Perjalanan visual",
@@ -195,7 +195,7 @@ export const dict: Record<Lang, Copy> = {
     },
     footer: {
       taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
-      company: "Perusahaan", companyItems: ["Tentang kami", "Ekowisata", "Ulasan", "Kontributor"],
+      company: "Perusahaan", companyItems: ["Tentang kami", "Ulasan", "Kontributor", "Ekowisata"],
       legal: "Legal", legalItems: ["Ketentuan penggunaan", "Kebijakan privasi", "Preferensi cookie"],
       support: "Dukungan", supportItems: ["Bantuan", "FAQ", "Layanan pelanggan"],
       rights: "© 2026 Lakuna Nusantara Media. Hak cipta dilindungi",
@@ -203,7 +203,7 @@ export const dict: Record<Lang, Copy> = {
     },
   },
   en: {
-    nav: { tagline: "Explore Nusantara", photos: "Photos", videos: "Videos", categories: "Categories", pricing: "Pricing", signin: "Sign in", langLabel: "EN", searchPlaceholder: "Search images and videos" },
+    nav: { tagline: "Explore Nusantara", photos: "Photos", videos: "Videos", categories: "Categories", allCategories: "All categories", allCategoriesKicker: "Full archive", pricing: "Pricing", signin: "Sign in", langLabel: "EN", searchPlaceholder: "Search images and videos" },
     hero: {
       kicker: "Lakuna — The Visual Archive of Nusantara",
       titleA: "A visual journey",
@@ -290,7 +290,7 @@ export const dict: Record<Lang, Copy> = {
     },
     pricing: {
       kicker: "Subscription",
-      title: "Limitless access\nto the archives",
+      title: "Unlimited access\nto our archives",
       body: "Get a thousand of best quality frames from our archives",
       cta: "See plans",
     },
@@ -340,7 +340,7 @@ export const dict: Record<Lang, Copy> = {
     },
     footer: {
       taglineA: "Every frame ", taglineEm: "finds a home", taglineB: " in one archive",
-      company: "Company", companyItems: ["About us", "Ecotourism", "Reviews", "Contributor"],
+      company: "Company", companyItems: ["About us", "Reviews", "Contributor", "Ecotourism"],
       legal: "Legal", legalItems: ["Terms of use", "Privacy policy", "Cookie preferences"],
       support: "Support", supportItems: ["Help", "FAQ", "Customer service"],
       rights: "© 2026 Lakuna Nusantara Media. All rights reserved",

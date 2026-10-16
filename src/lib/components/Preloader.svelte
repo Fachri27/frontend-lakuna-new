@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { soundOn } from "$lib/sound.svelte";
+	// Isi script dini di modul tersendiri: svelte.config.js menghitung hash CSP-nya dari teks yang sama.
+	import { EARLY_SCRIPT } from "$lib/preloadEarly.js";
+import { allReady } from "$lib/ready.svelte";
 	/**
 	 * Preloader: lensa kamera yang membuka diafragmanya — port dari
 	 * apps/front-lakuna/app/landing/preloader.tsx.
@@ -63,7 +66,6 @@
 	/** Putaran cincin skala saat f/16 berada di bawah penanda. */
 	const RING_START_DEG = STOP_DEG * (F_STOPS.length - 1);
 
-	const EARLY_SCRIPT = `try{var n=performance.getEntriesByType&&performance.getEntriesByType("navigation")[0],t=n&&n.type||"navigate",i=false;try{i=!!document.referrer&&new URL(document.referrer).origin===location.origin}catch(e){}if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(t==="reload"||(t==="navigate"&&!i))){document.documentElement.dataset.preload="play"}}catch(e){}`;
 	// Tag penutup dipecah supaya parser komponen tidak mengira blok script ini selesai.
 	const EARLY_TAG = "<script>" + EARLY_SCRIPT + "</" + "script>";
 
@@ -225,22 +227,56 @@
 			decor: 1
 		};
 
+		// Atribut hanya ditulis bila nilainya BERUBAH (nilai yang ditulis tetap persis sama). Selama menunggu,
+		// yang bergerak hanya cincin skala, tetapi viewBox, transform lensa/masker, dan `d` lubang + 9 bilah dulu
+		// ditulis ulang tiap frame dengan nilai yang sama: Blink tetap mem-parse ulang dan membatalkan cache masker
+		// lubang untuk tiap tulisan, jadi overlay selayar bermasker dirasterisasi ulang tiap frame — tepat saat
+		// halaman paling sibuk memuat. Begitu cincin berhenti (menunggu hero/peta), overlay benar-benar diam.
+		let lastView = "";
+		let lastTransform = "";
+		let lastIris = "";
+		let lastRing = "";
+		let lastGlass = "";
+		let lastDecor = "";
 		const apply = () => {
 			const w = window.innerWidth;
 			const h = window.innerHeight;
-			svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+			const view = `0 0 ${w} ${h}`;
+			if (view !== lastView) {
+				lastView = view;
+				svg.setAttribute("viewBox", view);
+			}
 			const scale = (Math.min(w, h) * LENS_FILL) / LENS_OUTER;
 			const transform = `translate(${(w / 2).toFixed(1)} ${(h / 2).toFixed(1)}) scale(${(scale * state.zoom).toFixed(4)})`;
-			lens.setAttribute("transform", transform);
-			maskGroup.setAttribute("transform", transform);
+			if (transform !== lastTransform) {
+				lastTransform = transform;
+				lens.setAttribute("transform", transform);
+				maskGroup.setAttribute("transform", transform);
+			}
 
-			const paths = irisPaths(state.r, state.sweep, state.rotation);
-			hole.setAttribute("d", paths.hole);
-			blades.forEach((blade, i) => blade.setAttribute("d", paths.blades[i]));
+			const iris = `${state.r} ${state.sweep} ${state.rotation}`;
+			if (iris !== lastIris) {
+				lastIris = iris;
+				const paths = irisPaths(state.r, state.sweep, state.rotation);
+				hole.setAttribute("d", paths.hole);
+				blades.forEach((blade, i) => blade.setAttribute("d", paths.blades[i]));
+			}
 
-			ring.setAttribute("transform", `rotate(${state.ring.toFixed(2)})`);
-			glass.style.opacity = state.glass.toFixed(3);
-			decor.style.opacity = state.decor.toFixed(3);
+			const ringT = `rotate(${state.ring.toFixed(2)})`;
+			if (ringT !== lastRing) {
+				lastRing = ringT;
+				ring.setAttribute("transform", ringT);
+			}
+			const glassO = state.glass.toFixed(3);
+			if (glassO !== lastGlass) {
+				lastGlass = glassO;
+				glass.style.opacity = glassO;
+			}
+			const decorO = state.decor.toFixed(3);
+			if (decorO !== lastDecor) {
+				lastDecor = decorO;
+				decor.style.opacity = decorO;
+			}
 		};
 
 		apply();
@@ -256,17 +292,27 @@
 
 		// Isi di balik lensa siap dilihat. Prop dibaca saat dipanggil, jadi nilainya
 		// selalu yang terbaru.
+		let fontsReady = false;
+		if (document.fonts?.ready) {
+			void document.fonts.ready.then(() => {
+				fontsReady = true;
+			}).catch(() => {
+				fontsReady = true;
+			});
+		} else {
+			fontsReady = true;
+		}
 		function contentReady() {
-			return heroReady === undefined ? loaded : heroReady;
+			// hero + font + semua penahan (data beranda, ubin awal peta).
+			// Batas keras MAX_WAIT_MS di loop wait tetap berlaku.
+			const hero = heroReady === undefined ? loaded : heroReady;
+			return hero && fontsReady && allReady();
 		}
 
 		// Bunyi lensa dimuat sejak awal fase loading supaya tidak ada jeda jaringan
 		// saat diafragma membuka.
 		let lensAudio: HTMLAudioElement | null = null;
 		try {
-			// Suara dimatikan (bawaan): bunyi lensa tak dimuat/diputar, dan lensa tak menunggu ketukan
-			// "izin audio" (lihat `sound` di bawah).
-			if (!soundOn()) throw new Error("suara mati");
 			lensAudio = new Audio(LENS_OPEN_SRC);
 			lensAudio.preload = "auto";
 			lensAudio.volume = LENS_VOLUME;
@@ -278,7 +324,7 @@
 			lensAudio = null;
 		}
 
-		let sound: "checking" | "auto" | "blocked" = lensAudio ? "checking" : soundOn() ? "blocked" : "auto";
+		let sound: "checking" | "auto" | "blocked" = lensAudio ? "checking" : "blocked";
 		let opening = false;
 		let played = false;
 

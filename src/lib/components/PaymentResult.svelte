@@ -58,9 +58,9 @@
 	// `/api/payment/check/{orderId}`. Query param (status / transaction_status)
 	// TIDAK BOLEH dipakai untuk menentukan status — rawan pemalsuan via URL.
 	// Awalan mengikuti backend: ORDER- (keranjang), SUB- (langganan),
-	// STD- (lisensi Standar). Dulu hanya ORDER- yang diterima, sehingga
-	// pembayaran langganan langsung tampil "ditolak" tanpa pernah dicek.
-	const ORDER_ID_RE = /^(?:ORDER|SUB|STD)-[A-Za-z0-9-]+$/;
+	// STD- (lisensi Standar), INST- (pelunasan cicilan). Dulu hanya ORDER- yang diterima, sehingga
+	// pembayaran langganan langsung tampil "ditolak" tanpa pernah dicek (INST- masih begitu sampai DOKU).
+	const ORDER_ID_RE = /^(?:ORDER|SUB|STD|INST)-[A-Za-z0-9-]+$/;
 	const isPlanOrder = $derived(/^(?:SUB|STD)-/.test(orderId ?? ""));
 
 	const SUCCESS_STATUSES = new Set(["PAID", "ORDER_PAID", "ACTIVE", "ALREADY_ACTIVE", "SETTLED"]);

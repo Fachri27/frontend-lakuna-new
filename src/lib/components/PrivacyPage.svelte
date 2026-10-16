@@ -41,7 +41,7 @@
 					id: "berbagi",
 					title: "Dengan siapa kami berbagi",
 					body: [
-						"Penyedia pembayaran (misalnya Midtrans) untuk memproses pembayaran; Google bila kamu memilih masuk dengan Google dan untuk memuat huruf; serta penyedia penyimpanan dan hosting yang menyimpan berkas dan menjalankan layanan",
+						"Penyedia pembayaran (misalnya DOKU) untuk memproses pembayaran; Google bila kamu memilih masuk dengan Google dan untuk memuat huruf; serta penyedia penyimpanan dan hosting yang menyimpan berkas dan menjalankan layanan",
 						"Kami hanya membagikan yang dibutuhkan masing-masing untuk bekerja. Kami tidak menjual data pribadimu",
 					],
 				},
@@ -125,7 +125,7 @@
 					id: "share",
 					title: "Who we share it with",
 					body: [
-						"Payment providers (such as Midtrans) to process payments; Google when you choose Google sign-in and to load fonts; and the storage and hosting providers that hold our files and run the service",
+						"Payment providers (such as DOKU) to process payments; Google when you choose Google sign-in and to load fonts; and the storage and hosting providers that hold our files and run the service",
 						"We share only what each one needs to do its job. We do not sell your personal data",
 					],
 				},

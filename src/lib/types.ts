@@ -7,8 +7,12 @@ export type ApiPhoto = {
   descriptionEn?: string | null;
   photographer: string;
   location: string | null;
+  /** Tanggal & waktu pengambilan (ISO, opsional); null = tidak diisi. */
+  takenAt?: string | null;
   price: number;
   type: "FOTO" | "VIDEO";
+  /** Foto eksklusif: tetap FOTO di semua filter/galeri. */
+  isExclusive?: boolean | null;
   status: "APPROVED" | "PENDING" | "REJECTED";
   width: number;
   height: number;
@@ -22,10 +26,14 @@ export type ApiPhoto = {
   originalUrl: string | null;
   /** Klip kartu bersih (VIDEO, 8 dtk tanpa watermark); null bila belum dibuat. */
   clipUrl?: string | null;
+  /** Klip kartu potret 3:4 (VIDEO) untuk rel "Collection of videos" di beranda; null bila belum dibuat. */
+  cardClipUrl?: string | null;
+  /** Versi kecil (600 × 800) untuk koneksi lambat. */
+  cardClipSmUrl?: string | null;
   tags: string[];
   createdAt: string;
   updatedAt: string;
-  photoCategories: { category: { id: string; name: string } }[];
+  photoCategories: { category: { id: string; name: string; nameEn?: string | null } }[];
   photoKeywords: { keyword: { id: string; name: string; lang?: "id" | "en" } }[];
 };
 
@@ -102,12 +110,18 @@ export type ApiFavorite = {
   };
 };
 
+export type HeroVideoVariant = { id: string; url: string; w: number; h: number; portrait: boolean; bytes?: number | null };
+
 export type HomepageSection = {
   key: "hero" | "manifesto" | "anjungan_1" | "mulai" | "journeys" | "orbit" | "arsip" | "video" | "harga" | "klip" | "banding" | "percaya" | "etalase" | "koridor_kiri" | "koridor_kanan";
   imageKey: string | null;
   imageUrl: string | null;
   /** Jenis media latar hero: "video" = klip autoplay bisu. */
   mediaType: "image" | "video" | null;
+  /** Versi bertingkat video hero (l720…l2160 lanskap, p1080/p2160 potret ponsel); null = hanya imageUrl. */
+  videoVariants?: HeroVideoVariant[] | null;
+  /** Frame pertama video hero (JPEG). */
+  posterUrl?: string | null;
   kicker: string | null;
   title: string | null;
   body: string | null;
@@ -169,6 +183,9 @@ export type ApiCategory = {
   id: string;
   name: string;
   description: string | null;
+  /** Versi Inggris dari CMS; kosong = pakai name/description. */
+  nameEn?: string | null;
+  descriptionEn?: string | null;
   imageKey: string | null;
   imageUrl: string | null;
   createdAt: string;

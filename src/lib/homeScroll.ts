@@ -13,8 +13,10 @@ import { getLenis } from "$lib/lenis";
  * baru gulir dipulihkan dan tampilan dibuka.
  */
 const KEY = "lakuna:home-scroll";
-const MAX_MS = 2600;
-const STABLE_MS = 700;
+const MAX_MS = 1600;
+const STABLE_MS = 400;
+/** Batas tunggu peta setelah gulir dipulihkan; lewat ini penutup dibuka walau ubin belum lengkap (peta memudar masuk sendiri). */
+const MAP_WAIT_MS = 1500;
 
 type Saved = { y: number; h: number };
 
@@ -31,11 +33,16 @@ function read(): Saved | null {
 
 function jump(y: number) {
 	const l = getLenis();
-	if (l) l.scrollTo(y, { immediate: true, force: true });
-	else window.scrollTo(0, y);
+	if (l) {
+		// Lenis menjepit tujuan ke batas tinggi halaman yang ia simpan, dan batas itu baru diperbarui 250 ms
+		// setelah tinggi konten berubah. Saat Back, landing masih memanjang → tujuan di bawah peta (mis. y 10.000)
+		// terpotong ke tinggi lama (y 7.162) dan pengunjung kembali ke tempat yang salah. Ukur ulang dulu.
+		l.resize();
+		l.scrollTo(y, { immediate: true, force: true });
+	} else window.scrollTo(0, y);
 }
 
-/** Tunggu peta selesai memuat (sinyal dari IndonesiaMap), maksimal 4,5 dtk — hanya bila panggung peta sedang di layar. */
+/** Tunggu peta selesai memuat (sinyal dari IndonesiaMap), maksimal 1,5 dtk — hanya bila panggung peta sedang di layar. */
 function waitForMap(): Promise<void> {
 	const stage = document.querySelector(".md-sticky");
 	if (!stage) return Promise.resolve();
@@ -51,7 +58,7 @@ function waitForMap(): Promise<void> {
 			window.clearTimeout(timer);
 			resolve();
 		};
-		const timer = window.setTimeout(finish, 4500);
+		const timer = window.setTimeout(finish, MAP_WAIT_MS);
 		window.addEventListener("lakuna:map-idle", finish);
 	});
 }
@@ -62,6 +69,8 @@ export function installHomeScrollRestore() {
 
 	beforeNavigate(({ from, to, type }) => {
 		if (from?.url.pathname === "/") {
+			// Peta menyimpan kamera pilihan pengunjung (lihat IndonesiaMap) sebelum halaman ditinggalkan.
+			window.dispatchEvent(new Event("lakuna:home-leaving"));
 			try {
 				sessionStorage.setItem(
 					KEY,
@@ -91,6 +100,10 @@ export function installHomeScrollRestore() {
 			return;
 		}
 		root().classList.add("home-restoring");
+		// Penanda "sedang kembali lewat riwayat" untuk komponen yang dibuat terlambat (peta): kamera pilihan
+		// pengunjung hanya dipulihkan pada Back, bukan muat ulang.
+		root().dataset.homeBack = "1";
+		window.setTimeout(() => delete root().dataset.homeBack, 20000);
 		const start = performance.now();
 		let lastH = -1;
 		let stableSince = start;

@@ -18,7 +18,9 @@ import type { CustomLayerInterface, CustomRenderMethodInput, Map as MlMap } from
 
 const A = 6378137; // jari-jari WGS84 (m) — untuk rumus stereografik
 const HALF = 850000; // setengah sisi kotak ekspor (m) → cakupan sampai ±82.3°
-const SIZE = 2048;
+// 1024² sudah jauh lebih rinci daripada tampilan kutub di globe hero (±20 km/piksel layar di sana: 1024 piksel
+// = ±1,7 km/piksel citra). Dulu 2048² — unggah ke GPU + mipmap 4× lebih berat (±40–60 ms di perangkat lambat).
+const SIZE = 1024;
 
 const ARCTIC_URL =
 	"https://services.arcgisonline.com/arcgis/rest/services/Polar/Arctic_Imagery/MapServer/export" +
@@ -162,12 +164,27 @@ export function polarCapsLayer(): CustomLayerInterface {
 
 				const img = new Image();
 				img.crossOrigin = "anonymous";
-				img.onload = () => {
+				img.onload = async () => {
+					// Citra kutub di-decode DI LUAR thread utama (createImageBitmap) lalu diunggah ke GPU saat
+					// browser senggang — dulu decode + unggah sinkron ±20–80 ms jatuh di tengah guliran.
+					let src: TexImageSource = img;
+					try {
+						src = await createImageBitmap(img);
+					} catch {
+						/* peramban lama: pakai <img> langsung */
+					}
+					await new Promise<void>((r) => {
+						const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+							.requestIdleCallback;
+						if (ric) ric(() => r(), { timeout: 1500 });
+						else setTimeout(r, 0);
+					});
 					const tex = gl.createTexture();
 					gl.bindTexture(gl.TEXTURE_2D, tex);
 					gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 					gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-					gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+					gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+					if (src !== img) (src as ImageBitmap).close();
 					gl.generateMipmap(gl.TEXTURE_2D);
 					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

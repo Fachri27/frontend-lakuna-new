@@ -2,7 +2,7 @@
 <html lang="en" class="dark" data-skin="ungu">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/logo1.png" />
+		<link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<!-- PWA: manifest (installability → hak autoplay bersuara di app ter-install)
 		     + warna bar judul + ikon iOS (iOS tidak membaca manifest). -->
@@ -19,8 +19,14 @@
 			href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Hanken+Grotesk:wght@300..700&family=Poppins:wght@300;400;500;600&family=Archivo:wdth,wght@62..125,300..800&display=swap"
 			rel="stylesheet"
 		/>
-		<script>
+		<script nonce="%sveltekit.nonce%">
 			(function () {
+				// Halaman Lakuna tak pernah tampil di dalam bingkai. Satu-satunya cara itu terjadi: form kartu DOKU
+				// (iframe di halaman bayar) mengarahkan bingkainya kembali ke Lakuna setelah membayar → pindahkan
+				// ke jendela utama (frame-ancestors 'self' menjamin bingkainya milik Lakuna sendiri).
+				try {
+					if (window.top !== window.self) window.top.location.replace(window.location.href);
+				} catch (e) {}
 				try {
 					document.documentElement.classList.add('js');
 					// Situs ini HANYA bertema gelap: tak ada pilihan tema, dan preferensi

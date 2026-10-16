@@ -23,6 +23,8 @@ export type Photo = {
   title: Localized;
   author: string;
   location?: string;
+  /** Tanggal & waktu pengambilan (ISO) dari API; null = tidak diisi (baris meta disembunyikan). */
+  takenAt?: string | null;
   /** Tipe aset dari API — beranda perlu memisahkan foto dari video. */
   assetType?: "FOTO" | "VIDEO";
   cat: Cat;
@@ -31,6 +33,12 @@ export type Photo = {
   h: number;
   price: number;
   categories: string[];
+  /** Nama kategori versi Inggris (dari CMS; yang kosong jatuh ke nama aslinya), urutan sama dengan categories. */
+  categoriesEn?: string[];
+  /** Lebar ASLI berkas (piksel) dari API; null = belum diketahui (w/h di atas memakai nilai cadangan). */
+  nativeW?: number | null;
+  /** Tinggi ASLI berkas (piksel) dari API; null = belum diketahui. */
+  nativeH?: number | null;
   keywords: string[];
   /** Kata kunci berbahasa Inggris (keywords = Indonesia). Kosong = tampilkan keywords. */
   keywordsEn?: string[];
@@ -43,6 +51,9 @@ export type Photo = {
   originalUrl?: string | null;
   /** Klip kartu bersih (VIDEO): diputar saat hover di grid/contact sheet. */
   clipUrl?: string | null;
+  /** Klip kartu potret 3:4 (VIDEO) untuk rel "Collection of videos". */
+  cardClipUrl?: string | null;
+  cardClipSmUrl?: string | null;
 };
 
 export type Video = {
@@ -55,6 +66,8 @@ export type Video = {
   /** Lokasi & kategori asli dari API — dipakai meta di grid beranda. */
   location?: string;
   category?: string;
+  /** Tanggal & waktu pengambilan (ISO) dari API; null = tidak diisi. */
+  takenAt?: string | null;
   price: number;
   desc: Localized;
   thumbUrl?: string;
@@ -62,8 +75,17 @@ export type Video = {
   keywords: string[];
   keywordsEn?: string[];
   categories: string[];
+  categoriesEn?: string[];
   /** URL mp4 preview (dipetakan dari ApiPhoto.originalUrl). */
   previewUrl?: string | null;
+  /** Klip kartu potret 3:4 untuk rel "Collection of videos" (lebih ringan dari klip lanskap 4K). */
+  cardClipUrl?: string | null;
+  /** Versi kecil 600 × 800 untuk koneksi lambat. */
+  cardClipSmUrl?: string | null;
+  /** Lebar ASLI berkas (piksel) dari API; null = belum diketahui. */
+  nativeW?: number | null;
+  /** Tinggi ASLI berkas (piksel) dari API; null = belum diketahui. */
+  nativeH?: number | null;
 };
 
 export type Plan = {
@@ -127,11 +149,14 @@ type RememberedUrls = {
   originalUrl?: string | null;
   previewUrl?: string | null;
   clipUrl?: string | null;
+  cardClipUrl?: string | null;
+  cardClipSmUrl?: string | null;
 };
 const urlMemory = new Map<string, RememberedUrls>();
 // v2: aset publik diregenerasi (kecil + watermark + pita kredit) — URL lama
 // yang diingat menunjuk berkas versi lama di cache browser.
-const URLMEM_KEY = "lakuna:url-mem:v5";
+// v6: foto dikirim TERACAK (lib/scramble.ts) — URL berkas bersih yang diingat versi lama tak boleh dipakai.
+const URLMEM_KEY = "lakuna:url-mem:v6";
 let urlMemSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Ingatan URL persisten (localStorage): modul JS lahir ulang tiap reload,
@@ -139,6 +164,8 @@ let urlMemSaveTimer: ReturnType<typeof setTimeout> | null = null;
 // detik; kedaluwarsa dinilai per pakai (pickStableUrl), jadi entri basi tak
 // pernah dipakai. Dibatasi 500 foto terbaru.
 try {
+  // Ingatan & snapshot versi sebelum foto diacak berisi URL berkas bersih — hapus dari penyimpanan.
+  for (const old of ["lakuna:url-mem:v5", "lakuna:home-snap:v9"]) localStorage.removeItem(old);
   const raw = localStorage.getItem(URLMEM_KEY);
   if (raw) {
     const parsed = JSON.parse(raw) as Record<string, RememberedUrls>;
@@ -171,6 +198,8 @@ function stableUrls(id: string, urls: RememberedUrls): RememberedUrls {
     originalUrl: pick(prev?.originalUrl, urls.originalUrl),
     previewUrl: pick(prev?.previewUrl, urls.previewUrl),
     clipUrl: pick(prev?.clipUrl, urls.clipUrl),
+    cardClipUrl: pick(prev?.cardClipUrl, urls.cardClipUrl),
+    cardClipSmUrl: pick(prev?.cardClipSmUrl, urls.cardClipSmUrl),
   };
   urlMemory.set(id, out);
   persistUrlMemory();
@@ -198,6 +227,14 @@ function splitKeywords(api: ApiPhoto): { id: string[]; en: string[] } {
   return { id, en };
 }
 
+/** Nama kategori sesuai bahasa: versi Inggris bila diisi di CMS, selain itu nama asli (dipakai juga di URL & filter). */
+export function catName(c: { name: string; nameEn?: string | null }, lang: "id" | "en"): string {
+  return lang === "en" && c.nameEn?.trim() ? c.nameEn.trim() : c.name;
+}
+function catsEnOf(api: ApiPhoto): string[] {
+  return [...new Set((api.photoCategories ?? []).map((pc) => catName(pc.category, "en")).filter(Boolean))];
+}
+
 export function adaptPhoto(api: ApiPhoto): Photo {
   const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
   const { id: keywords, en: keywordsEn } = splitKeywords(api);
@@ -207,12 +244,15 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     watermarkUrl: api.watermarkUrl ?? undefined,
     originalUrl: api.originalUrl ?? undefined,
     clipUrl: api.clipUrl ?? undefined,
+    cardClipUrl: api.cardClipUrl ?? undefined,
+    cardClipSmUrl: api.cardClipSmUrl ?? undefined,
   });
   return {
     id: api.id,
     title: titleOf(api),
     author: api.photographer || "Unknown",
     location: api.location || undefined,
+    takenAt: api.takenAt ?? null,
     assetType: api.type === "VIDEO" ? "VIDEO" : "FOTO",
     cat,
     seed: api.id,
@@ -222,6 +262,9 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     // Nama kategori & keyword asli dari API — dipakai PhotoDetail (kategori dari
     // API, bukan catLabel; keywords menggantikan field "Lokasi").
     categories: [...new Set(cats.filter(Boolean))],
+    categoriesEn: catsEnOf(api),
+    nativeW: api.width || null,
+    nativeH: api.height || null,
     keywords: [...new Set(keywords.filter(Boolean))],
     keywordsEn: [...new Set(keywordsEn.filter(Boolean))],
     tags: api.tags ?? [],
@@ -230,6 +273,8 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     watermarkUrl: urls.watermarkUrl ?? undefined,
     originalUrl: urls.originalUrl ?? null,
     clipUrl: urls.clipUrl ?? null,
+    cardClipUrl: urls.cardClipUrl ?? null,
+    cardClipSmUrl: urls.cardClipSmUrl ?? null,
   };
 }
 
@@ -264,6 +309,8 @@ export function adaptVideo(api: ApiPhoto): Video {
     watermarkUrl: api.watermarkUrl ?? undefined,
     originalUrl: api.originalUrl ?? undefined,
     clipUrl: api.clipUrl ?? undefined,
+    cardClipUrl: api.cardClipUrl ?? undefined,
+    cardClipSmUrl: api.cardClipSmUrl ?? undefined,
   });
   return {
     id: api.id,
@@ -273,6 +320,7 @@ export function adaptVideo(api: ApiPhoto): Video {
     seed: api.id,
     duration: "02:00",
     location: api.location || undefined,
+    takenAt: api.takenAt ?? null,
     category: (api.photoCategories ?? [])[0]?.category?.name,
     price: api.price,
     desc: descOf(api),
@@ -280,8 +328,13 @@ export function adaptVideo(api: ApiPhoto): Video {
     keywords: [...new Set(keywords.filter(Boolean))],
     keywordsEn: [...new Set(keywordsEn.filter(Boolean))],
     categories: [...new Set(cats.filter(Boolean))],
+    categoriesEn: catsEnOf(api),
+    nativeW: api.width || null,
+    nativeH: api.height || null,
     // Kartu: klip bersih dulu; pratinjau ber-watermark bila klip belum ada.
     previewUrl: pickVideoPreview(urls.clipUrl, urls.watermarkUrl),
+    cardClipUrl: urls.cardClipUrl ?? null,
+    cardClipSmUrl: urls.cardClipSmUrl ?? null,
   };
 }
 
@@ -426,7 +479,12 @@ export async function fetchVideos(limit = 12): Promise<{ videos: Video[]; total:
       keywords: p.keywords,
       keywordsEn: p.keywordsEn,
       categories: p.categories,
+      categoriesEn: p.categoriesEn,
+      nativeW: p.nativeW ?? null,
+      nativeH: p.nativeH ?? null,
       previewUrl: pickVideoPreview(p.clipUrl, p.watermarkUrl),
+      cardClipUrl: p.cardClipUrl ?? null,
+      cardClipSmUrl: p.cardClipSmUrl ?? null,
     })),
     total: r.total,
   };
@@ -435,19 +493,61 @@ export async function fetchVideos(limit = 12): Promise<{ videos: Video[]; total:
 const originalViewCache = new Map<string, Promise<string | null>>();
 
 /**
- * URL file asli (tanpa watermark) satu foto untuk viewer layar penuh.
+ * URL versi tampilan besar satu foto (turunan file asli seukuran layar) untuk viewer layar penuh.
+ * Berkasnya TERACAK (#lk=…, lib/scramble.ts) — wajib dirender lewat kanvas, bukan <img>.
  * Diminta hanya saat viewer dibuka; null bila tak tersedia (dummy, video,
  * belum approved) — pemanggil kembali ke pratinjau ber-watermark.
  */
-export function fetchPhotoOriginal(id: string): Promise<string | null> {
-  let p = originalViewCache.get(id);
+export type ViewWidth = 1280 | 2048 | 3200 | 5120;
+export const VIEW_WIDTHS: readonly ViewWidth[] = [1280, 2048, 3200, 5120];
+/**
+ * Ukuran untuk tampilan selebar layar: turunan terkecil yang ≥ piksel fisik yang dibutuhkan (3200 atau 5120),
+ * jadi foto tak pernah tampil lebih besar dari pikselnya. `overscan` = perbesaran tambahan tampilan itu
+ * (mis. zoom parallax 1,12×). Semuanya turunan file asli yang tak pernah diperbesar; file master asli hanya
+ * untuk unduhan berlisensi.
+ */
+export function fullscreenWidth(overscan = 1): ViewWidth {
+  if (typeof window === "undefined") return 3200;
+  // Foto lanskap yang menutupi layar (cover): di layar yang relatif tinggi (mis. MacBook Pro 16) tinggi layarlah
+  // yang menentukan — lebar foto yang dibutuhkan = tinggi layar × rasio foto (±16:9).
+  const need = Math.max(window.innerWidth, (window.innerHeight * 16) / 9) * (window.devicePixelRatio || 1) * overscan;
+  return need > 3200 ? 5120 : 3200;
+}
+
+export function fetchPhotoOriginal(id: string, width?: ViewWidth, opts: { watermark?: boolean } = {}): Promise<string | null> {
+  // `width`: versi asli yang diperkecil di server (tanpa watermark) — untuk tampilan yang tak butuh resolusi
+  // penuh. File asli bisa 20 MP; men-decode-nya hanya untuk tampil ±1.000 px membuat halaman patah-patah.
+  // `watermark` (bersama width): versi yang tetap ber-watermark tile — pratinjau produk yang tajam.
+  const wm = !!(width && opts.watermark);
+  const key = width ? `${id}@${width}${wm ? "wm" : ""}` : id;
+  let p = originalViewCache.get(key);
   if (!p) {
-    p = apiGet<ApiResponse<{ url: string }>>(`/api/photos/${encodeURIComponent(id)}/view`)
+    const q = width ? `?w=${width}${wm ? "&wm=1" : ""}` : "";
+    p = apiGet<ApiResponse<{ url: string }>>(`/api/photos/${encodeURIComponent(id)}/view${q}`)
       .then((r) => r.data?.url ?? null)
       .catch(() => null);
-    originalViewCache.set(id, p);
+    originalViewCache.set(key, p);
     // URL presigned berlaku 10 menit — buang dari cache sebelum basi.
-    setTimeout(() => originalViewCache.delete(id), 8 * 60 * 1000);
+    setTimeout(() => originalViewCache.delete(key), 8 * 60 * 1000);
+  }
+  return p;
+}
+
+const sectionImageCache = new Map<string, Promise<string | null>>();
+/**
+ * Satu tingkat ukuran gambar section homepage CMS (teracak) — imageUrl dari API hanya 2048 px; tampilan yang
+ * butuh lebih tajam (layar retina/5K) meminta 3200/5120 di sini (ApiImage `sectionKey`). Tak pernah diperbesar
+ * melebihi file unggahannya.
+ */
+export function fetchSectionImage(section: string, width: ViewWidth): Promise<string | null> {
+  const key = `${section}@${width}`;
+  let p = sectionImageCache.get(key);
+  if (!p) {
+    p = apiGet<ApiResponse<{ url: string }>>(`/api/homepage/${encodeURIComponent(section)}/image?w=${width}`)
+      .then((r) => r.data?.url ?? null)
+      .catch(() => null);
+    sectionImageCache.set(key, p);
+    setTimeout(() => sectionImageCache.delete(key), 8 * 60 * 1000);
   }
   return p;
 }
@@ -459,7 +559,7 @@ export async function fetchPhotoById(id: string): Promise<Photo | null> {
     if (d) return d;
   }
   try {
-    const res = await apiGet<ApiResponse<ApiPhoto>>(`/api/photos/${id}`);
+    const res = await apiGet<ApiResponse<ApiPhoto>>(`/api/photos/${encodeURIComponent(id)}`);
     if (!res.success || !res.data) return dummyPhotoById(id);
     return adaptPhoto(res.data);
   } catch {
@@ -467,22 +567,51 @@ export async function fetchPhotoById(id: string): Promise<Photo | null> {
   }
 }
 
-export async function fetchRelatedPhotos(id: string, limit = 4): Promise<Photo[]> {
+/**
+ * Aset terkait (keyword sama). `type` membatasi jenisnya — bagian "Foto terkait" hanya foto. API menyaring
+ * sendiri; saringan klien di bawah pengaman bila API lama mengabaikan parameternya.
+ */
+export async function fetchRelatedPhotos(id: string, limit = 8, type?: "FOTO" | "VIDEO"): Promise<Photo[]> {
+  const pick = (list: Photo[]) =>
+    list.filter((p) => !type || (p.assetType ?? "FOTO") === type).slice(0, limit);
   if (USE_DUMMY_IMAGES) {
-    const d = dummyRelated(id, limit);
+    const d = pick(dummyRelated(id, limit));
     if (d.length > 0) return d;
   }
   try {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (type) q.set("type", type);
     const res = await apiGet<ApiResponse<ApiPhoto[]> & { photos?: ApiPhoto[] }>(
-      `/api/photos/${id}/related?limit=${limit}`,
+      `/api/photos/${encodeURIComponent(id)}/related?${q.toString()}`,
     );
     // Backend mengembalikan { success, photos: [...] } (bukan ApiResponse.data).
     const rows = Array.isArray(res.data) ? res.data : (res.photos ?? []);
-    if (USE_DUMMY_IMAGES && rows.length === 0) return dummyRelated(id, limit);
-    return rows.map(adaptPhoto);
+    if (USE_DUMMY_IMAGES && rows.length === 0) return pick(dummyRelated(id, limit));
+    return pick(rows.map(adaptPhoto));
   } catch {
-    return dummyRelated(id, limit);
+    return pick(dummyRelated(id, limit));
   }
+}
+
+/**
+ * Video terkait (keyword sama) untuk halaman detail FOTO — dipetakan ke `Video` agar bisa memakai VideoCard.
+ * Tak ada yang cocok → diisi video terbaru, sama seperti "Video terkait" di halaman detail video.
+ */
+export async function fetchRelatedVideos(id: string, limit = 4): Promise<Video[]> {
+  if (!USE_DUMMY_IMAGES) {
+    try {
+      const res = await apiGet<ApiResponse<ApiPhoto[]> & { photos?: ApiPhoto[] }>(
+        `/api/photos/${encodeURIComponent(id)}/related?type=VIDEO&limit=${limit}`,
+      );
+      const rows = Array.isArray(res.data) ? res.data : (res.photos ?? []);
+      const vids = rows.filter((r) => r.type === "VIDEO").map(adaptVideo);
+      if (vids.length > 0) return vids.slice(0, limit);
+    } catch {
+      /* jatuh ke video terbaru */
+    }
+  }
+  const { videos } = await fetchVideos(limit + 1);
+  return videos.filter((v) => v.id !== id).slice(0, limit);
 }
 
 /**
@@ -514,7 +643,7 @@ export async function fetchPlans(): Promise<Plan[]> {
   }
 }
 
-export type ApiCatItem = { id: string; name: string; description: string | null; imageUrl: string | null };
+export type ApiCatItem = { id: string; name: string; nameEn?: string | null; description: string | null; imageUrl: string | null };
 
 export async function fetchCategories(): Promise<ApiCatItem[]> {
   if (USE_DUMMY_IMAGES) return DUMMY_CATEGORIES;
@@ -663,7 +792,8 @@ const SNAP_TTL = 45 * 60 * 1000;
 // v3: snapshot basi yang sempat menyimpan URL picsum (era backend menjawab
 // picsum saat presign MinIO gagal) dibuang paksa — jangan turunkan versi ini
 // tanpa alasan.
-const SNAP_KEY = "lakuna:home-snap:v9";
+// v10: foto teracak — snapshot berisi URL berkas bersih (v9) dibuang.
+const SNAP_KEY = "lakuna:home-snap:v10";
 let snapMem: HomeSnapshot | null = null;
 
 function snapshotApiBase(): string {
@@ -1203,6 +1333,23 @@ export function imgFor(seed: string, w: number, h: number, thumbUrl?: string | n
 
 export function fmtIDR(n: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+}
+
+/**
+ * Tanggal & waktu pengambilan sesuai bahasa, di zona waktu pengunjung: "12 Okt 2026, 06.30" (id) /
+ * "Oct 12, 2026, 6:30 AM" (en). "" bila kosong/tidak valid — pemanggil menyembunyikan barisnya.
+ */
+export function fmtTakenAt(iso: string | null | undefined, lang: "id" | "en"): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(lang === "en" ? "en-US" : "id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: lang === "en" ? "numeric" : "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export const COLLECTIONS: Collection[] = [

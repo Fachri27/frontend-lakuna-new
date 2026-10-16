@@ -154,7 +154,8 @@
 						scrollTrigger: { trigger: card, start: "top 92%", once: true }
 					}
 				);
-				const img = card.querySelector("img");
+				// Foto API = <canvas> teracak yang disusun ulang (lihat ApiImage); dummy = <img>.
+				const img = card.querySelector("img, canvas");
 				if (img) {
 					gsap.from(img, {
 						scale: 1.15,
@@ -189,6 +190,7 @@
 							src={imgFor(p.seed, 800, Math.round((800 * p.h) / p.w), p.thumbUrl)}
 							alt={p.title[lang]}
 							fill
+							photoId={isVideo(p) ? undefined : p.id}
 							class="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
 						/>
 						{#if isVideo(p)}

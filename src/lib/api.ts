@@ -73,6 +73,8 @@ async function tryRefreshToken(): Promise<boolean> {
 		const json = await res.json();
 		if (json.success && json.data?.newToken) {
 			setAccessToken(json.data.newToken);
+			// Refresh token dirotasi server: yang lama tak berlaku lagi.
+			if (json.data.refreshToken) setRefreshToken(json.data.refreshToken);
 			return true;
 		}
 		return false;
@@ -86,6 +88,11 @@ export async function api<T>(
 	options: RequestInit & { noAuth?: boolean } = {}
 ): Promise<T> {
 	const { noAuth, ...init } = options;
+	// Segmen "." / ".." (mentah atau %2e) dari parameter URL (mis. /photos/..%2Fdownloads%2Fx) bisa
+	// membelokkan request bertoken ke endpoint lain — tolak sebelum dikirim.
+	if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(path.split(/[?#]/)[0])) {
+		throw new ApiError(400, "BAD_PATH", "Path tidak valid");
+	}
 	const headers = new Headers(init.headers);
 
 	if (!headers.has("Content-Type") && !(init.body instanceof FormData)) {

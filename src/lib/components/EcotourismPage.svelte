@@ -676,6 +676,7 @@
 									src={imgFor(p.seed, k === 0 ? 1200 : 700, k === 0 ? 800 : 700, p.thumbUrl)}
 									alt={p.title[lang]}
 									fill
+									photoId={p.assetType === "VIDEO" ? undefined : p.id}
 									class="object-cover"
 								/>
 							</span>
@@ -686,7 +687,7 @@
 						</a>
 					{/each}
 				</div>
-				<a href={`/photos?q=${encodeURIComponent(b.terms[0] ?? "")}`} class="eco-link">{t.seeAll}</a>
+				<a href={`/archives?q=${encodeURIComponent(b.terms[0] ?? "")}`} class="eco-link">{t.seeAll}</a>
 			{:else if d?.done}
 				<div class="eco-empty">
 					<p>{t.empty}</p>

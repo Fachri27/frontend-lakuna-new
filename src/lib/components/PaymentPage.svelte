@@ -13,8 +13,8 @@
 			kicker: "Pembayaran", title: "Selesaikan pesanan", total: "Total",
 			voucherLabel: "Kode voucher", voucherPlaceholder: "Mis. NUSANTARA25", voucherApply: "Terapkan",
 			voucherApplied: "Voucher diterapkan", voucherInvalid: "Voucher tidak valid",
-			pay: "Bayar dengan Midtrans", processing: "Menyiapkan pembayaran…",
-			secureNote: "Pembayaran diproses aman oleh Midtrans. Kamu akan diarahkan ke halaman Midtrans untuk menyelesaikan transaksi",
+			pay: "Lanjut ke pembayaran", processing: "Menyiapkan pembayaran…",
+			secureNote: "Pembayaran diproses aman oleh DOKU. Kamu memilih metode (VA bank, QRIS, dompet digital, kartu) di halaman pembayaran berikutnya",
 			empty: "Tidak ada item untuk dibayar", emptyCta: "Kembali ke koleksi",
 			needLogin: "Masuk untuk membayar", needLoginBody: "Pesanan hanya bisa diselesaikan setelah kamu masuk",
 			goLogin: "Masuk",
@@ -31,8 +31,8 @@
 			kicker: "Payment", title: "Complete your order", total: "Total",
 			voucherLabel: "Voucher code", voucherPlaceholder: "e.g. NUSANTARA25", voucherApply: "Apply",
 			voucherApplied: "Voucher applied", voucherInvalid: "Invalid voucher",
-			pay: "Pay with Midtrans", processing: "Preparing payment…",
-			secureNote: "Payment is securely processed by Midtrans. You'll be redirected to Midtrans to finish the transaction",
+			pay: "Continue to payment", processing: "Preparing payment…",
+			secureNote: "Payment is securely processed by DOKU. You'll pick a method (bank VA, QRIS, e-wallet, card) on the next payment page",
 			empty: "Nothing to pay for", emptyCta: "Back to the collection",
 			needLogin: "Sign in to pay", needLoginBody: "Orders can only be completed after you sign in",
 			goLogin: "Sign in",
@@ -71,19 +71,14 @@
 
 	/**
 	 * Allowlist tujuan redirect pembayaran. Aktual dari backend:
-	 * - Midtrans snap redirect_url (`https://app.midtrans.com` / `app.sandbox.midtrans.com`)
+	 * - halaman bayar DOKU (`*.doku.com`)
 	 * - host backend sendiri (VITE_API_URL) + localhost dev.
 	 * Tolak `javascript:`/skema non-https (kecuali http localhost).
 	 * (Order Xendit lama dilanjutkan dari ProfilePage, yang masih mengizinkan host Xendit.)
 	 */
-	const PAYMENT_HOSTS = [
-		"app.midtrans.com",
-		"app.sandbox.midtrans.com",
-	];
-
 	function paymentHostAllowed(host: string): boolean {
 		const h = host.toLowerCase();
-		if ((PAYMENT_HOSTS as string[]).includes(h)) return true;
+		if (h === "doku.com" || h.endsWith(".doku.com")) return true;
 		if (h === "localhost" || h === "127.0.0.1") return true;
 		try {
 			const base = new URL(import.meta.env.VITE_API_URL || "http://localhost:3000");
@@ -128,14 +123,13 @@
 				voucherCode: voucher.trim() || undefined,
 			});
 			if (res.success && res.data.orderId) {
-				// Halaman bayar milik Lakuna (Midtrans Core API), bukan halaman
-				// Snap. Jangan clear cart di sini — backend menghapus item
+				// Halaman bayar milik Lakuna (→ DOKU Checkout). Jangan clear cart di sini — backend menghapus item
 				// STANDAR otomatis saat status jadi PAID (lewat webhook/check).
 				void goto(`/payment/pay/ORDER-${encodeURIComponent(res.data.orderId)}`);
 				return;
 			}
 			if (res.success && res.data.redirectUrl) {
-				// Cadangan lama (redirect Snap) bila backend tak mengirim orderId.
+				// Cadangan: redirect langsung ke DOKU bila backend tak mengirim orderId.
 				// Validasi dulu: jangan ikuti URL ke host asing/skema berbahaya.
 				if (!isSafePaymentUrl(res.data.redirectUrl)) {
 					error = t.errBadRedirect;

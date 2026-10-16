@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { pauseOffscreen } from "$lib/pauseOffscreen";
+	import { isScrambledUrl, loadScrambledCached, paintScrambled, scrambleKey, scrambledSize } from "$lib/photoScramble";
 	import type { Snippet } from "svelte";
 
 	/**
@@ -97,13 +99,155 @@
 			`@media(prefers-reduced-motion:reduce){.${cardCls}{animation-play-state:paused}}`,
 	);
 	const slots = $derived(Array.from({ length: cards }, (_, i) => i));
+
+	/**
+	 * Kartu untuk foto TERACAK (lib/photoScramble.ts): <canvas> yang hanya memuat potongan yang pernah terlihat.
+	 * Kartu berasio tetap (cardWidth:cardHeight) dengan object-fit: cover di tengah, jadi sisi foto yang berlebih
+	 * tak pernah tampil — 18 kanvas selebar turunan 3200 px = ±460 MB memori kanvas, potongan potretnya ±separuh.
+	 * Piksel potongan tetap 1:1 dengan berkasnya (tak diperkecil): kartu terdekat butuh resolusi penuh (lihat
+	 * streamExit di Footer). Ubin disusun langsung ke kanvas kartu yang digeser ke pojok potongan — tanpa kanvas
+	 * kerja selebar foto. Lazy seperti <img loading="lazy">; ganti src → isi lama tetap tampil sampai yang baru siap.
+	 *
+	 * Sumbernya ImageBitmap, satu berkas per giliran (puncak memori ±satu bitmap, bukan 12), dibagi kartu-kartu
+	 * berfoto sama, lalu dilepas begitu kartunya tersusun. Gambar lintas-origin tanpa CORS (harus, supaya kanvas
+	 * tetap "tainted") hanya bisa di-decode di MAIN THREAD untuk kanvas — createImageBitmap(<img>) pun begitu —
+	 * dan foto 3200 px makan 65–140 ms per berkas (diukur: 8 long task beruntun saat menggulir ke footer; dulu
+	 * <img> di-decode di thread raster). Jadi decode foto besar menunggu gulir berhenti (≥300 ms) + idle: kartu
+	 * menajam begitu pengguna berhenti, dan animasi rel (CSS, di kompositor) tak terganggu decode. Thumbnail kecil
+	 * langsung, supaya kartu tak kosong saat digulir.
+	 */
+	const fileOf = (url: string) => url.split(/[?#]/)[0]!;
+	const cardBitmaps = new Map<string, { p: Promise<ImageBitmap | null>; t: number }>();
+	let decodeChain: Promise<unknown> = Promise.resolve();
+	let lastScroll = 0;
+	$effect(() => {
+		const on = () => (lastScroll = performance.now());
+		const opt = { passive: true, capture: true };
+		window.addEventListener("scroll", on, opt);
+		window.addEventListener("wheel", on, opt);
+		window.addEventListener("touchmove", on, opt);
+		return () => {
+			window.removeEventListener("scroll", on, opt);
+			window.removeEventListener("wheel", on, opt);
+			window.removeEventListener("touchmove", on, opt);
+		};
+	});
+	const QUIET_MS = 300;
+	const BIG_PX = 2_000_000;
+	const scrollQuiet = () =>
+		new Promise<void>((resolve) => {
+			const check = () => {
+				const wait = QUIET_MS - (performance.now() - lastScroll);
+				if (wait > 0) return void window.setTimeout(check, wait + 20);
+				if (typeof requestIdleCallback !== "function") return resolve();
+				requestIdleCallback(() => (performance.now() - lastScroll < QUIET_MS ? check() : resolve()), { timeout: 1000 });
+			};
+			check();
+		});
+	function cardBitmap(src: string): Promise<ImageBitmap | null> {
+		const id = fileOf(src);
+		const hit = cardBitmaps.get(id);
+		if (hit) {
+			window.clearTimeout(hit.t);
+			return hit.p;
+		}
+		const loaded = loadScrambledCached(src); // unduhan tetap paralel, decode-nya bergiliran
+		const p = loaded
+			.then(
+				(img) =>
+					(decodeChain = decodeChain
+						// Bitmap jalur cepat sudah di-decode di luar thread utama; hanya <img> besar yang menunggu gulir tenang.
+						.then(() => (img instanceof HTMLImageElement && img.naturalWidth * img.naturalHeight > BIG_PX ? scrollQuiet() : undefined))
+						.then(() => createImageBitmap(img))
+						.catch(() => null)),
+			)
+			.then((b) => (b instanceof ImageBitmap ? b : null), () => null);
+		cardBitmaps.set(id, { p, t: 0 });
+		return p;
+	}
+	function releaseCardBitmap(src: string) {
+		const id = fileOf(src);
+		const e = cardBitmaps.get(id);
+		if (!e) return;
+		window.clearTimeout(e.t);
+		// Sesudah semua kartu yang menunggu berkas ini tersusun (callback-nya jalan di giliran yang sama).
+		e.t = window.setTimeout(() => {
+			if (cardBitmaps.get(id) !== e) return;
+			cardBitmaps.delete(id);
+			void e.p.then((b) => b?.close());
+		}, 0);
+	}
+	function coverCard(canvas: HTMLCanvasElement, params: { src: string; ratio: number }) {
+		let cur = params;
+		let token = 0;
+		let io: IntersectionObserver | null = null;
+		const stop = () => {
+			io?.disconnect();
+			io = null;
+		};
+		const run = () => {
+			const { src, ratio } = cur;
+			const key = scrambleKey(src);
+			const my = ++token;
+			if (!key) return;
+			cardBitmap(src).then(
+				async (bmp) => {
+					// Bitmap gagal → susun dari <img>-nya (decode sinkron, tapi tetap tampil).
+					const img: CanvasImageSource | null = bmp ?? (await loadScrambledCached(src).catch(() => null));
+					releaseCardBitmap(src);
+					if (my !== token || !img) return;
+					const { w, h } = scrambledSize(src, key);
+					const wide = w / h > ratio;
+					const cw = wide ? Math.max(1, Math.round(h * ratio)) : w;
+					const ch = wide ? h : Math.max(1, Math.round(w / ratio));
+					// Hanya potongan cover yang tampil (tengah) — kanvas tak menyimpan piksel yang terpotong.
+					paintScrambled(canvas, img, src, key, { x: Math.floor((w - cw) / 2), y: Math.floor((h - ch) / 2), w: cw, h: ch });
+					canvas.dataset.scr = "ok";
+				},
+				() => {},
+			);
+		};
+		const start = () => {
+			stop();
+			if (typeof IntersectionObserver === "undefined") return run();
+			io = new IntersectionObserver(
+				(entries) => {
+					if (entries.some((e) => e.isIntersecting)) {
+						stop();
+						run();
+					}
+				},
+				{ rootMargin: "1250px" },
+			);
+			io.observe(canvas);
+		};
+		start();
+		return {
+			update(next: { src: string; ratio: number }) {
+				if (next.src === cur.src && next.ratio === cur.ratio) return;
+				const sameFile = next.ratio === cur.ratio && next.src.split(/[?#]/)[0] === cur.src.split(/[?#]/)[0];
+				cur = next;
+				// URL presigned diperbarui (berkas sama) → isi kanvas sudah benar.
+				if (sameFile && canvas.dataset.scr === "ok") return;
+				start();
+			},
+			destroy() {
+				token++;
+				stop();
+			},
+		};
+	}
 </script>
 
 <svelte:head>
 	{@html `<style>${css}</style>`}
 </svelte:head>
 
-<div class="ish {className}" style="container-type: inline-size">
+<!-- Jeda luar layar TANPA margin (bawaan 120px): saat etalase di atas footer memenuhi layar, tepi atas koridor
+	tinggal ±80px di bawah layar — dulu 18 kartu terus beranimasi tanpa terlihat (diukur: 19 dari 20 animasi yang
+	berjalan di section etalase ada di luar layar). Jeda = waktu dibekukan, jadi begitu masuk layar animasi lanjut
+	dari titik yang sama tanpa loncatan; tepi atas koridor pun masih di zona pudar. -->
+<div class="ish {className}" style="container-type: inline-size" {@attach pauseOffscreen("0px")}>
 	<div
 		class="ish-view"
 		aria-hidden="true"
@@ -121,7 +265,10 @@
 							`border-radius:${p.cardRadius}cqw;animation:${name} ${speed}s linear infinite;` +
 							`animation-delay:${-(i * speed) / cards}s`}
 					>
-						{#if src}
+						{#if src && isScrambledUrl(src)}
+							<!-- Foto teracak (lib/photoScramble.ts) → <canvas> tersusun (potongan cover saja, lihat coverCard). -->
+							<canvas use:coverCard={{ src, ratio: p.cardWidth / p.cardHeight }}></canvas>
+						{:else if src}
 							<img {src} alt="" loading="lazy" decoding="async" draggable="false" />
 						{/if}
 					</div>
@@ -154,7 +301,8 @@
 		backface-visibility: hidden;
 		background: #16171a;
 	}
-	.ish-card img {
+	.ish-card img,
+	.ish-card canvas {
 		display: block;
 		width: 100%;
 		height: 100%;

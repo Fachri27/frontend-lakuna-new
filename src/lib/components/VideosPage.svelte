@@ -2,17 +2,18 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { announcer } from "$lib/stores/announce.svelte";
-	import { catLabel, fmtIDR, imgFor, fetchPhotos, fetchCategories, pickVideoPreview, type Video, type ApiCatItem } from "$lib/data";
+	import { catLabel, fmtIDR, imgFor, fetchPhotos, fetchCategories, catName, pickVideoPreview, type Video, type ApiCatItem } from "$lib/data";
 import Reveal from "./Reveal.svelte";
 import SearchField from "./SearchField.svelte";
 import SortSelect from "./SortSelect.svelte";
 	import { goto } from "$app/navigation";
+	import { intrinsicSize, isScrambledUrl, scrambled } from "$lib/photoScramble";
 
-	let { initialQ }: { initialQ?: string } = $props();
+	let { initialQ, initialBy }: { initialQ?: string; initialBy?: string } = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi video", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir" },
-		en: { kicker: "Videos", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year" }
+		id: { kicker: "Koleksi video", kickerMixed: "Arsip", title: "Mengabadikan momen dalam bingkai", titleSearch: (q: string) => `Hasil untuk “${q}”`, sub: "Jelajahi ribuan video eksklusif dari berbagai peristiwa dalam format 4K dan HD", duration: "Durasi", all: "Semua", count: "klip", noResults: "Tidak ada klip yang cocok. Coba tema lain", resultsFor: "Hasil untuk", clear: "Hapus", searchLabel: "Cari di arsip video", searchPlaceholder: "Cari video", searchSubmit: "Cari", addToCart: "Tambah ke keranjang", added: "Ditambahkan", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir" },
+		en: { kicker: "Videos", kickerMixed: "Archives", title: "Preserving memories in frames", titleSearch: (q: string) => `Results for “${q}”`, sub: "Explore thousands of exclusive videos, clips, and footage available in 4K and HD", duration: "Duration", all: "All", count: "clips", noResults: "No matching clips. Try another theme", resultsFor: "Results for", clear: "Clear", searchLabel: "Search the video archive", searchPlaceholder: "Search for videos", searchSubmit: "Search", addToCart: "Add to cart", added: "Added", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -31,16 +32,18 @@ import SortSelect from "./SortSelect.svelte";
 	}
 	// Pencarian diketik → jeda 350ms → baru fetch (pola yang sama dengan
 	// pemilih foto CMS). Tanpa jeda, tiap ketikan menembak API.
-	let sq = $state(initialQ ?? "");
-	let query = $state((initialQ ?? "").trim());
+	let sq = $state(initialQ ?? initialBy ?? "");
+	let query = $state((initialQ ?? initialBy ?? "").trim());
+	// ?by=<nama fotografer>: arsip satu fotografer (dari tautan nama).
+	const by = $derived(initialBy?.trim() || undefined);
 	// Urutan + rentang waktu — pola yang sama dengan /photos.
 	let sort = $state<"newest" | "popular">("newest");
 	let period = $state<"all" | "day" | "week" | "month" | "year">("all");
 
 	// Kata kunci dari URL (mis. dari pencarian navbar) mengisi kolom ini.
 	$effect(() => {
-		sq = initialQ ?? "";
-		query = (initialQ ?? "").trim();
+		sq = initialQ ?? initialBy ?? "";
+		query = (initialQ ?? initialBy ?? "").trim();
 	});
 
 	// Enter menuliskan kata kunci ke URL supaya hasilnya bisa dibagikan.
@@ -89,9 +92,10 @@ import SortSelect from "./SortSelect.svelte";
 	}
 
 	function readRatio(id: string, e: Event) {
-		const img = e.currentTarget as HTMLImageElement;
-		if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-			ratios = { ...ratios, [id]: img.naturalWidth / img.naturalHeight };
+		// <img> (dummy) atau <canvas> teracak yang sudah disusun — ukuran fotonya sama-sama dari intrinsicSize.
+		const size = intrinsicSize(e.currentTarget as Element);
+		if (size && size.w > 0 && size.h > 0) {
+			ratios = { ...ratios, [id]: size.w / size.h };
 		}
 	}
 
@@ -125,7 +129,7 @@ import SortSelect from "./SortSelect.svelte";
 	});
 
 	function load() {
-		return fetchPhotos({ cat, search: query || undefined, type: "VIDEO", sort, period: period === "all" ? undefined : period, limit: 24 })
+		return fetchPhotos({ cat, search: query && query.toLowerCase() !== by?.toLowerCase() ? query : undefined, photographer: by, type: "VIDEO", sort, period: period === "all" ? undefined : period, limit: 24 })
 			.then((r) => {
 				videos = r.photos.map((p) => ({
 					id: p.id,
@@ -163,8 +167,8 @@ import SortSelect from "./SortSelect.svelte";
 
 <section class="mx-auto max-w-[1500px] px-6 pb-10 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:px-10 lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
 	<Reveal>
-		<p data-reveal class="kicker text-safelight">{t.kicker}</p>
-		<h1 data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{query ? t.titleSearch(query) : t.title}</h1>
+		<p data-reveal class="kicker text-safelight">{by || query ? t.kickerMixed : t.kicker}</p>
+		<h1 data-reveal class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">{by ? t.titleSearch(by) : query ? t.titleSearch(query) : t.title}</h1>
 		<p data-reveal class="mt-6 whitespace-nowrap text-[min(1.02rem,1.8vw)] leading-relaxed text-fg-muted">{t.sub}</p>
 		<div data-reveal class="relative z-40 mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-no-hover-sound data-no-click-sound>
 			<SearchField
@@ -228,7 +232,7 @@ import SortSelect from "./SortSelect.svelte";
 		{/snippet}
 		{@render chip(!cat, t.all, () => (cat = undefined))}
 		{#each categories as c (c.id)}
-			{@render chip(cat === c.name, c.name, () => (cat = c.name))}
+			{@render chip(cat === c.name, catName(c, lang), () => (cat = c.name))}
 		{/each}
 		<span class="ml-auto hidden whitespace-nowrap text-xs text-fg-muted md:inline" aria-live="polite">
 			{videos.length} {t.count}
@@ -261,13 +265,23 @@ import SortSelect from "./SortSelect.svelte";
 					class="relative w-full overflow-hidden rounded-[3px] border border-hair"
 					style={`aspect-ratio: ${aspectFor(v, i)}`}
 				>
-					<img
-						src={imgFor(v.seed, 800, 450, v.thumbUrl)}
-						alt={v.title[lang]}
-						loading="lazy"
-						onload={(e) => readRatio(v.id, e)}
-						class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
-					/>
+					<!-- Thumbnail API teracak → disusun ulang di <canvas> (lazy seperti <img>); dummy tetap <img>. -->
+					{#if isScrambledUrl(imgFor(v.seed, 800, 450, v.thumbUrl))}
+						<canvas
+							use:scrambled={imgFor(v.seed, 800, 450, v.thumbUrl)}
+							aria-label={v.title[lang]}
+							onload={(e) => readRatio(v.id, e)}
+							class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+						></canvas>
+					{:else}
+						<img
+							src={imgFor(v.seed, 800, 450, v.thumbUrl)}
+							alt={v.title[lang]}
+							loading="lazy"
+							onload={(e) => readRatio(v.id, e)}
+							class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+						/>
+					{/if}
 					{#if v.previewUrl}
 						<video
 							data-preview

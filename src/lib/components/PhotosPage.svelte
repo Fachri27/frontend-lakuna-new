@@ -1,23 +1,25 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { i18n } from "$lib/i18n.svelte";
-	import { fetchPhotos, fetchCategories, type Photo, type ApiCatItem } from "$lib/data";
+	import { fetchPhotos, fetchCategories, catName, type Photo, type ApiCatItem } from "$lib/data";
 	import Masonry from "./Masonry.svelte";
 	import SearchField from "./SearchField.svelte";
 	import SortSelect from "./SortSelect.svelte";
 
-	let { initialCat, initialQ, initialBy, chipTitle = false }: {
+	let { initialCat, initialQ, initialBy, chipTitle = false, archive = false }: {
 		initialCat?: string;
 		initialQ?: string;
 		/** ?by=<nama fotografer>: karya satu fotografer (tautan "oleh …"). Bukan pencarian teks. */
 		initialBy?: string;
 		/** true di halaman /categories/[name]: judul mengikuti chip aktif. */
 		chipTitle?: boolean;
+		/** true di halaman /archives: arsip foto DAN video (label "Archives", pencarian "images and videos"). */
+		archive?: boolean;
 	} = $props();
 
 	const copy = {
-		id: { kicker: "Koleksi foto", kickerMixed: "Arsip", title: "Satu lensa, seribu cerita", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
-		en: { kicker: "Photos", kickerMixed: "Archives", title: "Every frame tells a story", sub: "Discover thousands of best quality images, stunning photos in a variety of angles", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search for images", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
+		id: { kicker: "Koleksi foto", kickerMixed: "Arsip", title: "Satu lensa, seribu cerita", titleArchive: "Jelajahi foto dan video memukau kami", subArchive: "Lebih dari 10 ribu foto dan video tentang alam, lanskap, dan satwa liar", sub: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif", all: "Semua", count: "bingkai", resultsFor: "Hasil untuk", clear: "Hapus", noResults: "Tidak ada bingkai yang cocok. Coba kata kunci lain", searchLabel: "Cari di arsip foto", searchPlaceholder: "Cari foto", searchSubmit: "Cari", titleMixed: (c: string) => `Foto dan video ${c}`, titleSearch: (q: string) => `Hasil untuk “${q}”`, subMixed: "Temukan ribuan foto dengan kualitas terbaik, dan potret memukau dari berbagai perspektif", searchLabelMixed: "Cari di arsip", searchPlaceholderMixed: "Cari foto dan video", newest: "Terbaru", popular: "Populer", sortLabel: "Urutkan", timeLabel: "Waktu", anyTime: "Semua waktu", pastDay: "24 jam terakhir", pastWeek: "7 hari terakhir", pastMonth: "30 hari terakhir", pastYear: "Setahun terakhir", loadingPhotos: "Memuat foto berikutnya…", loadingMixed: "Memuat berikutnya…" },
+		en: { kicker: "Photos", kickerMixed: "Archives", title: "Every frame tells a story", titleArchive: "Explore our stunning images and videos", subArchive: "Over 10K images and videos across nature, landscape and wildlife", sub: "Discover thousands of best quality images, stunning photos in a variety of angles", all: "All", count: "frames", resultsFor: "Results for", clear: "Clear", noResults: "No matching frames. Try another keyword", searchLabel: "Search the photo archive", searchPlaceholder: "Search for images", searchSubmit: "Search", titleMixed: (c: string) => `${c} photos and videos`, titleSearch: (q: string) => `Results for “${q}”`, subMixed: "Discover thousands of best quality images, stunning photos in a variety of angles", searchLabelMixed: "Search the archive", searchPlaceholderMixed: "Search images and videos", newest: "Newest", popular: "Popular", sortLabel: "Sort", timeLabel: "Time", anyTime: "All time", pastDay: "Past 24 hours", pastWeek: "Past week", pastMonth: "Past month", pastYear: "Past year", loadingPhotos: "Loading more photos…", loadingMixed: "Loading more…" }
 	};
 
 	const lang = $derived(i18n.lang);
@@ -33,8 +35,8 @@
 	// Isi kolom pencarian. Diketik langsung menyaring (setelah jeda singkat);
 	// menekan Enter menuliskannya ke URL supaya hasilnya bisa dibagikan dan
 	// tautan ?q= yang sudah ada tetap bekerja.
-	let q = $state(initialQ ?? "");
-	let query = $state((initialQ ?? "").trim());
+	let q = $state(initialQ ?? initialBy ?? "");
+	let query = $state((initialQ ?? initialBy ?? "").trim());
 	const needle = $derived(query.toLowerCase());
 	// Urutan waktu: terbaru / terlama. Ganti = muat ulang dari halaman 1.
 	let sort = $state<"newest" | "popular">("newest");
@@ -42,7 +44,7 @@
 	// Kategori atau kata cari (author, keyword, pencarian) aktif = foto DAN video.
 	// Tanpa keduanya: galeri foto saja (video ada di /videos).
 	const by = $derived(initialBy?.trim() || undefined);
-	const mixed = $derived((!!cat && catFromNav) || !!needle || !!by);
+	const mixed = $derived(archive || (!!cat && catFromNav) || !!needle || !!by);
 	// ATURAN JUDUL (final, permintaan pemilik — jangan dibalik lagi):
 	// - ?cat= dari navbar Categories → `Results for "<kategori>"` (headCat, dari URL).
 	// - Chip kategori di halaman ini → judul TIDAK berubah (tetap default).
@@ -50,11 +52,16 @@
 	// - PENGECUALIAN: halaman /categories/[name] (prop chipTitle) → judul
 	//   mengikuti chip aktif.
 	const headCat = $derived(initialCat || undefined);
-	const headMixed = $derived(!!headCat || !!needle || !!by);
+	// Nama kategori (nilai filter/URL) → label sesuai bahasa.
+	const catText = (n: string) => {
+		const c = categories.find((x) => x.name === n);
+		return c ? catName(c, lang) : n;
+	};
+	const headMixed = $derived(archive || !!headCat || !!needle || !!by);
 
 	$effect(() => {
-		q = initialQ ?? "";
-		query = (initialQ ?? "").trim();
+		q = initialQ ?? initialBy ?? "";
+		query = (initialQ ?? initialBy ?? "").trim();
 	});
 
 	$effect(() => {
@@ -103,7 +110,7 @@
 		page = 1;
 		return fetchPhotos({
 			cat,
-			search: needle || undefined,
+			search: needle && needle !== by?.toLowerCase() ? needle : undefined,
 			photographer: by,
 			type: mixed ? undefined : "FOTO",
 			sort,
@@ -138,7 +145,7 @@
 		const minShow = new Promise((r) => setTimeout(r, 750));
 		Promise.all([fetchPhotos({
 			cat,
-			search: needle || undefined,
+			search: needle && needle !== by?.toLowerCase() ? needle : undefined,
 			photographer: by,
 			type: mixed ? undefined : "FOTO",
 			sort,
@@ -205,9 +212,9 @@
 		<!-- Foto + video bercampur (lewat kategori / pencarian) = bukan lagi "Photos". -->
 		<p class="kicker text-safelight">{headMixed ? t.kickerMixed : t.kicker}</p>
 			<h1 class="mt-5 font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-			{chipTitle && cat ? t.titleSearch(cat) : headCat ? t.titleSearch(headCat) : (by || needle) && cat ? t.titleSearch(cat) : by ? t.titleSearch(by) : needle ? t.titleSearch(query) : t.title}
+			{chipTitle && cat ? t.titleSearch(catText(cat)) : headCat ? t.titleSearch(catText(headCat)) : (by || needle) && cat ? t.titleSearch(catText(cat)) : by ? t.titleSearch(by) : needle ? t.titleSearch(query) : archive ? t.titleArchive : t.title}
 		</h1>
-		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{headMixed ? t.subMixed : t.sub}</p>
+		<p class="mt-6 whitespace-nowrap text-[min(1.02rem,2vw)] leading-relaxed text-fg-muted">{archive ? t.subArchive : headMixed ? t.subMixed : t.sub}</p>
 
 		<!-- Pencarian memakai bahasa yang sama dengan rel hero: garis bawah
 			tipis, bukan kotak — satu produk, satu cara mencari. -->
@@ -266,7 +273,7 @@
 	<div class="rail-scroll mx-auto flex max-w-[1500px] items-center gap-1.5 overflow-x-auto px-[max(1.5rem,env(safe-area-inset-left))] py-1.5 sm:gap-2 sm:px-6 sm:py-3 lg:px-10">
 		{@render chip(!cat, t.all, () => ((cat = undefined), (catPicked = true)))}
 		{#each categories as c (c.id)}
-			{@render chip(cat === c.name, c.name, () => ((cat = c.name), (catPicked = true)))}
+			{@render chip(cat === c.name, catName(c, lang), () => ((cat = c.name), (catPicked = true)))}
 		{/each}
 	</div>
 </div>

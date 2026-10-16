@@ -17,6 +17,15 @@
 
 const CREDIT_RATIO = 0.05;
 const CREDIT_MIN = 18;
+/**
+ * Potongan ekstra ke dalam foto di atas pita (porsi tinggi foto, min. 2 px berkas).
+ * Batas crop yang tepat-matematika menyisakan sehelai garis putih di sebagian foto:
+ * kompresi JPEG mencampur warna pita ke baris foto terakhir, dan browser ikut
+ * mengambil sampel piksel pita saat menskalakan (tergantung posisi sub-piksel tepi).
+ * 0,4% ≈ 3 px pada pratinjau 1000 px — tak terasa sebagai potongan.
+ */
+const EDGE = 0.004;
+const EDGE_MIN = 2;
 const CREDITED = /\/(?:thumb|watermark)\/[^?#]+\.(?:jpe?g|png|webp)(?:[?#]|$)/i;
 
 export type CreditDims = { w: number; h: number; bar: number };
@@ -34,6 +43,17 @@ function dimsOf(w: number, h: number): CreditDims | null {
 	const bar = creditBarPx(w);
 	// Gambar lebih pendek dari pitanya = bukan berkas ber-pita (mis. data lama).
 	return bar < h * 0.5 ? { w, h, bar } : null;
+}
+
+/** Piksel berkas yang disembunyikan dari dasar gambar: pita + EDGE. */
+function hiddenPx(d: CreditDims): number {
+	return d.bar + Math.max(EDGE_MIN, Math.ceil((d.h - d.bar) * EDGE));
+}
+
+/** Piksel yang dibuang dari dasar berkas ber-pita w×h (0 bila bukan berkas ber-pita) — untuk kanvas teracak. */
+export function creditHiddenPx(w: number, h: number): number {
+	const d = dimsOf(w, h);
+	return d ? hiddenPx(d) : 0;
 }
 
 // Kunci tanpa query: URL presigned berganti tanda tangan tiap fetch, tapi
@@ -67,7 +87,7 @@ export function probeCredit(url: string): Promise<CreditDims | null> {
  * (seperti `cover`) dengan hanya bagian foto — pita jatuh di luar kotak.
  */
 export function coverBackground(boxW: number, boxH: number, d: CreditDims) {
-	const s = Math.max(boxW / d.w, boxH / (d.h - d.bar));
+	const s = Math.max(boxW / d.w, boxH / (d.h - hiddenPx(d)));
 	const bw = d.w * s;
 	const bh = d.h * s;
 	return { width: bw, height: bh, offsetX: (boxW - bw) / 2 };
@@ -102,7 +122,7 @@ function cropImg(img: HTMLImageElement) {
 	if (supportsViewBox()) {
 		// Chrome/Edge: potong langsung di level berkas — ukuran intrinsik
 		// ikut berubah, jadi object-fit apa pun & tinggi auto tetap benar.
-		img.style.setProperty("object-view-box", `inset(0 0 ${d.bar}px 0)`);
+		img.style.setProperty("object-view-box", `inset(0 0 ${hiddenPx(d)}px 0)`);
 		return;
 	}
 	// Cadangan (Safari/Firefox).
@@ -110,13 +130,14 @@ function cropImg(img: HTMLImageElement) {
 	if (getComputedStyle(img).objectFit === "cover") {
 		// Kotak tetap: perpanjang elemen ke bawah sebesar porsi pita; induk
 		// (overflow hidden) memotongnya, dan cover + rata-atas menjaga isi.
-		img.style.height = `calc(100% / ${(1 - f).toFixed(5)})`;
+		// × (1 + EDGE): lihat EDGE — tanpa itu tersisa sehelai garis putih.
+		img.style.height = `calc(100% / ${(1 - f).toFixed(5)} * ${1 + EDGE})`;
 		img.style.maxHeight = "none";
 		img.style.objectPosition = "center top";
 	} else {
 		// Tinggi mengikuti gambar: rasio elemen = rasio foto tanpa pita,
 		// cover + rata-atas membuang pita di dasar.
-		img.style.aspectRatio = `${d.w} / ${d.h - d.bar}`;
+		img.style.aspectRatio = `${d.w} / ${d.h - hiddenPx(d)}`;
 		img.style.objectFit = "cover";
 		img.style.objectPosition = "center top";
 	}

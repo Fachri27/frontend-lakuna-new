@@ -56,7 +56,68 @@
 		setLenis(l);
 		l.on("scroll", ScrollTrigger.update);
 
-		const tick = (time: number) => l.raf(time * 1000);
+		// Tick Lenis TIDUR saat gulir diam. raf() Lenis hanya memajukan animasinya (animate.advance; di luar
+		// animasi cuma mencatat waktu), tapi dulu tick terpasang permanen di gsap.ticker → ticker GSAP tak pernah
+		// tidur (autoSleep butuh <2 pendengar) dan thread utama menjalankan frame 60×/dtk walau halaman diam
+		// (jejak 1366×768, CPU 4× lambat: 45–55% sibuk saat diam di globe). Kini tick lepas setelah ±0,5 dtk
+		// tanpa animasi, dan dipasang lagi oleh SATU-SATUNYA pintu animasi Lenis: scrollTo() — roda masuk lewat
+		// onVirtualScroll → this.scrollTo (menimpa properti instans ikut menangkapnya), begitu pula panggilan
+		// terprogram (tombol ke atas, globe, peta). Sentuh, keyboard, dan seret scrollbar = gulir native
+		// (syncTouch mati) yang tak butuh raf; start()/stop() hanya reset, juga tak butuh raf.
+		// Jam Lenis dimajukan per DELTA frame, bukan waktu absolut: jeda tidur tak terhitung, dan frame pertama
+		// setelah bangun maju tepat satu interval frame — sama dengan dulu saat tick tak pernah lepas.
+		const IDLE_FRAMES = 30;
+		let alive = true;
+		let attached = true;
+		let clock = 0; // jam Lenis (ms)
+		let frameMs = 1000 / 60; // interval frame wajar terakhir — langkah frame pertama setelah bangun
+		let resync = false; // tick berikut = frame pertama setelah dipasang lagi
+		let woke = false; // ticker GSAP ikut tidur: delta dispatch pertamanya terpotong (sejak bangun), pakai frameMs
+		let syncing = false; // di dalam gsap.ticker.add(): GSAP yang tidur langsung memanggil tick — bukan frame layar
+		let still = 0;
+		let firstFrame = 0;
+		const step = (dt: number) => {
+			clock += dt;
+			resync = false;
+			l.raf(clock);
+			if (l.isSmooth) still = 0;
+			else if (++still >= IDLE_FRAMES) {
+				gsap.ticker.remove(tick);
+				attached = false;
+			}
+		};
+		const tick = (_time: number, deltaMs: number) => {
+			if (syncing) {
+				woke = true;
+				return;
+			}
+			if (resync) return step(woke ? frameMs : deltaMs);
+			if (deltaMs >= 4 && deltaMs <= 34) frameMs = deltaMs;
+			step(deltaMs);
+		};
+		const resume = () => {
+			if (attached || !alive) return;
+			attached = true;
+			still = 0;
+			resync = true;
+			woke = false;
+			syncing = true;
+			gsap.ticker.add(tick);
+			syncing = false;
+			// Ticker GSAP yang baru bangun menahan dispatch berikutnya ≥4 ms, padahal roda (input selaras rAF)
+			// tiba tepat sebelum frame → frame itu terlewat dan gulir mulai satu frame terlambat. Tanggul: bila
+			// frame ini lewat tanpa tick (rAF ini antre SETELAH rAF GSAP), majukan sendiri satu frame.
+			cancelAnimationFrame(firstFrame);
+			firstFrame = requestAnimationFrame(() => {
+				firstFrame = 0;
+				if (attached && resync) step(frameMs);
+			});
+		};
+		const baseScrollTo = l.scrollTo.bind(l);
+		l.scrollTo = ((...args: Parameters<Lenis["scrollTo"]>) => {
+			baseScrollTo(...args);
+			if (l.isSmooth) resume();
+		}) as Lenis["scrollTo"];
 		gsap.ticker.add(tick);
 		gsap.ticker.lagSmoothing(0);
 
@@ -85,6 +146,8 @@
 
 		return () => {
 			lockObserver.disconnect();
+			alive = false;
+			cancelAnimationFrame(firstFrame);
 			gsap.ticker.remove(tick);
 			cancelAnimationFrame(r);
 			window.removeEventListener("load", onLoad);

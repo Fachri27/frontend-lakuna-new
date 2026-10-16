@@ -291,6 +291,8 @@ img[src*="/watermark/"] {
   /* CVD correction — media only, never text/logos. Matches apps/web app.css. */
   html[data-cvd] img:not(.no-cvd),
   html[data-cvd] video:not(.no-cvd),
+  /* Foto API = <canvas> teracak yang disusun ulang ($lib/scramble) — media juga. */
+  html[data-cvd] canvas[data-scr]:not(.no-cvd),
   html[data-cvd] picture img:not(.no-cvd),
   html[data-cvd] .cvd-target {
     filter: url(#cvd-filter) !important;
@@ -1142,9 +1144,9 @@ a.ias-card:focus-visible {
   height: 2rem;
   border-radius: 999px;
   border: 1px solid rgba(239, 231, 220, 0.35);
-  background: rgba(7, 9, 10, 0.4);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  /* Latar pekat, tanpa backdrop-filter: blur di atas kanvas peta yang bergerak = satu render pass kompositor
+     tambahan per tombol per frame selama peta digeser. */
+  background: rgba(7, 9, 10, 0.58);
   color: var(--im-ink);
   cursor: pointer;
   transition:
@@ -1211,7 +1213,10 @@ a.ias-card:focus-visible {
   border-radius: 999px;
   background: var(--color-safelight-lamp);
   box-shadow: 0 0 8px var(--color-safelight-lamp);
-  animation: im-live 2.4s ease-in-out infinite;
+  /* Berdenyut BERTANGGA (±7 perubahan/dtk), bukan halus 60 fps: tiap frame animasi memaksa seluruh layar —
+     termasuk kanvas peta selayar — dikomposit ulang. Halus = ±20% GPU saat peta diam; bertangga = ±3%,
+     dan pada titik 5 px tangganya tak terlihat. */
+  animation: im-live 2.4s steps(8, jump-none) infinite;
 }
 @keyframes im-live {
   0%, 100% { opacity: 1; }
@@ -1268,6 +1273,21 @@ a.ias-card:focus-visible {
   color: rgba(239, 231, 220, 0.88);
   text-shadow: 0 1px 2px rgba(4, 6, 7, 0.9), 0 0 14px rgba(4, 6, 7, 0.95);
   transition: color 0.3s, opacity 0.3s;
+}
+/* Label menabrak plate / label lain di kanan → dipindah ke kiri plate; di kiri pun menabrak → disembunyikan,
+   muncul saat plate disorot (lihat placeLabels di IndonesiaMap). */
+.im-mk-label.is-left {
+  left: auto;
+  right: calc(100% + 0.6rem);
+}
+.im-mk-label.is-hidden {
+  opacity: 0;
+}
+.im-mk:hover .im-mk-label.is-hidden {
+  opacity: 1;
+}
+.im-wrap .maplibregl-marker:hover {
+  z-index: 3;
 }
 .im-mk-name {
   font-weight: 500;
@@ -1332,10 +1352,9 @@ a.ias-card:focus-visible {
   width: 18px;
   height: 18px;
   border-radius: 3px;
-  background: rgba(7, 9, 10, 0.55);
+  /* Tanpa backdrop-filter (lihat .im-round): tiap plate = render pass tambahan per frame saat peta bergerak. */
+  background: rgba(7, 9, 10, 0.66);
   color: #fff;
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
 }
 /* plate tanpa foto yang bisa dimuat — bidang arsir, bukan kotak kosong */
 .im-mk-plate-img.is-empty {
@@ -1462,8 +1481,12 @@ a.ias-card:focus-visible {
   cursor: zoom-out;
 }
 /* Garis scan vertikal transisi "terbakar" peta ↔ foto (opacity diatur
-   paintBurn). Di atas viewer, tak pernah menangkap klik. */
+   paintBurn). Di atas viewer, tak pernah menangkap klik.
+   Sejak garis scan dilepas dari paintBurn (opasitasnya SELALU 0), elemen ini
+   lapisan fixed selayar penuh ber-mix-blend-mode yang tak pernah terlihat →
+   display: none (nol beda tampilan). Hidupkan lagi garisnya = hapus baris itu. */
 .im-burn-lines {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 2001;
@@ -1596,9 +1619,7 @@ a.ias-card:focus-visible {
   color: rgba(239, 231, 220, 0.9);
 }
 .im-dv-caption--link {
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--safelight) 60%, transparent);
-  text-underline-offset: 4px;
+  text-decoration: none;
 }
 .im-dv-caption--link {
   pointer-events: auto;
@@ -2155,10 +2176,16 @@ video {
   pointer-events: none !important;
 }
 
+/* Animasi di luar layar dijeda (lihat lib/pauseOffscreen.ts). */
+[data-offscreen],
+[data-offscreen] * {
+  animation-play-state: paused !important;
+}
+
 /* Back ke landing: tampilan ditutup sampai posisi gulir dipulihkan (lihat lib/homeScroll.ts). */
 html.home-restoring body {
   opacity: 0;
 }
 html:not(.home-restoring) body {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.3s ease;
 }

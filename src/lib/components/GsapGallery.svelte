@@ -1,5 +1,6 @@
 <script lang="ts">
 import { probeCredit, coverBackground } from "$lib/creditCrop";
+import { isScrambledUrl, loadScrambledCached, paintScrambled, scrambleKey } from "$lib/photoScramble";
 import { primePageTurn, playPageTurn, PAGE_TURN_VOLUME, PAGE_TURN_EXIT_VOLUME } from "$lib/pageTurn";
 import gsap from "gsap";
 	import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -199,9 +200,57 @@ import gsap from "gsap";
 			const totalBendDeg = (bendRad * 180) / Math.PI;
 			const stepDeg = totalBendDeg / SLICES;
 
+			// Foto dari API datang TERACAK (lib/photoScramble.ts) dan tak boleh jadi background-image: irisannya
+			// <canvas> kecil. Berkasnya disusun SEKALI ke kanvas lepas (tak pernah dipasang di dokumen), tiap
+			// irisan menyalin bagiannya dengan rumus background yang sama — cover terhadap foto tanpa pita kredit
+			// (kanvas susunan sudah terpotong pitanya), rata atas — lalu kanvas lepas itu dibuang. Memori tetap
+			// ±satu foto per kartu, seperti satu background bersama dulu.
+			// Resolusi irisan = kebutuhan kartu terdekat: perspective 900px membesarkan kartu di z = rz (+ separuh
+			// lebarnya saat berputar), dibatasi piksel berkasnya — tak pernah diperbesar melebihi aslinya.
+			const dpr = window.devicePixelRatio || 1;
+			const nearMag = 900 / Math.max(100, 900 - rz - imgW / 2);
+			const paintSlices = (raw: string, canvases: HTMLCanvasElement[], attempt: number) => {
+				const key = scrambleKey(raw);
+				if (!key) return;
+				loadScrambledCached(raw).then(
+					(img) => {
+						if (!canvases[0]?.isConnected) return; // sudah dibangun ulang
+						const full = document.createElement("canvas");
+						paintScrambled(full, img, raw, key);
+						const sc = Math.max(imgW / full.width, imgH / full.height);
+						const offX = (imgW - full.width * sc) / 2;
+						const displayW = sliceW + 1.5;
+						const k = Math.min(1 / sc, dpr * nearMag); // px kanvas per px CSS
+						// 1 px kanvas = 1 px berkas: salin di koordinat bulat, tanpa resampling (tajam persis).
+						const native = k * sc > 0.999;
+						const cw = Math.max(1, Math.round(displayW * k));
+						const ch = Math.max(1, Math.round(imgH * k));
+						const sw = native ? cw : displayW / sc;
+						const sh = native ? ch : imgH / sc;
+						canvases.forEach((cv, s) => {
+							const sx = (s * sliceW - offX) / sc;
+							cv.width = cw;
+							cv.height = ch;
+							const g = cv.getContext("2d");
+							if (!g) return;
+							g.imageSmoothingQuality = "high";
+							// Sumber yang melewati tepi foto dipotong browser = area kosong, seperti background no-repeat.
+							g.drawImage(full, native ? Math.round(sx) : sx, 0, sw, sh, 0, 0, cw, ch);
+						});
+						full.width = full.height = 0;
+					},
+					() => {
+						if (attempt < 4 && canvases[0]?.isConnected)
+							window.setTimeout(() => paintSlices(raw, canvases, attempt + 1), 1200 * (attempt + 1));
+					},
+				);
+			};
+
 			wraps.forEach((wrap, wi) => {
 				if (!wrap) return;
-				const src = safeBg(thumbUrl(photos[wi] ?? {}, wi));
+				const rawSrc = thumbUrl(photos[wi] ?? {}, wi);
+				const src = safeBg(rawSrc);
+				const scr = src !== "none" && isScrambledUrl(rawSrc);
 				wrap.innerHTML = "";
 				wrap.style.cssText = `
 					position:absolute;
@@ -213,24 +262,27 @@ import gsap from "gsap";
 				`;
 				const slices: HTMLElement[] = [];
 				for (let s = 0; s < SLICES; s++) {
-					const sl = document.createElement("div");
+					const sl = document.createElement(scr ? "canvas" : "div");
 					slices.push(sl);
 					sl.className = "cvd-target";
 					const displayW = sliceW + 1.5;
 					const angle = (s - (SLICES - 1) / 2) * stepDeg;
+					const bg = scr
+						? ""
+						: `
+						background-image:${src};
+						/* Lebar saja (tinggi auto) + tanpa ulang: pita kredit di
+						   dasar thumbnail jatuh di bawah irisan, tak terlihat. */
+						background-size:${imgW.toFixed(1)}px auto;
+						background-repeat:no-repeat;
+						background-position:${(-s * sliceW).toFixed(1)}px 0;`;
 					sl.style.cssText = `
 						position:absolute;
 						top:0;
 						height:100%;
 						width:${displayW.toFixed(1)}px;
 						left:50%;
-						margin-left:${(-displayW / 2).toFixed(1)}px;
-						background-image:${src};
-						/* Lebar saja (tinggi auto) + tanpa ulang: pita kredit di
-						   dasar thumbnail jatuh di bawah irisan, tak terlihat. */
-						background-size:${imgW.toFixed(1)}px auto;
-						background-repeat:no-repeat;
-						background-position:${(-s * sliceW).toFixed(1)}px 0;
+						margin-left:${(-displayW / 2).toFixed(1)}px;${bg}
 						transform-origin:50% 50% ${(-cylR).toFixed(1)}px;
 						transform:rotateY(${angle.toFixed(2)}deg);
 						backface-visibility:hidden;
@@ -238,11 +290,14 @@ import gsap from "gsap";
 					`;
 					wrap.appendChild(sl);
 				}
+				if (scr) {
+					paintSlices(rawSrc, slices as HTMLCanvasElement[], 0);
+					return;
+				}
 				// Pita kredit di dasar thumbnail: setelah ukuran aslinya diketahui,
 				// skala background seperti `cover` terhadap bagian foto saja.
 				// Probe gagal (jaringan) dicoba ulang beberapa kali; selama itu
 				// irisan belum diberi ukuran final.
-				const rawSrc = thumbUrl(photos[wi] ?? {}, wi);
 				const applyCrop = (attempt: number) => {
 					void probeCredit(rawSrc).then((d) => {
 						if (!slices[0]?.isConnected) return; // sudah dibangun ulang
@@ -381,6 +436,7 @@ import gsap from "gsap";
 					}
 
 					// ── Foto ──────────────────────────────────────────────
+					const depth: [HTMLDivElement, number][] = [];
 					wraps.forEach((img, i) => {
 						if (!img) return;
 						const imgT = progress * totalRange - i * stagger;
@@ -399,8 +455,16 @@ import gsap from "gsap";
 
 						img.style.transform = `translate3d(${pos.x.toFixed(1)}px,${pos.y.toFixed(1)}px,${pos.z.toFixed(1)}px) rotateY(${rotDeg}deg)`;
 						img.style.opacity = String(alpha);
-						img.style.zIndex = String(Math.round(pos.z + 600));
+						depth.push([img, Math.round(pos.z + 600)]);
 					});
+					// z-index: yang berpengaruh hanya URUTAN antarfoto (semua bersaudara di satu konteks tumpuk; frasa
+					// 9999 selalu di atas, foto yang tak tampil ber-opacity 0). Dulu nilai mentah round(z + 600) ditulis
+					// tiap frame gulir — berubah hampir tiap frame, dan tiap perubahan z-index memaksa urutan lukis panggung
+					// disusun ulang + pelapisan kompositor dihitung ulang (bukan jalur cepat transform/opacity). Kini
+					// peringkat padat dari nilai yang SAMA: urutan dan seri identik, nilainya hanya berubah saat dua foto
+					// bertukar urutan kedalaman.
+					const levels = [...new Set(depth.map(([, z]) => z))].sort((a, b) => a - b);
+					for (const [el, z] of depth) el.style.zIndex = String(600 + levels.indexOf(z));
 
 					// ── Phrase ────────────────────────────────────────────
 					const phraseStart = 0.25;
@@ -424,10 +488,14 @@ import gsap from "gsap";
 									const wordT = revealP * (wordEls.length + 4) - wi;
 									const wP = Math.max(0, Math.min(1, wordT / 3));
 									w.style.opacity = String(wP);
-									w.style.filter = `blur(${(8 * (1 - wP)).toFixed(1)}px)`;
+									// Blur yang sudah 0 dihapus, bukan dibiarkan `blur(0px)`: tampak sama, tapi filter identitas
+									// tetap jadi lapisan filter per kata tiap kali frasa dirasterisasi. Urutan lukis tak berubah:
+									// kata yang sudah tajam selalu awalan (urutan DOM) dari kata yang masih kabur.
+									const b = 8 * (1 - wP);
+									w.style.filter = b < 0.05 ? "" : `blur(${b.toFixed(1)}px)`;
 								} else {
 									w.style.opacity = "1";
-									w.style.filter = "blur(0px)";
+									w.style.filter = "";
 								}
 							});
 

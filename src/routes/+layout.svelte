@@ -103,8 +103,11 @@
 	// Halaman arsip & transaksional senyap total — sapuan melintasi
 	// grid/kartu/form di sana terdengar berisik. Pola mencakup sub-rute
 	// (/photos/:id, /videos/:id, ...).
-	// Landing ("/") juga senyap total: tak ada bunyi hover/klik di beranda.
-	const SILENT_SOUND = /^\/$|^\/(photos|videos|pricing|profile|license|checkout|ecotourism)(\/|$)/;
+	// Landing ("/") juga senyap total: tak ada bunyi hover/klik di beranda (termasuk klik kartu
+	// kategori/tema yang lalu membuka /categories — saat klik, path masih "/").
+	// Pengecualian per elemen: `data-sound` tetap berbunyi di halaman senyap
+	// (mis. CTA "Check all destination" di landing).
+	const SILENT_SOUND = /^\/$|^\/(photos|videos|pricing|profile|license|checkout|payment|archive|categories|archives|ecotourism|about|reviews|contributor|terms|privacy|cookies|help|faq|customer-service)(\/|$)/;
 	function soundMuted(): boolean {
 		try {
 			return SILENT_SOUND.test(page.url.pathname);
@@ -117,9 +120,9 @@
 		return el?.closest?.('button, a, [role="button"]') ?? null;
 	}
 	function onHover(e: MouseEvent) {
-		if (soundMuted()) return;
 		const el = clickTarget(e);
 		if (!el) return;
+		if (soundMuted() && !el.closest("[data-sound]")) return;
 		if (e.relatedTarget instanceof Element && el.contains(e.relatedTarget)) return;
 		// Zona senyap (mis. papan harga): tanpa bunyi hover.
 		if (el.closest("[data-no-hover-sound]")) return;
@@ -129,11 +132,11 @@
 		playScrambleSound();
 	}
 	function onClick(e: MouseEvent) {
-		if (soundMuted()) return;
 		// Klik kanan / tombol tengah bukan "klik" tombol.
 		if (e.button !== 0) return;
 		const el = clickTarget(e);
 		if (!el) return;
+		if (soundMuted() && !el.closest("[data-sound]")) return;
 		// Opt-out per zona/elemen (mis. tombol peta yang harus senyap total).
 		if (el.closest("[data-no-click-sound]")) return;
 		playScrambleClick();

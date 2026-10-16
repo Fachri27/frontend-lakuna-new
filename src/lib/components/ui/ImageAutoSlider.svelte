@@ -1,4 +1,6 @@
 <script module lang="ts">
+	import { pauseOffscreen } from "$lib/pauseOffscreen";
+	import ApiImage from "../ApiImage.svelte";
 	/**
 	 * Satu baris poster yang berjalan tanpa henti.
 	 *
@@ -18,6 +20,8 @@
 	export type SliderImage = {
 		src: string;
 		alt: string;
+		/** Id foto di API: thumbnail yang direntangkan diganti versi tajam saat terlihat (lihat ApiImage). */
+		photoId?: string;
 		/** Bila ada, kartunya jadi tautan. */
 		href?: string;
 	};
@@ -69,13 +73,19 @@
 			// Berhenti saat disentuh atau saat ada kartu yang menerima fokus papan
 			// ketik — kalau tidak, tautannya mustahil diklik.
 			`.${track}:hover,.${track}:focus-within{animation-play-state:paused}` +
-			`@media(prefers-reduced-motion:reduce){.${track}{animation:none}}`
+			// Foto teracak dirender ApiImage sebagai <canvas> (lib/photoScramble.ts): aturan `.ias-card img` di app.css
+			// berlaku sama untuknya — tanpa ini kanvas tampil seukuran pikselnya di dalam kartu.
+			`.${track} .ias-card canvas{display:block;width:100%;height:100%;max-width:none;object-fit:cover;transition:transform .7s cubic-bezier(.16,1,.3,1)}` +
+			`.${track} .ias-card:hover canvas,.${track} .ias-card:focus-visible canvas{transform:scale(1.04)}` +
+			`@media(prefers-reduced-motion:reduce){.${track}{animation:none}.${track} .ias-card canvas{transition:none}}`
 		);
 	});
 </script>
 
 {#if images.length}
-	<div class={`ias ${className}`}>
+	<!-- Jeda luar layar tanpa margin: jeda membekukan waktu animasi, jadi baris yang baru masuk layar lanjut dari
+		titik yang sama (tak ada loncatan) — margin 120px hanya membuat baris tetap berjalan saat belum terlihat. -->
+	<div class={`ias ${className}`} {@attach pauseOffscreen("0px")}>
 		{@html `<style>${css}<\/style>`}
 		<div class="ias-mask">
 			<div class={`${track} ias-track`}>
@@ -92,11 +102,11 @@
 							aria-hidden={primary ? undefined : "true"}
 							tabindex={primary ? undefined : -1}
 						>
-							<img src={img.src} alt={primary ? img.alt : ""} loading="lazy" decoding="async" draggable="false" />
+							<ApiImage src={img.src} alt={primary ? img.alt : ""} eager={primary && i < 6} photoId={img.photoId} />
 						</a>
 					{:else}
 						<span class="ias-card" aria-hidden={primary ? undefined : "true"}>
-							<img src={img.src} alt={primary ? img.alt : ""} loading="lazy" decoding="async" draggable="false" />
+							<ApiImage src={img.src} alt={primary ? img.alt : ""} eager={primary && i < 6} photoId={img.photoId} />
 						</span>
 					{/if}
 				{/each}

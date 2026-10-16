@@ -6,9 +6,11 @@
 	 * di hero beranda.
 	 */
 import { i18n } from "$lib/i18n.svelte";
+	import { page } from "$app/state";
+	import { scrollToTop } from "$lib/scrollTop";
 	import { store } from "$lib/store.svelte";
 	import { announcer } from "$lib/stores/announce.svelte";
-	import { fetchCategories, type ApiCatItem } from "$lib/data";
+	import { fetchCategories, catName, type ApiCatItem } from "$lib/data";
 	import { authModal } from "$lib/authModal.svelte";
 	import ApiImage from "./ApiImage.svelte";
 	import { scrambleMute, toggleScramble } from "$lib/sound.svelte";
@@ -66,8 +68,17 @@ import { i18n } from "$lib/i18n.svelte";
 				megaBtnRef?.focus();
 			}
 		};
+		// Klik di mana pun di luar menu menutupnya (lapisan overlay tak
+		// selalu kena klik karena konten halaman melukis di atasnya).
+		const onDown = (e: PointerEvent) => {
+			if (megaRef && !megaRef.contains(e.target as Node)) mega = false;
+		};
 		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		document.addEventListener("pointerdown", onDown);
+		return () => {
+			window.removeEventListener("keydown", onKey);
+			document.removeEventListener("pointerdown", onDown);
+		};
 	});
 
 	// Close mobile menu on Escape
@@ -138,17 +149,24 @@ import { i18n } from "$lib/i18n.svelte";
 		}`}
 	>
 		<nav class="relative mx-auto flex h-[var(--nav-h)] max-w-[1500px] items-center justify-between px-6 lg:px-10">
+			<!-- Logo di beranda sendiri: gulir halus ke puncak seperti tombol "ke atas". Navigasi ke URL yang sama
+				dulu melompat ke 0 tanpa tanda scrollingTop → globe merebut gulir dan berhenti di awal globe. -->
 			<a
 				href="/"
 				data-no-hover-sound
 				data-no-click-sound
+				onclick={(e) => {
+					if (page.url.pathname !== "/" || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+					e.preventDefault();
+					scrollToTop();
+				}}
 				class="group relative z-10 md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
 				aria-label="Lakuna"
 			>
 				<!-- logo1.png sudah di-crop ke glyph (simetris), jadi tidak perlu
 					koreksi optik margin/translate lagi. -->
 				<ApiImage
-					src="/logo1.png"
+					src="/logo1-sm.png"
 					alt="Lakuna"
 					width={200}
 					height={36}
@@ -205,15 +223,32 @@ import { i18n } from "$lib/i18n.svelte";
 										onclick={() => (mega = false)}
 										class="group flex flex-col gap-1 bg-bg p-5 transition-colors hover:bg-surface-2"
 									>
-										<span class="kicker text-safelight/80">0{i + 1}</span>
+										<span class="kicker text-safelight/80">{String(i + 1).padStart(2, "0")}</span>
 										<span class="font-display text-lg font-medium tracking-[-0.01em] text-fg">
-											{cat.name}
+											{catName(cat, i18n.lang)}
 										</span>
 										<span class="arrow-link mt-1 text-[0.72rem] text-fg-muted">
 											<span class="text-safelight arr">→</span>
 										</span>
 									</a>
 								{/each}
+								<!-- Kotak "Semua kategori" melebar mengisi sisa baris terakhir
+									(13 kategori → 2 kolom; kelipatan 3 → satu baris penuh),
+									jadi grid tak pernah menyisakan sel kosong. -->
+								<a
+									role="menuitem"
+									href="/archives"
+									onclick={() => (mega = false)}
+									class={`group flex flex-col gap-1 bg-bg p-5 transition-colors hover:bg-surface-2 ${["col-span-3", "col-span-2", "col-span-1"][categories.length % 3]}`}
+								>
+									<span class="kicker text-safelight/80">{i18n.c.nav.allCategoriesKicker}</span>
+									<span class="font-display text-lg font-medium tracking-[-0.01em] text-fg">
+										{i18n.c.nav.allCategories}
+									</span>
+									<span class="arrow-link mt-1 text-[0.72rem] text-fg-muted">
+										<span class="text-safelight arr">→</span>
+									</span>
+								</a>
 							</div>
 						</div>
 					{/if}
@@ -431,9 +466,14 @@ import { i18n } from "$lib/i18n.svelte";
 		stroke-linejoin: round;
 		transition: opacity 0.3s ease;
 	}
-	/* Bersuara: gelombang mengalir pelan. Dibisukan: rebah jadi garis datar. */
+	/* Bersuara: gelombang (diam); mengalir saat tombol disorot. Dibisukan: rebah jadi garis datar.
+	   Dulu mengalir terus: animasi stroke-dashoffset tak bisa dikerjakan GPU, jadi thread utama menghitung
+	   ulang & melukis ulang navbar 60×/dtk di SETIAP halaman, juga saat pengunjung diam. */
 	.nav-sound-wave {
 		stroke-dasharray: 60 12;
+	}
+	.nav-sound:hover .nav-sound-wave,
+	.nav-sound:focus-visible .nav-sound-wave {
 		animation: ns-flow 1.6s linear infinite;
 	}
 	.nav-sound-flat {

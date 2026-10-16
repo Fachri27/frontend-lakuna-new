@@ -144,10 +144,12 @@
 							</div>
 						{/each}
 					</div>
-					<!-- progress -->
+					<!-- progress — transisi lebar HANYA saat panel terbuka: lebarnya berubah tiap detik, dan transisi
+						 1 dtk berurutan = animasi lebar (bukan GPU) tanpa henti → style + layout di thread utama
+						 SETIAP frame di semua halaman, walau panel tertutup di luar layar. -->
 					<div class="mt-4 h-1 w-full overflow-hidden rounded-full bg-surface-2">
 						<div
-							class="h-full rounded-full bg-safelight transition-[width] duration-1000 ease-linear"
+							class={`h-full rounded-full bg-safelight ${access.panelOpen ? "transition-[width] duration-1000 ease-linear" : ""}`}
 							style={`width: ${progress * 100}%`}
 						></div>
 					</div>
@@ -191,7 +193,6 @@
 			<h3 class="mt-2 font-display text-xl font-light tracking-[-0.01em] text-fg">{t.a11yTitle}</h3>
 
 			<div class="mt-4 flex flex-col gap-3">
-				{@render Toggle(t.reduceMotion, t.reduceMotionDesc, settings.reduceMotion, (v) => access.set("reduceMotion", v))}
 				{@render Toggle(t.highContrast, t.highContrastDesc, settings.highContrast, (v) => access.set("highContrast", v))}
 
 				<!-- text size -->
@@ -314,12 +315,14 @@
 {/snippet}
 
 
-<!-- backdrop -->
+<!-- backdrop — selalu terpasang, jadi saat tertutup WAJIB `invisible` (setelah pudar 500 ms; visibility ikut
+	 transisi = tetap terlihat selama memudar). opacity-0 saja tidak cukup: Chrome tetap menggambar simpul
+	 ber-backdrop-filter walau opasitasnya 0 → blur selayar penuh tiap frame gulir di SEMUA halaman. -->
 <div
 	onclick={() => access.setPanelOpen(false)}
 	aria-hidden={!access.panelOpen}
-	class={`fixed inset-0 z-[90] bg-ocean-deep/40 backdrop-blur-sm transition-opacity duration-500 ${
-		access.panelOpen ? "opacity-100" : "pointer-events-none opacity-0"
+	class={`fixed inset-0 z-[90] bg-ocean-deep/40 backdrop-blur-sm transition-[opacity,visibility] duration-500 ${
+		access.panelOpen ? "opacity-100" : "pointer-events-none invisible opacity-0"
 	}`}
 ></div>
 

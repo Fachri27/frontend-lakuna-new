@@ -5,13 +5,14 @@
 	import { authModal } from "$lib/authModal.svelte";
 	import { loadLacuna, type ThinCategory } from "$lib/lacuna";
 	import { fetchPhotos, fetchVideos, imgFor, stripPicsumPhotos, type Photo, type Video } from "$lib/data";
+	import ApiImage from "./ApiImage.svelte";
 	import { PROVINCES, MAP_W, MAP_H } from "$lib/provinces";
 
 	type Step = { title: string; body: string };
 	type QA = { q: string; a: string; link?: { href: string; label: string } };
 	type Way = { title: string; body: string };
 	type Who = { title: string; body: string };
-	type Opp = { key: string; title: string; body: string; subject: string; d?: string; vb?: string; img?: string | null };
+	type Opp = { key: string; title: string; body: string; subject: string; d?: string; vb?: string; img?: string | null; photoId?: string };
 
 	const copy: Record<Lang, {
 		title: string; intro: string; notice: string; waysTitle: string; waysBody: string; ways: Way[];
@@ -209,6 +210,7 @@
 				body: t.oppCategory(c.n, c.name),
 				subject: t.subjectFor(c.name),
 				img: c.photo?.thumbUrl ? imgFor(c.photo.seed, 800, 600, c.photo.thumbUrl) : null,
+				photoId: c.photo && c.photo.assetType !== "VIDEO" ? c.photo.id : undefined,
 			});
 		}
 		return out;
@@ -284,6 +286,8 @@
 		whoPhoto?.thumbUrl ? imgFor(whoPhoto.seed, 900, 700, whoPhoto.thumbUrl) : null,
 		whoVideo?.thumbUrl ? imgFor(whoVideo.seed, 900, 700, whoVideo.thumbUrl) : null,
 	]);
+	// Kartu foto ditajamkan dari file asli saat terlihat; kartu video memakai thumbnail video (sudah 2880 px).
+	const whoIds = $derived([whoPhoto && whoPhoto.assetType !== "VIDEO" ? whoPhoto.id : undefined, undefined]);
 
 	const primaryHref = $derived(mailto(t.subject));
 	const signedIn = $derived(!!store.user);
@@ -309,7 +313,7 @@
 		{#if hero}
 			<div class="ct-art" aria-hidden="true">
 				<div class="ct-art__img">
-					<img src={imgFor(hero.seed, 1200, 900, hero.thumbUrl)} alt="" decoding="async" fetchpriority="high" />
+					<ApiImage src={imgFor(hero.seed, 1200, 900, hero.thumbUrl)} eager photoId={hero.assetType === "VIDEO" ? undefined : hero.id} />
 				</div>
 			</div>
 		{/if}
@@ -350,7 +354,7 @@
 					<article class="ct-who__card" class:no-img={!whoImgs[i]}>
 						{#if whoImgs[i]}
 							<div class="ct-who__img" aria-hidden="true">
-								<img src={whoImgs[i]} alt="" loading="lazy" decoding="async" />
+								<ApiImage src={whoImgs[i] ?? ""} photoId={whoIds[i]} />
 							</div>
 						{/if}
 						<div class="ct-who__body">
@@ -405,7 +409,7 @@
 									{#if o.d && o.vb}
 										<svg viewBox={o.vb} preserveAspectRatio="xMidYMid meet"><path d={o.d} /></svg>
 									{:else if o.img}
-										<img src={o.img} alt="" loading="lazy" decoding="async" />
+										<ApiImage src={o.img} photoId={o.photoId} />
 									{/if}
 								</div>
 								<h3>{o.title}</h3>
@@ -545,7 +549,8 @@
 		clip-path: url(#ct-slice);
 		background: var(--surface);
 	}
-	.ct-art__img img {
+	.ct-art__img :global(img),
+	.ct-art__img :global(canvas) {
 		position: absolute;
 		inset: 0;
 		width: 100%;
@@ -706,7 +711,8 @@
 		min-height: 220px;
 		overflow: hidden;
 	}
-	.ct-who__img img {
+	.ct-who__img :global(img),
+	.ct-who__img :global(canvas) {
 		position: absolute;
 		inset: 0;
 		width: 100%;
@@ -808,7 +814,8 @@
 		stroke-linejoin: round;
 		vector-effect: non-scaling-stroke;
 	}
-	.ct-card__art img {
+	.ct-card__art :global(img),
+	.ct-card__art :global(canvas) {
 		position: absolute;
 		inset: 0;
 		width: 100%;

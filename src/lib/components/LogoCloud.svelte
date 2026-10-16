@@ -2,6 +2,7 @@
 	import type { ApiResponse } from "../types";
 	import { apiGet } from "$lib/api";
 	import { access } from "$lib/access.svelte";
+	import { isScrambledUrl, loadScrambledCached, scrambled } from "$lib/photoScramble";
 	/**
 	 * Dinding logo pelanggan: grid petak berbingkai tipis. Secara acak satu petak
 	 * buram lalu memudar, logonya berganti, lalu menajam kembali — satu-satunya gerak.
@@ -73,20 +74,65 @@
 	let spares: Logo[] = [];
 	let hovered = -1;
 	let gridEl = $state<HTMLElement | null>(null);
+	// Gambar logo yang sudah termuat & terdekode. Hanya cadangan dari sini yang boleh masuk petak:
+	// <img> yang src-nya diganti ke gambar yang belum tiba tetap menampilkan logo LAMA — logo yang
+	// baru memudar keluar muncul lagi, lalu tertimpa logo baru begitu gambarnya tiba.
+	const ready = new Set<string>();
+	// Referensi dipegang supaya hasil dekode tetap di cache memori browser (foto teracak: cache lib/photoScramble → null).
+	const preloaded = new Map<string, HTMLImageElement | null>();
 
-	// Isi petak dari kumpulan logo; gambar dimuat lebih dulu supaya pertukaran terlihat seketika.
+	// Logo ada di bagian bawah beranda: gambarnya (±2,5 MB PNG) baru dimuat saat grid mendekati layar — dulu
+	// ikut diunduh di detik pertama dan merebut bandwidth video hero.
+	let near = $state(false);
+	$effect(() => {
+		const el = gridEl;
+		if (!el || near) return;
+		const io = new IntersectionObserver(
+			([e]) => {
+				if (e?.isIntersecting) {
+					near = true;
+					io.disconnect();
+				}
+			},
+			{ rootMargin: "1200px 0px" },
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
+
+	// Isi petak dari kumpulan logo; gambar dimuat & didekode lebih dulu supaya pertukaran terlihat seketika.
 	$effect(() => {
 		const list = pool;
+		const load = near;
 		// Variabel lokal: membaca `slots` setelah menulisnya akan memicu efek ini lagi tanpa henti.
 		const cells = list.slice(0, MAX_CELLS);
 		slots = cells;
 		spares = list.slice(MAX_CELLS);
 		out = cells.map(() => false);
+		if (!load) return;
 		for (const l of list) {
-			if (l.src) {
-				const im = new Image();
-				im.src = l.src;
+			const src = l.src;
+			if (!src || preloaded.has(src)) continue;
+			// Foto kurasi `percaya` datang teracak (lib/photoScramble.ts): dimuat lewat cache bersama, kanvas petak
+			// menyusunnya dari objek yang sama. Logo unggahan (/api/logos) tetap <img> biasa.
+			if (isScrambledUrl(src)) {
+				preloaded.set(src, null);
+				loadScrambledCached(src).then(
+					() => ready.add(src),
+					() => {
+						/* gagal dimuat: tak pernah dipakai sebagai cadangan */
+					},
+				);
+				continue;
 			}
+			const im = new Image();
+			im.src = src;
+			preloaded.set(src, im);
+			im.decode()
+				.then(() => ready.add(src))
+				.catch(() => {
+					/* gagal dimuat: tak pernah dipakai sebagai cadangan */
+				});
 		}
 	});
 
@@ -106,37 +152,47 @@
 			timers.add(t);
 		};
 
+		/** Indeks acak logo cadangan yang gambarnya siap tampil, atau -1 bila belum ada. */
+		const readySpare = () => {
+			const ks = spares.flatMap((l, k) => (!l.src || ready.has(l.src) ? [k] : []));
+			return ks.length ? ks[Math.floor(Math.random() * ks.length)]! : -1;
+		};
+
 		const step = () => {
 			if (!visible) return;
 			const free: number[] = [];
 			slots.forEach((_, i) => {
 				if (!out[i] && i !== hovered) free.push(i);
 			});
-			if (free.length >= 2 || (free.length === 1 && spares.length)) {
-				const i = free.splice(Math.floor(Math.random() * free.length), 1)[0]!;
-				if (spares.length) {
-					// Satu petak: keluar buram → ganti dengan logo cadangan → masuk tajam.
+			if (spares.length) {
+				// Satu petak: keluar buram → ganti dengan logo cadangan → masuk tajam.
+				// Belum ada cadangan yang siap → lewati putaran ini.
+				if (free.length && readySpare() >= 0) {
+					const i = free[Math.floor(Math.random() * free.length)]!;
 					out[i] = true;
 					later(() => {
-						const k = Math.floor(Math.random() * spares.length);
-						const incoming = spares[k]!;
-						spares[k] = slots[i]!;
-						slots[i] = incoming;
+						const k = readySpare();
+						if (k >= 0) {
+							const incoming = spares[k]!;
+							spares[k] = slots[i]!;
+							slots[i] = incoming;
+						}
 						out[i] = false;
-					}, FADE_MS);
-				} else {
-					// Tak ada cadangan: dua petak bertukar logo.
-					const j = free[Math.floor(Math.random() * free.length)]!;
-					out[i] = true;
-					out[j] = true;
-					later(() => {
-						const a = slots[i]!;
-						slots[i] = slots[j]!;
-						slots[j] = a;
-						out[i] = false;
-						out[j] = false;
 					}, FADE_MS);
 				}
+			} else if (free.length >= 2) {
+				// Tak ada cadangan: dua petak bertukar logo.
+				const i = free.splice(Math.floor(Math.random() * free.length), 1)[0]!;
+				const j = free[Math.floor(Math.random() * free.length)]!;
+				out[i] = true;
+				out[j] = true;
+				later(() => {
+					const a = slots[i]!;
+					slots[i] = slots[j]!;
+					slots[j] = a;
+					out[i] = false;
+					out[j] = false;
+				}, FADE_MS);
 			}
 			timer = window.setTimeout(step, rnd(2200, 3800));
 		};
@@ -155,6 +211,8 @@
 			io.disconnect();
 			window.clearTimeout(timer);
 			timers.forEach((t) => window.clearTimeout(t));
+			// Pertukaran yang dibatalkan di tengah jalan tak boleh meninggalkan petak kosong.
+			out = slots.map(() => false);
 		};
 	});
 </script>
@@ -162,6 +220,17 @@
 <div data-reveal class="flex items-center justify-between border-t border-hair pt-3">
 	<span class="kicker text-fg-muted">{eyebrow}</span>
 </div>
+<!-- Logo jadi putih polos (pengganti brightness-0 invert). Alpha sangat kecil dinolkan dulu: sebagian
+     logo unggahan (mis. detik) latarnya tidak benar-benar transparan (alpha 1/255), dan latar itu
+     berubah jadi kotak putih samar begitu warnanya diputihkan. -->
+<svg class="lc-defs" aria-hidden="true" focusable="false">
+	<filter id="lc-mono" color-interpolation-filters="sRGB">
+		<feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" />
+		<feComponentTransfer>
+			<feFuncA type="linear" slope="1.05" intercept="-0.05" />
+		</feComponentTransfer>
+	</filter>
+</svg>
 <div bind:this={gridEl} data-reveal class="lc-grid mt-12">
 	{#each slots as logo, i (i)}
 		<span
@@ -171,13 +240,20 @@
 			onpointerleave={() => (hovered = -1)}
 		>
 			<span class="lc-face" class:is-out={out[i]}>
-				{#if logo.src}
+				{#if logo.src && isScrambledUrl(logo.src)}
+					<!-- Foto teracak → <canvas> tersusun; kelas, object-contain & filter sama dengan <img>. -->
+					<canvas
+						use:scrambled={{ src: near ? logo.src : null, eager: true }}
+						aria-label={logo.name}
+						class="lc-img h-full w-full object-contain opacity-55 transition-opacity duration-200 hover:opacity-90"
+					></canvas>
+				{:else if logo.src}
 					<img
-						src={logo.src}
+						src={near ? logo.src : undefined}
 						alt={logo.name}
 						decoding="async"
 						draggable={false}
-						class="lc-img h-full w-full object-contain brightness-0 invert opacity-55 transition-opacity duration-200 hover:opacity-90"
+						class="lc-img h-full w-full object-contain opacity-55 transition-opacity duration-200 hover:opacity-90"
 					/>
 				{:else}
 					<span
@@ -192,6 +268,16 @@
 </div>
 
 <style>
+	/* Wadah filter: tak boleh display:none (filter di dalamnya ikut mati di sebagian browser). */
+	.lc-defs {
+		position: absolute;
+		width: 0;
+		height: 0;
+		overflow: hidden;
+	}
+	.lc-img {
+		filter: url(#lc-mono);
+	}
 	/* Tanpa kotak: logo mengambang di grid; "petak" hanyalah ruang yang dipakai tiap logo berganti. */
 	.lc-grid {
 		display: grid;
@@ -226,7 +312,9 @@
 		width: 72%;
 		height: 68%;
 		opacity: 1;
-		filter: blur(0);
+		/* `none`, bukan blur(0): tampak sama, tapi filter identitas tetap jadi lapisan filter di 8 petak. Transisi
+		   ke/dari blur(10px) tetap identik — `none` diinterpolasi sebagai blur(0). */
+		filter: none;
 		transition:
 			opacity 1s ease,
 			filter 1s ease;

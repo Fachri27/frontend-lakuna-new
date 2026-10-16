@@ -7,6 +7,7 @@
 	import { store, type CartItem } from "$lib/store.svelte";
 	import { fmtIDR, imgFor, fetchCartEventDiscounts, pickTitle } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
+	import { isScrambledUrl, scrambled } from "$lib/photoScramble";
 
 	const copy = {
 		id: {
@@ -92,7 +93,12 @@
 									<rect x="7" y="3" width="14" height="11" rx="1.5" /><path d="M4 7v11a1.5 1.5 0 0 0 1.5 1.5H17" /><path d="M10 11l2.5-3 2 2.5 1.5-1.5 2 2" />
 								</svg>
 							{:else if item.thumbUrl}
-								<img src={imgFor(item.meta ?? item.id, 240, 180, item.thumbUrl)} alt="" loading="lazy" />
+								<!-- Thumbnail API teracak → <canvas> yang disusun ulang; dummy tetap <img>. -->
+								{#if isScrambledUrl(imgFor(item.meta ?? item.id, 240, 180, item.thumbUrl))}
+									<canvas use:scrambled={imgFor(item.meta ?? item.id, 240, 180, item.thumbUrl)}></canvas>
+								{:else}
+									<img src={imgFor(item.meta ?? item.id, 240, 180, item.thumbUrl)} alt="" loading="lazy" />
+								{/if}
 							{:else}
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 									<rect x="3" y="5" width="18" height="14" rx="1.5" /><circle cx="12" cy="12" r="3.5" />
@@ -206,7 +212,8 @@
 		color: var(--safelight);
 		box-shadow: 0 0 0 1px var(--hair);
 	}
-	.ck-thumb img {
+	.ck-thumb img,
+	.ck-thumb canvas {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

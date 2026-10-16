@@ -4,8 +4,11 @@
 	import SliceHeadline from "./SliceHeadline.svelte";
 	import ImageStream from "./ImageStream.svelte";
 	import ApiImage from "./ApiImage.svelte";
-	import { fetchPhotos, fetchHomepage, adaptPhoto, imgFor } from "$lib/data";
+	import { untrack } from "svelte";
+	import { SvelteMap } from "svelte/reactivity";
+	import { fetchPhotos, fetchHomepage, fetchPhotoOriginal, adaptPhoto, imgFor, type Photo } from "$lib/data";
 	import type { HomepageSection } from "$lib/types";
+	import { isScrambledUrl, loadScrambledCached } from "$lib/photoScramble";
 
 	const c = $derived(i18n.c);
 
@@ -48,13 +51,74 @@
 	// koridor_kiri) menang bila diisi; kosong = arsip terbaru DIBAGI DUA
 	// (kanan dan kiri selalu beda foto). Thumbnail cukup — kartu kecil di
 	// kejauhan, besar hanya sesaat sebelum keluar layar.
-	let streamImages = $state<string[]>([]);
-	let streamImagesAlt = $state<string[]>([]);
+	let streamPhotos = $state<Photo[]>([]);
+	let streamPhotosAlt = $state<Photo[]>([]);
+	// Foto di rel membesar sampai ±61% lebar layar saat mendekati penonton — thumbnail 800 px jadi buram. Begitu
+	// footer mendekati layar, tiap foto diganti versi turunan file asli: 3200 px di laptop, 5120 px di layar
+	// 4K/5K. 5120 di semua layar membuat 12 foto ±17 MP dirasterisasi sekaligus saat footer masuk (frame ±50 ms),
+	// jadi puncak kartu (exitHeight) yang dibatasi: kartu terdekat tak pernah lebih besar dari piksel fotonya.
+	const sharpUrl = new SvelteMap<string, string>();
+	let vw = $state(typeof window === "undefined" ? 1440 : window.innerWidth);
+	let dpr = $state(typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
+	$effect(() => {
+		const upd = () => {
+			vw = window.innerWidth;
+			dpr = window.devicePixelRatio || 1;
+		};
+		window.addEventListener("resize", upd);
+		return () => window.removeEventListener("resize", upd);
+	});
+	const streamTier = $derived(vw * dpr > 3600 ? 5120 : 3200);
+	/** Tinggi tampak kartu terdekat yang masih terlihat ≈ 61% lebar wadah pada exitHeight bawaan (46 cqw). */
+	const STREAM_EXIT = 46;
+	const STREAM_PEAK = 0.61;
+	const streamExit = $derived.by(() => {
+		// Potongan cover di kartu tegak memakai TINGGI foto: tinggi piksel terkecil di rel yang menentukan —
+		// turunan selebar streamTier, atau file aslinya bila lebih kecil (turunan tak pernah diperbesar).
+		const heights = [...streamPhotos, ...streamPhotosAlt]
+			.filter((ph) => ph.nativeW && ph.nativeH)
+			.map((ph) => (Math.min(streamTier, ph.nativeW!) * ph.nativeH!) / ph.nativeW!);
+		const natH = heights.length ? Math.min(...heights) : (streamTier * 9) / 16;
+		const fit = natH / (STREAM_PEAK * vw * dpr);
+		return Math.min(STREAM_EXIT, STREAM_EXIT * fit * 0.97);
+	});
+	const toUrls = (list: Photo[]) => list.map((ph) => sharpUrl.get(ph.id) ?? imgFor(ph.seed, 600, 800, ph.thumbUrl ?? ""));
+	const streamImages = $derived(toUrls(streamPhotos));
+	const streamImagesAlt = $derived(toUrls(streamPhotosAlt));
+	let footerEl = $state<HTMLElement>();
+	$effect(() => {
+		const el = footerEl;
+		const list = [...streamPhotos, ...streamPhotosAlt];
+		if (!el || !list.length || typeof IntersectionObserver === "undefined") return;
+		const io = new IntersectionObserver(
+			([e]) => {
+				if (!e?.isIntersecting) return;
+				io.disconnect();
+				for (const ph of list) {
+					if (ph.assetType === "VIDEO" || untrack(() => sharpUrl.has(ph.id))) continue;
+					void fetchPhotoOriginal(ph.id, untrack(() => streamTier)).then((url) => {
+						if (!url) return;
+						// Berkas teracak: dimuat + di-decode lewat cache bersama — kanvas kartu menyusunnya dari objek yang sama.
+						if (isScrambledUrl(url)) {
+							loadScrambledCached(url).then(() => sharpUrl.set(ph.id, url), () => {});
+							return;
+						}
+						const im = new Image();
+						im.src = url;
+						im.decode()
+							.then(() => sharpUrl.set(ph.id, url))
+							.catch(() => {});
+					});
+				}
+			},
+			{ rootMargin: "1500px 0px" },
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
 	$effect(() => {
 		if (!isLanding) return;
 		let alive = true;
-		const toUrls = (list: { seed: string; thumbUrl?: string | null }[]) =>
-			list.map((ph) => imgFor(ph.seed, 600, 800, ph.thumbUrl ?? ""));
 		Promise.all([
 			fetchHomepage().catch(() => ({})),
 			fetchPhotos({ type: "FOTO", limit: 12 }).catch(() => null),
@@ -64,13 +128,12 @@
 				const rk = (hp as Record<string, HomepageSection>)["koridor_kanan"]?.photos;
 				const lk = (hp as Record<string, HomepageSection>)["koridor_kiri"]?.photos;
 				if (rk?.length && lk?.length) {
-					streamImages = toUrls(rk.map(adaptPhoto));
-					streamImagesAlt = toUrls(lk.map(adaptPhoto));
+					streamPhotos = rk.map(adaptPhoto);
+					streamPhotosAlt = lk.map(adaptPhoto);
 				} else if (latest) {
-					const urls = toUrls(latest.photos);
-					const half = Math.max(1, Math.ceil(urls.length / 2));
-					streamImages = urls.slice(0, half);
-					streamImagesAlt = urls.slice(half);
+					const half = Math.max(1, Math.ceil(latest.photos.length / 2));
+					streamPhotos = latest.photos.slice(0, half);
+					streamPhotosAlt = latest.photos.slice(half);
 				}
 			})
 			.catch(() => {});
@@ -82,7 +145,7 @@
 
 <!-- Tanpa garis atas: section di atas (etalase) larut ke --bg yang sama.
 	Seluruh footer zona senyap: tak ada bunyi hover/klik di tautan mana pun. -->
-<footer class="bg-bg" data-no-hover-sound data-no-click-sound>
+<footer bind:this={footerEl} class="bg-bg" data-no-hover-sound data-no-click-sound>
 	<!-- pb-24 di ponsel: tombol Help (kiri) dan panah ke atas (kanan) melayang di dasar layar dan menimpa baris
 		hak cipta; ruang ekstra membuat baris itu bisa digulir ke atas mereka. -->
 	<div class="mx-auto max-w-[1500px] px-6 pb-24 pt-20 md:pb-6 lg:px-10">
@@ -91,7 +154,7 @@
 			atasnya. Label + judul memudar masuk/keluar bersama mengikuti gulir
 			(satu-satunya gerak mereka), lihat SliceHeadline. -->
 		{#if isLanding}
-		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} class="ft-stream">
+		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} path={{ exitHeight: streamExit }} class="ft-stream">
 			<div class="ft-stream-copy">
 				<SliceHeadline
 					kicker={c.nav.tagline}
@@ -110,7 +173,7 @@
 		<div class="mt-12 grid grid-cols-2 gap-10 md:grid-cols-4">
 			<div class="col-span-2 md:col-span-1">
 				<ApiImage
-					src="/logo1.png"
+					src="/logo1-sm.png"
 					alt="Lakuna"
 					width={200}
 					height={36}
@@ -176,10 +239,46 @@
 		height: clamp(320px, 50svh, 540px);
 		margin: 0 calc(50% - 50vw);
 		width: 100vw;
-		/* Pinggir larut ke latar footer supaya kartu yang keluar tak terpotong
-		   garis keras di tepi section. */
-		-webkit-mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
-		mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
+		/* Konteks tumpuk sendiri (dulu efek samping mask-image): z-index tagline & pelapis tetap terkurung di sini. */
+		isolation: isolate;
+	}
+	/* Pinggir larut ke latar footer supaya kartu yang keluar tak terpotong garis keras di tepi section.
+	   Dulu mask-image (transparan → hitam 5% … 88% → transparan) pada koridor: karena isinya 18 kartu yang
+	   beranimasi di kompositor, topeng itu memaksa satu lapisan offscreen selebar layar × tinggi koridor
+	   digambar ulang + ditopengi TIAP frame selama koridor terlihat. Kini dua pelapis berwarna latar
+	   (--bg, sama dengan latar footer yang pejal) yang memudar ke transparan dengan rentang yang sama — secara
+	   matematis hasilnya identik (isi × a + latar × (1 − a)), tapi berupa tekstur diam tanpa lapisan offscreen. */
+	:global(.ft-stream)::before,
+	:global(.ft-stream)::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		right: 0;
+		/* Di atas kartu DAN tagline (.ft-stream-copy z-index 2) — topeng dulu juga memudarkan keduanya. */
+		z-index: 3;
+		pointer-events: none;
+	}
+	:global(.ft-stream)::before {
+		top: 0;
+		height: 5%;
+		background: linear-gradient(to bottom, var(--bg), transparent);
+	}
+	:global(.ft-stream)::after {
+		bottom: 0;
+		height: 12%;
+		background: linear-gradient(to top, var(--bg), transparent);
+	}
+	/* Mode warna paksa (high contrast): latar footer diganti warna sistem, pelapis --bg tak lagi cocok —
+	   kembali ke topeng aslinya. */
+	@media (forced-colors: active) {
+		:global(.ft-stream) {
+			-webkit-mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
+			mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 88%, transparent);
+		}
+		:global(.ft-stream)::before,
+		:global(.ft-stream)::after {
+			content: none;
+		}
 	}
 	.ft-stream-copy {
 		position: relative;

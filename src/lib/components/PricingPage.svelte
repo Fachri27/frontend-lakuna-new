@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 import { i18n, type Lang } from "$lib/i18n.svelte";
-import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, bestEvent, type Plan, type HomepageSection } from "$lib/data";
+import { fmtIDR, fetchPlans, fetchPhotos, fetchActiveEvents, fetchHomepage, eventAmount, bestEvent, type Plan, type HomepageSection } from "$lib/data";
 	import type { ApiEvent } from "$lib/data";
 	import { apiGet, apiPost, ApiError } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse } from "$lib/types";
+	import { checkVoucher, type VoucherCheck } from "$lib/voucher.svelte";
 	import Reveal from "./Reveal.svelte";
 	import LogoCloud from "./LogoCloud.svelte";
 
@@ -15,6 +16,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 			sub: "Pilih paket sesuai kebutuhanmu",
 			standar: "Standar", subscribe: "Subscribe", popular: "Paling populer",
 			monthly: "Bulanan", annual: "Tahunan", perItem: "/item", perMonth: "/mo",
+			typeLabel: "Jenis aset", typeFoto: "Foto", typeVideo: "Video", perPhoto: "/foto", perClip: "/klip", from: "mulai",
 			quotaLabel: "Kuota download", payMonthly: "Bayar bulanan", payUpfront: "Bayar di muka (hemat)",
 			features: ["Akses semua aset HD", "Lisensi premium", "Satu akun pengguna", "Customer service 24 jam"],
 			buyNow: "Beli Sekarang", subscribeNow: "Berlangganan", processing: "Memproses...",
@@ -34,6 +36,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 			sub: "Pick the plan that fits your needs",
 			standar: "Standard", subscribe: "Subscribe", popular: "Most popular",
 			monthly: "Monthly", annual: "Annual", perItem: "/item", perMonth: "/mo",
+			typeLabel: "Asset type", typeFoto: "Photos", typeVideo: "Video", perPhoto: "/photo", perClip: "/clip", from: "from",
 			quotaLabel: "Download quota", payMonthly: "Pay monthly", payUpfront: "Pay upfront (save)",
 			features: ["Access all HD assets", "Premium license", "Single user account", "24 hours customer service"],
 			buyNow: "Buy Now", subscribeNow: "Subscribe", processing: "Processing...",
@@ -66,18 +69,25 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 			: null,
 	);
 
-	/** Respon /api/vouchers/validate. */
-	type VoucherValidate = {
-		valid: boolean;
-		reason?: string;
-		voucher: { code: string; valueType: "PERCENT" | "NOMINAL"; value: number };
-	};
+	/** Teks galat voucher (Standar & Subscribe memakai pesan yang sama). */
+	function voucherErrorText(r: Extract<VoucherCheck, { ok: false }>): string {
+		if (r.reason === "login") return t.voucherNeedLogin;
+		if (r.reason === "invalid") return r.message || "Voucher tidak berlaku";
+		return r.message || "Gagal memeriksa voucher";
+	}
 
 	const lang = $derived<Lang>(i18n.lang);
 	const t = $derived(copy[lang]);
 
 	let plans = $state<Plan[]>([]);
 	let standarPrice = $state(500000);
+	// Harga satuan foto dan klip berbeda: kartu Standar punya pilihan jenis aset (sama dengan beranda).
+	// Angkanya harga termurah yang benar-benar ada di arsip; belum termuat = harga paket Standar.
+	let stdType = $state<"FOTO" | "VIDEO">("FOTO");
+	let fotoFrom = $state<number | null>(null);
+	let videoFrom = $state<number | null>(null);
+	const typeFrom = $derived(stdType === "VIDEO" ? videoFrom : fotoFrom);
+	const stdShown = $derived(typeFrom ?? standarPrice);
 	let quota = $state(0);
 	let billing = $state<"annual" | "monthly">("annual");
 	let isBuying = $state(false);
@@ -105,6 +115,12 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		apiGet<ApiResponse<{ key: string; value: string }>>("/api/settings/standar_plan_price")
 			.then((res) => { if (res.data?.value) standarPrice = Number(res.data.value); })
 			.catch(() => {});
+		fetchPhotos({ type: "FOTO", sort: "price_asc", limit: 1 })
+			.then((r) => { if (r.photos[0]) fotoFrom = r.photos[0].price; })
+			.catch(() => {});
+		fetchPhotos({ type: "VIDEO", sort: "price_asc", limit: 1 })
+			.then((r) => { if (r.photos[0]) videoFrom = r.photos[0].price; })
+			.catch(() => {});
 	});
 
 	const selectedPlan = $derived(plans.find((p) => p.quota === quota));
@@ -128,7 +144,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 	const voucherAmt = $derived(isUpfront && subAppliedVoucher ? subAppliedVoucher.amount : 0);
 	const subDiscount = $derived(Math.max(eventAmt, voucherAmt));
 	const subFinalPrice = $derived(Math.max(0, selectedPrice - subDiscount));
-	const stdFinalPrice = $derived(Math.max(0, standarPrice - (stdAppliedVoucher?.amount ?? 0)));
+	const stdFinalPrice = $derived(Math.max(0, stdShown - (stdAppliedVoucher?.amount ?? 0)));
 
 	async function applyStdVoucher() {
 		const code = stdVoucherInput.trim();
@@ -136,24 +152,30 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		stdValidating = true;
 		stdVoucherError = "";
 		stdNeedLogin = false;
-		try {
-			const res = await apiPost<ApiResponse<VoucherValidate>>("/api/vouchers/validate", { code, scope: "ORDER", amount: standarPrice });
-			if (!res.data?.valid) {
-				stdAppliedVoucher = null;
-				stdVoucherError = res.data?.reason || "Voucher tidak berlaku";
-				return;
-			}
-			const amt = res.data.voucher.valueType === "PERCENT"
-				? Math.round(standarPrice * res.data.voucher.value / 100)
-				: res.data.voucher.value;
-			stdAppliedVoucher = { code: res.data.voucher.code, amount: amt };
+		const r = await checkVoucher(code, "ORDER", stdShown);
+		stdValidating = false;
+		if (r.ok) {
+			stdAppliedVoucher = { code: r.code, amount: r.amount };
 			stdVoucherInput = "";
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 401) { stdVoucherError = t.voucherNeedLogin; stdNeedLogin = true; }
-			else if (err instanceof ApiError) stdVoucherError = err.message || "Gagal memeriksa voucher";
-			else stdVoucherError = "Gagal memeriksa voucher";
-		} finally {
-			stdValidating = false;
+			return;
+		}
+		if (r.reason === "invalid") stdAppliedVoucher = null;
+		stdNeedLogin = r.reason === "login";
+		stdVoucherError = voucherErrorText(r);
+	}
+
+	/** Ganti jenis aset; voucher yang sudah dipakai dihitung ulang terhadap harga yang kini tampil. */
+	async function setStdType(next: "FOTO" | "VIDEO") {
+		if (next === stdType) return;
+		stdType = next;
+		const applied = stdAppliedVoucher;
+		if (!applied) return;
+		const r = await checkVoucher(applied.code, "ORDER", stdShown);
+		if (stdAppliedVoucher?.code !== applied.code) return; // dihapus / diganti selagi memeriksa
+		if (r.ok) stdAppliedVoucher = { code: r.code, amount: r.amount };
+		else {
+			stdAppliedVoucher = null;
+			stdVoucherError = voucherErrorText(r);
 		}
 	}
 
@@ -163,29 +185,20 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		subValidating = true;
 		subVoucherError = "";
 		subNeedLogin = false;
-		try {
-			const res = await apiPost<ApiResponse<VoucherValidate>>("/api/vouchers/validate", { code, scope: "SUBSCRIPTION", amount: selectedPrice });
-			if (!res.data?.valid) {
-				subAppliedVoucher = null;
-				subVoucherError = res.data?.reason || "Voucher tidak berlaku";
-				return;
-			}
-			const amt = res.data.voucher.valueType === "PERCENT"
-				? Math.round(selectedPrice * res.data.voucher.value / 100)
-				: res.data.voucher.value;
-			subAppliedVoucher = { code: res.data.voucher.code, amount: amt };
+		const r = await checkVoucher(code, "SUBSCRIPTION", selectedPrice);
+		subValidating = false;
+		if (r.ok) {
+			subAppliedVoucher = { code: r.code, amount: r.amount };
 			subVoucherInput = "";
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 401) { subVoucherError = t.voucherNeedLogin; subNeedLogin = true; }
-			else if (err instanceof ApiError) subVoucherError = err.message || "Gagal memeriksa voucher";
-			else subVoucherError = "Gagal memeriksa voucher";
-		} finally {
-			subValidating = false;
+			return;
 		}
+		if (r.reason === "invalid") subAppliedVoucher = null;
+		subNeedLogin = r.reason === "login";
+		subVoucherError = voucherErrorText(r);
 	}
 
-	/** Redirect pembayaran hanya boleh ke Snap Midtrans (allowlist ala PaymentPage). */
-	function isSnapRedirect(raw: string | null | undefined): raw is string {
+	/** Redirect pembayaran hanya boleh ke halaman bayar DOKU (https, *.doku.com). */
+	function isPaymentRedirect(raw: string | null | undefined): raw is string {
 		if (!raw) return false;
 		let u: URL;
 		try {
@@ -195,7 +208,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		}
 		if (u.protocol !== "https:") return false;
 		const h = u.hostname.toLowerCase();
-		return h === "app.midtrans.com" || h === "app.sandbox.midtrans.com";
+		return h === "doku.com" || h.endsWith(".doku.com");
 	}
 
 	function handleBuyStandar() {
@@ -204,24 +217,24 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		if (isBuying) return;
 		isBuying = true;
 		message = "";
-		apiPost<ApiResponse<{ snapToken: string | null; redirectUrl?: string; orderId: string; payOrderId?: string }>>(
+		apiPost<ApiResponse<{ redirectUrl?: string | null; orderId: string; payOrderId?: string; requiresPayment?: boolean }>>(
 			"/api/subscription/standar",
 			{ voucherCode: stdAppliedVoucher?.code || undefined },
 		).then((res) => {
-			// Halaman bayar milik Lakuna (Core API), bukan halaman Snap.
-			if (res.data?.redirectUrl && res.data.payOrderId) {
+			// Halaman bayar milik Lakuna (→ DOKU Checkout). requiresPayment=false = gratis (diskon 100%).
+			if (res.data?.payOrderId && res.data.requiresPayment !== false) {
 				void goto(`/payment/pay/${encodeURIComponent(res.data.payOrderId)}`);
 				return;
 			}
 			if (res.data?.redirectUrl) {
-				if (!isSnapRedirect(res.data.redirectUrl)) {
+				if (!isPaymentRedirect(res.data.redirectUrl)) {
 					message = t.badLink;
 					return;
 				}
 				window.location.href = res.data.redirectUrl;
 				return;
 			}
-			// Gratis (diskon 100%): order langsung PAID tanpa Midtrans.
+			// Gratis (diskon 100%): order langsung PAID tanpa pembayaran.
 			message = t.nowActive;
 		}).catch((err) => {
 			if (err instanceof ApiError && err.status === 401) {
@@ -242,7 +255,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 		if (!selectedPlan || isBuying) return;
 		isBuying = true;
 		message = "";
-		apiPost<ApiResponse<{ snapToken: string | null; redirectUrl?: string; orderId?: string; payOrderId?: string }>>(
+		apiPost<ApiResponse<{ redirectUrl?: string | null; orderId?: string; payOrderId?: string; requiresPayment?: boolean }>>(
 			"/api/subscription",
 			{
 				planId: selectedPlan.id,
@@ -251,20 +264,20 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 				voucherCode: isUpfront && subAppliedVoucher ? subAppliedVoucher.code : undefined,
 			},
 		).then((res) => {
-			// Halaman bayar milik Lakuna (Core API), bukan halaman Snap.
-			if (res.data?.redirectUrl && res.data.payOrderId) {
+			// Halaman bayar milik Lakuna (→ DOKU Checkout). requiresPayment=false = gratis (diskon 100%).
+			if (res.data?.payOrderId && res.data.requiresPayment !== false) {
 				void goto(`/payment/pay/${encodeURIComponent(res.data.payOrderId)}`);
 				return;
 			}
 			if (res.data?.redirectUrl) {
-				if (!isSnapRedirect(res.data.redirectUrl)) {
+				if (!isPaymentRedirect(res.data.redirectUrl)) {
 					message = t.badLink;
 					return;
 				}
 				window.location.href = res.data.redirectUrl;
 				return;
 			}
-			// Gratis (diskon 100%): subscription langsung ACTIVE tanpa Midtrans.
+			// Gratis (diskon 100%): subscription langsung ACTIVE tanpa pembayaran.
 			message = t.nowActive;
 		}).catch((err) => {
 			if (err instanceof ApiError && err.status === 401) {
@@ -317,20 +330,34 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 						<div>
 							<span class="font-display text-[clamp(2.6rem,6vw,4rem)] font-light leading-none text-fg/12">01</span>
 							<p class="kicker mt-2 text-fg">{t.standar}</p>
+							<!-- Foto dan klip dihargai berbeda: pilih jenisnya, angkanya ikut berganti. -->
+							<div class="mt-4 inline-flex overflow-hidden rounded-full border border-hair" role="group" aria-label={t.typeLabel}>
+								{#each [["FOTO", t.typeFoto], ["VIDEO", t.typeVideo]] as [key, label] (key)}
+									<button
+										type="button"
+										aria-pressed={stdType === key}
+										onclick={() => void setStdType(key as "FOTO" | "VIDEO")}
+										class="px-4 py-1.5 text-[0.82rem] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-safelight {stdType === key ? 'bg-fg/10 text-fg' : 'text-fg-muted hover:text-fg'}"
+									>
+										{label}
+									</button>
+								{/each}
+							</div>
 						</div>
 						<span class="kicker text-fg-muted">{t.perItem.replace("/", "")}</span>
 					</div>
 
 					<p class="mt-6 font-display font-light text-[clamp(2.4rem,5vw,3.4rem)] leading-[0.95] tracking-[-0.02em] text-fg">
+						{#if typeFrom != null}<span class="mr-2 align-middle font-mono text-[0.82rem] tracking-[0.1em] text-fg-muted">{t.from}</span>{/if}
 						{#if stdAppliedVoucher}
 							<span class="inline-flex flex-col leading-none">
-								<span class="mb-1.5 font-mono text-[0.32em] tracking-[0.08em] line-through opacity-40">{fmtIDR(standarPrice)}</span>
+								<span class="mb-1.5 font-mono text-[0.32em] tracking-[0.08em] line-through opacity-40">{fmtIDR(stdShown)}</span>
 								{fmtIDR(stdFinalPrice)}
 							</span>
 						{:else}
-							{fmtIDR(standarPrice)}
+							{fmtIDR(stdShown)}
 						{/if}
-						<span class="ml-1 font-mono text-[0.82rem] tracking-[0.1em] text-fg-muted">{t.perItem}</span>
+						<span class="ml-1 font-mono text-[0.82rem] tracking-[0.1em] text-fg-muted">{stdType === "VIDEO" ? t.perClip : t.perPhoto}</span>
 					</p>
 
 					<ul class="mt-7 flex flex-col gap-2.5">
@@ -380,6 +407,7 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 							<span>{isBuying ? t.processing : t.buyNow}</span>
 							{#if !isBuying}<span class="arr text-safelight transition-transform group-hover/btn:translate-x-1">→</span>{/if}
 						</button>
+						<p class="mt-5 kicker text-fg-muted/70">{t.taxNote}</p>
 					</div>
 				</article>
 			</Reveal>
@@ -514,12 +542,11 @@ import { fmtIDR, fetchPlans, fetchActiveEvents, fetchHomepage, eventAmount, best
 						{#if message}
 							<p class={`mt-4 text-[0.82rem] ${/berhasil|success/i.test(message) ? "text-green-600" : "text-red-500"}`}>{message}</p>
 						{/if}
+						<p class="mt-5 kicker text-fg-muted/70">{t.taxNote}</p>
 					</div>
 				</article>
 			</Reveal>
 		</div>
-
-		<p class="mx-auto mt-12 max-w-[1400px] kicker text-fg-muted">{t.taxNote}</p>
 	</section>
 
 	<!-- ── Trusted Clients ── -->

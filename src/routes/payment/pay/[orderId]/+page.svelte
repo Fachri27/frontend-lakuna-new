@@ -2,8 +2,8 @@
 	import { page } from "$app/state";
 	import PayPage from "$lib/components/PayPage.svelte";
 
-	// Halaman bayar milik Lakuna (Midtrans Core API) — pengganti redirect ke
-	// halaman Snap. orderId = order_id dasar (ORDER-/SUB-/STD-/INST-).
+	// Halaman bayar milik Lakuna (DOKU Direct API, tanpa halaman checkout DOKU).
+	// orderId = order_id dasar (ORDER-/SUB-/STD-/INST-).
 	const orderId = $derived(page.params.orderId ?? "");
 </script>
 

@@ -2,6 +2,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { fetchPhotos, imgFor, type Photo } from "$lib/data";
 	import { scrambleHover } from "$lib/scramble";
+	import { isScrambledUrl, loadScrambledCached, sourceSize } from "$lib/photoScramble";
 	import RevealText from "./RevealText.svelte";
 	import Reveal from "./Reveal.svelte";
 	import ImageAutoSlider from "./ui/ImageAutoSlider.svelte";
@@ -55,7 +56,8 @@
 			// Rasio potret, sama dengan kartunya: placeholder tidak perlu di-crop berat.
 			src: imgFor(p.seed, 600, 800, p.thumbUrl),
 			alt: p.title[lang],
-			href: `/photos/${p.id}`
+			href: `/photos/${p.id}`,
+			photoId: p.assetType === "VIDEO" ? undefined : p.id
 		}))
 	);
 
@@ -71,8 +73,23 @@
 		const checks = list.map(
 			(img) =>
 				new Promise<string | null>((resolve) => {
-					const probe = new Image();
 					const timer = window.setTimeout(() => resolve(img.src), PROBE_TIMEOUT_MS);
+					// Berkas teracak (lib/photoScramble.ts): diperiksa lewat cache bersama — kanvas kartunya (ApiImage)
+					// menyusun dari objek yang sama, tanpa unduh/decode kedua.
+					if (isScrambledUrl(img.src)) {
+						loadScrambledCached(img.src).then(
+							(im) => {
+								window.clearTimeout(timer);
+								resolve(sourceSize(im).w > 0 ? img.src : null);
+							},
+							() => {
+								window.clearTimeout(timer);
+								resolve(null);
+							},
+						);
+						return;
+					}
+					const probe = new Image();
 					probe.onload = () => {
 						window.clearTimeout(timer);
 						resolve(probe.naturalWidth > 0 ? img.src : null);

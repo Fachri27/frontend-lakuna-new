@@ -2,8 +2,8 @@
 	/**
 	 * Dismissible promo bar pinned to the very top of the viewport, above the
 	 * navbar. Fetches the currently active voucher from the API. Dismissal is
-	 * per voucher-code — a new voucher re-shows the bar even if a previous one
-	 * was dismissed.
+	 * per voucher-code and only lasts until the page is reloaded — sengaja
+	 * tidak disimpan, jadi bar muncul lagi setiap kali halaman di-refresh.
 	 */
 	import { i18n } from "$lib/i18n.svelte";
 	import { voucherCountdown, pad, discountLabel, type ActiveVoucher } from "$lib/voucher.svelte";
@@ -11,7 +11,6 @@
 	import type { ApiResponse } from "$lib/types";
 
 	const BAR_H = "2.25rem"; // 36px — matches the inner row's h-9
-	const SEEN_KEY = "lakuna-voucher-seen";
 
 	const t = $derived(i18n.c.access);
 	let voucher = $state<ActiveVoucher>(null);
@@ -24,15 +23,6 @@
 			.then((res) => (voucher = res.data))
 			.catch(() => (voucher = null))
 			.finally(() => (loading = false));
-	});
-
-	// Restore the last-dismissed voucher code from localStorage.
-	$effect(() => {
-		try {
-			dismissedCode = localStorage.getItem(SEEN_KEY);
-		} catch {
-			/* ignore */
-		}
 	});
 
 	// Seed deadline + tick the countdown every second (port dari hook React).
@@ -55,11 +45,6 @@
 
 	function dismiss() {
 		const code = voucher?.code ?? "1";
-		try {
-			localStorage.setItem(SEEN_KEY, code);
-		} catch {
-			/* ignore */
-		}
 		dismissedCode = code;
 		window.dispatchEvent(new Event("voucher-seen"));
 	}

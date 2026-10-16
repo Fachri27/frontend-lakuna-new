@@ -20,9 +20,8 @@ import type { Handle } from "@sveltejs/kit";
  *   (avatarUrl dari backend, mis. lh3.googleusercontent.com).
  *
  * Penyimpangan dari CSP minimal di brief (demi aman-fungsional):
- * - script-src memakai 'unsafe-inline': WAJIB untuk inline bootstrap SvelteKit
- *   (%sveltekit.head%/%sveltekit.body% menyuntik <script> inline) dan inline
- *   theme-script di app.html. Tanpa ini halaman blank / tidak ter-hidrasi.
+ * - script-src di kebijakan ini masih 'unsafe-inline', tetapi TIDAK berlaku: kit.csp (svelte.config.js)
+ *   menambahkan kebijakan kedua tanpa 'unsafe-inline' (nonce + hash), dan browser menegakkan keduanya.
  *   GSAP/glightbox/leaflet aman karena di-bundle Vite (termasuk 'self').
  * - style-src + https://fonts.googleapis.com, font-src + https://fonts.gstatic.com
  *   (tanpanya font display/body fallback ke sistem).
@@ -51,17 +50,19 @@ const MINIO_ORIGIN =
 
 const CSP = [
 	"default-src 'self'",
-	// api(.sandbox).midtrans.com: skrip tokenisasi kartu + 3DS di halaman bayar
-	// custom (/payment/pay) — data kartu dikirim langsung ke Midtrans.
-	"script-src 'self' 'unsafe-inline' https://accounts.google.com https://api.midtrans.com https://api.sandbox.midtrans.com",
+	// Pembayaran: tak ada skrip DOKU. Form kartu DOKU tampil sebagai iframe di halaman bayar (frame-src https:
+	// di bawah) — data kartu langsung ke DOKU, tak pernah lewat halaman/skrip Lakuna.
+	"script-src 'self' 'unsafe-inline' https://accounts.google.com",
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
- 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.trycloudflare.com https://*.googleusercontent.com https://*.up.railway.app https://api.midtrans.com https://api.sandbox.midtrans.com " +
+ 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.trycloudflare.com https://*.googleusercontent.com https://*.up.railway.app " +
 		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
 	`media-src 'self' blob: https://*.trycloudflare.com https://*.up.railway.app ${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
 	"font-src 'self' data: https://fonts.gstatic.com",
-	"connect-src 'self' https://gibs.earthdata.nasa.gov https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://api.midtrans.com https://api.sandbox.midtrans.com ws: wss: " +
+	// *.trycloudflare.com / *.up.railway.app (storage, sama dengan img-src): foto teracak diunduh lewat fetch CORS
+	// supaya di-decode di luar thread utama (lib/photoScramble.ts).
+	"connect-src 'self' https://gibs.earthdata.nasa.gov https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://*.trycloudflare.com https://*.up.railway.app ws: wss: " +
 		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
-	// Verifikasi 3DS kartu tampil di iframe milik halaman bayar; halaman ACS
+	// Form kartu DOKU + verifikasi 3DS tampil di iframe milik halaman bayar; halaman ACS
 	// bank berbeda-beda domainnya, jadi https: diizinkan untuk frame.
 	"frame-src 'self' https://accounts.google.com https:",
 	// worker-src blob: = HMR dev Vite (polling worker); tanpa ini console
@@ -70,14 +71,24 @@ const CSP = [
 	"frame-ancestors 'self'",
 	"object-src 'none'",
 	"base-uri 'self'",
+	// Form hanya ke situs sendiri / https (pengalihan pembayaran DOKU).
+	"form-action 'self' https:",
 ].join("; ");
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const res = await resolve(event);
-	res.headers.set("Content-Security-Policy", CSP);
+	// SvelteKit (kit.csp di svelte.config.js) memasang kebijakan script ber-nonce; gabungkan sebagai kebijakan
+	// kedua (dipisah koma = dua kebijakan, keduanya ditegakkan) supaya 'unsafe-inline' di bawah tak berlaku.
+	const kitCsp = res.headers.get("content-security-policy");
+	res.headers.set("Content-Security-Policy", kitCsp ? `${CSP}, ${kitCsp}` : CSP);
 	// Anti-clickjacking berlapis: X-Frame-Options untuk UA lama, frame-ancestors (di CSP) yang otoritatif.
 	res.headers.set("X-Frame-Options", "SAMEORIGIN");
 	res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 	res.headers.set("X-Content-Type-Options", "nosniff");
+	// payment tidak diblokir: iframe kartu DOKU memakainya.
+	res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=()");
+	if (event.url.protocol === "https:") {
+		res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+	}
 	return res;
 };

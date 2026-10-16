@@ -23,6 +23,9 @@
 		amount?: number;
 		priority?: boolean;
 		imgClassName?: string;
+		/** Gambar section homepage CMS (key section): ApiImage menaikkan tingkat resolusinya sesuai kebutuhan
+		 *  layar. Translasi parallax tak mengubah ukuran tampil, jadi ukuran diamnya sudah = puncaknya. */
+		sectionKey?: string;
 	};
 
 	/**
@@ -37,7 +40,8 @@
 		class: className = "",
 		amount = 10,
 		priority = false,
-		imgClassName = ""
+		imgClassName = "",
+		sectionKey
 	}: Props = $props();
 
 	let el: HTMLDivElement | undefined = $state();
@@ -105,6 +109,6 @@
 
 <div bind:this={el} class={`overflow-hidden ${className}`}>
 	<div data-pi-inner class="absolute inset-x-0 -top-[15%] h-[130%] will-change-transform">
-		<ApiImage {src} {alt} fill eager={priority} class={`object-cover ${imgClassName}`} />
+		<ApiImage {src} {alt} fill eager={priority} {sectionKey} class={`object-cover ${imgClassName}`} />
 	</div>
 </div>

@@ -5,46 +5,48 @@
 	import gsap from "gsap";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { catLabel, fmtIDR, imgFor, fetchPhotoById, fetchPhotoOriginal, fetchRelatedPhotos, fetchVideos, fetchContributorWorks, pickVideoPreview, type Video, type Photo } from "$lib/data";
+	import { catLabel, fmtIDR, fmtTakenAt, imgFor, fetchPhotoById, fetchPhotoOriginal, fetchRelatedPhotos, fetchVideos, fetchContributorWorks, pickVideoPreview, type Video, type Photo } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
 	import { subscribeModal } from "$lib/subscribeModal.svelte";
 	import { authModal } from "$lib/authModal.svelte";
 	import { page } from "$app/state";
 	import PhotoCard from "./PhotoCard.svelte";
 	import VideoCard from "./VideoCard.svelte";
+	import DetailTitle from "./DetailTitle.svelte";
+	import { isScrambledUrl, scrambled } from "$lib/photoScramble";
 
 	let { videoId }: { videoId: string } = $props();
 
 	const copy = {
 		id: {
-			back: "Kembali", by: "oleh", cat: "Kategori", duration: "Durasi", resolution: "Resolusi",
+			back: "Kembali", by: "oleh", cat: "Kategori", duration: "Durasi", resolution: "Resolusi", taken: "Diambil",
 			format: "Format", tags: "Kata kunci", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
 			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Kuota unduhan bulanan",
 			addToCart: "Tambah ke keranjang", added: "Ditambahkan", buyNow: "Beli sekarang",
 			save: "Simpan", saved: "Tersimpan", noClip: "Pratinjau klip belum tersedia",
 			slip: "Lembar lisensi", usage: "Jenis pakai", fee: "Biaya lisensi",
 			youGet: "Yang kamu terima",
-			previewNote: "Pratinjau memutar berkas asli. Unduhan berlisensi tersedia setelah pembelian",
-			related: "Bingkai bergerak terkait", byArtist: "Dari perajangga yang sama",
+			previewNote: "Pratinjau diputar pada resolusi asli dengan watermark. File master tanpa watermark bisa diunduh setelah pembelian",
+			relPhoto: "Arsip foto", relVideo: "Arsip video", byArtist: "Dari perajangga yang sama",
 			relPhotos: "Foto terkait", relVideos: "Video terkait",
-			contrib: "Galeri kontributor", contribSub: "Karya lain dari",
+			contrib: "Arsip profil", contribSub: "Karya lain dari",
 			seeAll: "Lihat semua",
-			resValue: "4K UHD", fmtValue: "MP4 · H.265"
+			fmtValue: "File master asli"
 		},
 		en: {
-			back: "Back", by: "by", cat: "Category", duration: "Duration", resolution: "Resolution",
+			back: "Back", by: "by", cat: "Category", duration: "Duration", resolution: "Resolution", taken: "Taken",
 			format: "Format", tags: "Keywords", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
 			personalDesc: "Personal & social media use", commercialDesc: "Monthly download quota",
 			addToCart: "Add to cart", added: "Added", buyNow: "Buy now",
 			save: "Save", saved: "Saved", noClip: "No preview clip available yet",
 			slip: "Licence slip", usage: "Usage", fee: "Licence fee",
 			youGet: "What you get",
-			previewNote: "The preview plays the original file. The licensed download is available after purchase",
-			related: "Related motion frames", byArtist: "From the same image-maker",
+			previewNote: "The preview plays at full resolution with a watermark. The clean master file is available to download after purchase",
+			relPhoto: "Photo archives", relVideo: "Video archives", byArtist: "From the same image-maker",
 			relPhotos: "Related photos", relVideos: "Related videos",
-			contrib: "Contributor gallery", contribSub: "More works from",
+			contrib: "Profile archives", contribSub: "More works from",
 			seeAll: "See all",
-			resValue: "4K UHD", fmtValue: "MP4 · H.265"
+			fmtValue: "Original master file"
 		}
 	};
 
@@ -60,6 +62,8 @@
 	const kws = $derived(
 		lang === "en" && video?.keywordsEn?.length ? video.keywordsEn : (video?.keywords ?? []),
 	);
+	// Tanggal & waktu pengambilan (opsional), tampil di bawah nama perajangga; "" = barisnya disembunyikan.
+	const takenText = $derived(fmtTakenAt(video?.takenAt, lang));
 	let related = $state<Photo[]>([]);
 	let relVideos = $state<Video[]>([]);
 	let contrib = $state<Photo[]>([]);
@@ -71,6 +75,10 @@
 	let fallbackUrl: string | null = null;
 	/** Frame pertama siap → gambar pengganti poster disembunyikan. */
 	let clipReady = $state(false);
+	/** Menunggu unduhan/stream: spinner di atas poster/pemutar supaya
+		pengguna tahu videonya sedang dimuat, bukan macet. File asli bisa
+		puluhan MB — di koneksi lambat butuh belasan detik buffering. */
+	let buffering = $state(true);
 
 	let rootEl: HTMLDivElement | undefined = $state();
 
@@ -103,24 +111,31 @@
 	});
 
 	$effect(() => {
+		// URL pemutar diminta PARALEL dengan detail (bukan serial di dalam .then):
+		// pratinjau resolusi asli bisa puluhan MB — tiap RTT yang dihemat berarti
+		// pemutar dapat src lebih cepat dan mulai buffering lebih awal.
+		const originalPromise = fetchPhotoOriginal(videoId).catch(() => null);
 		fetchPhotoById(videoId).then((p) => {
+			// Tautan ke /videos/<id foto>: halaman detail foto yang benar.
+			if (p?.assetType === "FOTO") {
+				void goto(`/photos/${p.id}`, { replaceState: true });
+				return;
+			}
 			if (p) {
 				video = { ...p, duration: "02:00", desc: p.desc };
-				// Pemutar memakai berkas ASLI (resolusi penuh, tanpa watermark),
-				// diminta per video lewat /view. Pratinjau H.264 ber-watermark
-				// hanya cadangan: bila asli tak tersedia atau browser tak bisa
-				// memutarnya (mis. MOV/HEVC tertentu → onerror di <video>).
+				// Pemutar memakai pratinjau RESOLUSI ASLI ber-watermark, diminta
+				// per video lewat /view (file master hanya lewat unduhan berlisensi).
+				// Pratinjau 640 px hanya cadangan: bila /view gagal atau browser
+				// tak bisa memutarnya (onerror di <video>).
 				const preview = pickVideoPreview(p.clipUrl, p.watermarkUrl);
 				fallbackUrl = pickVideoPreview(p.watermarkUrl, p.clipUrl);
-				fetchPhotoOriginal(p.id)
-					.then((url) => (clipUrl = url ?? preview))
-					.catch(() => (clipUrl = preview));
+				originalPromise.then((url) => (clipUrl = url ?? preview));
 				fetchContributorWorks(p.author, p.id, 8)
 					.then((c) => (contrib = c))
 					.catch(() => {});
 			}
 		});
-		fetchRelatedPhotos(videoId, 3).then((r) => (related = r)).catch(() => {});
+		fetchRelatedPhotos(videoId, 4, "FOTO").then((r) => (related = r)).catch(() => {});
 		fetchVideos(7)
 			.then((r) => {
 				relVideos = r.videos.filter((v) => v.id !== videoId).slice(0, 4);
@@ -129,6 +144,33 @@
 	});
 
 	const fav = $derived(video ? store.isFavorite(video.id) : false);
+	// Durasi & resolusi SUNGGUHAN (dulu tertulis mati "02:00 · 4K UHD" untuk semua klip): durasi dari metadata
+	// pemutar (pratinjau sama panjang dengan aslinya), resolusi dari ukuran asli berkas (API).
+	let durSec = $state(0);
+	// Batas tampil pemutar = ukuran asli berkas dalam px CSS (video 1080p di kotak 1.028 px CSS retina tak
+	// direntangkan 1,07×; tampil 1:1 di tengah latar hitam). Layar penuh tetap mengikuti browser.
+	let dpr = $state(typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
+	$effect(() => {
+		const upd = () => (dpr = window.devicePixelRatio || 1);
+		window.addEventListener("resize", upd);
+		return () => window.removeEventListener("resize", upd);
+	});
+	const playerMax = $derived(
+		video?.nativeW && video?.nativeH ? { w: video.nativeW / dpr, h: video.nativeH / dpr } : null,
+	);
+	const durText = $derived.by(() => {
+		if (!(durSec > 0)) return "";
+		const s = Math.round(durSec);
+		const two = (n: number) => String(n).padStart(2, "0");
+		return s >= 3600 ? `${Math.floor(s / 3600)}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${two(Math.floor(s / 60))}:${two(s % 60)}`;
+	});
+	const resLabel = $derived.by(() => {
+		const w = video?.nativeW;
+		const h = video?.nativeH;
+		if (!w || !h) return "";
+		const long = Math.max(w, h);
+		return long >= 7680 ? "8K" : long >= 3840 ? "4K UHD" : long >= 2560 ? "QHD" : long >= 1920 ? "Full HD" : long >= 1280 ? "HD" : `${w}×${h}`;
+	});
 	const price = $derived(video ? (license === "personal" ? video.price : video.price * 2) : 0);
 	// Nomor katalog untuk dibaca manusia — enam digit terakhir id sudah cukup
 	// menyebut satu klip; id penuhnya tetap hidup di URL dan keranjang.
@@ -233,35 +275,70 @@
 					class="group relative overflow-hidden"
 				>
 					<div class="pointer-events-none absolute -inset-10 bg-[radial-gradient(circle_at_50%_40%,color-mix(in_srgb,var(--safelight)_18%,transparent),transparent_60%)] blur-2xl"></div>
-					<div class="relative aspect-video w-full overflow-hidden bg-black/40">
+					<!-- Latar hitam penuh: video yang aslinya lebih kecil dari kotak tampil 1:1 di tengahnya. -->
+					<div class="relative aspect-video w-full overflow-hidden bg-black">
 						<!-- Pemutar sungguhan. Sebelumnya di sini hanya gambar diam,
 							tombol play yang mengubah state, dan bilah progres palsu
 							yang bergerak lewat transisi CSS — klipnya tidak pernah
 							benar-benar diputar. -->
 						{#if clipUrl}
 							<!-- Pengganti atribut poster: <img> ikut dipotong pita
-								kreditnya oleh creditCrop; poster <video> tidak. -->
+								kreditnya oleh creditCrop; poster <video> tidak. Thumbnail API
+								teracak → <canvas> yang disusun ulang (sudah tanpa pita). -->
 							{#if !clipReady}
-								<img
-									src={imgFor(video.seed, 1600, 900, video.thumbUrl)}
-									alt=""
-									aria-hidden="true"
-									class="pointer-events-none absolute inset-0 z-[1] h-full w-full bg-black object-contain"
-								/>
+								{#if isScrambledUrl(imgFor(video.seed, 1600, 900, video.thumbUrl))}
+									<canvas
+										use:scrambled={{ src: imgFor(video.seed, 1600, 900, video.thumbUrl), eager: true }}
+										aria-hidden="true"
+										class="pointer-events-none absolute inset-0 z-[1] h-full w-full bg-black object-contain"
+									></canvas>
+								{:else}
+									<img
+										src={imgFor(video.seed, 1600, 900, video.thumbUrl)}
+										alt=""
+										aria-hidden="true"
+										class="pointer-events-none absolute inset-0 z-[1] h-full w-full bg-black object-contain"
+									/>
+								{/if}
 							{/if}
+							<!-- Menu ⋮ bawaan peramban dihilangkan: tanpa unduh, kecepatan, PiP, dan cast, isinya kosong
+								sehingga tombolnya tak ditampilkan. -->
 							<!-- svelte-ignore a11y_media_has_caption -->
 							<video
 								src={clipUrl}
 								onloadeddata={() => (clipReady = true)}
+								onloadedmetadata={(e) => {
+									const d = e.currentTarget.duration;
+									if (Number.isFinite(d) && d > 0) durSec = d;
+								}}
 								onplay={() => (clipReady = true)}
+								onwaiting={() => (buffering = true)}
+								onseeking={() => (buffering = true)}
+								onplaying={() => (buffering = false)}
+								oncanplay={() => (buffering = false)}
 								controls
+								controlslist="nodownload noplaybackrate noremoteplayback"
+								disablepictureinpicture
+								disableremoteplayback
 								playsinline
-								preload="metadata"
+								preload="auto"
 								onerror={() => {
 									if (fallbackUrl && clipUrl !== fallbackUrl) clipUrl = fallbackUrl;
 								}}
-								class="absolute inset-0 h-full w-full bg-black object-contain"
+								style:max-width={playerMax ? `${playerMax.w}px` : undefined}
+								style:max-height={playerMax ? `${playerMax.h}px` : undefined}
+								class="absolute inset-0 m-auto h-full w-full bg-black object-contain"
 							></video>
+							{#if buffering}
+								<div
+									class="pointer-events-none absolute inset-0 z-[2] grid place-items-center"
+									aria-hidden="true"
+								>
+									<span
+										class="h-10 w-10 animate-spin rounded-full border-2 border-ivory/25 border-t-ivory"
+									></span>
+								</div>
+							{/if}
 						{:else}
 							<ApiImage
 								src={imgFor(video.seed, 1600, 900, video.thumbUrl)}
@@ -294,20 +371,25 @@
 				<!-- Strip bukti: nomor bingkai + durasi -->
 				<div class="mt-3 flex items-center justify-between gap-4">
 					<p class="kicker text-fg-muted">
-						No. {frameNo}<span class="hidden sm:inline"> — {video.duration}</span>
+						No. {frameNo}{#if durText}<span class="hidden sm:inline"> — {durText}</span>{/if}
 					</p>
 					<span class="kicker text-fg-muted">{catLabel[video.cat][lang]}</span>
 				</div>
 
 				<!-- Keterangan: judul dan perajangga menempel pada klip,
 					bukan pada lembar lisensi. -->
-				<div class="mt-8 max-w-2xl">
-					<h1 class="font-display text-[clamp(2.2rem,4.2vw,3.6rem)] font-light leading-[1.02] tracking-[-0.02em] text-fg">
-						{video.title[lang]}
-					</h1>
+				<!-- Judul paling banyak dua baris, selebar kolom klip (lihat DetailTitle). -->
+				<div class="mt-8">
+					<DetailTitle text={video.title[lang]} />
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <a href={`/videos?q=${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
+						{t.by} <a href={`/archive/${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
 					</p>
+					<!-- Tanggal & waktu pengambilan: baris sekunder tepat di bawah perajangga. -->
+					{#if takenText}
+						<p class="mt-1.5 kicker tabular-nums text-fg-muted/70">
+							{t.taken} <time datetime={video.takenAt}>{takenText}</time>
+						</p>
+					{/if}
 				</div>
 			</div>
 
@@ -381,7 +463,7 @@
 					<div class="border-t border-hair px-5 py-4">
 						<span class="kicker text-fg-muted">{t.youGet}</span>
 						<p class="mt-2 font-mono text-[0.76rem] tabular-nums text-fg">
-							{video.duration} · {t.resValue} · {t.fmtValue}
+							{[durText, resLabel, t.fmtValue].filter(Boolean).join(" · ")}
 						</p>
 						<p class="mt-2 text-xs leading-relaxed text-fg-muted">{t.previewNote}</p>
 					</div>
@@ -400,14 +482,14 @@
 				<!-- Data klip. Di mobile jadi baris-baris bergaris rambut —
 					bahasa yang sama dengan lembar lisensi. -->
 				<div class="mt-8 border-t border-hair pt-2 sm:grid sm:grid-cols-3 sm:gap-x-8 sm:gap-y-5 sm:pt-8">
-					{@render meta(t.cat, video.categories.join(", ") || catLabel[video.cat][lang])}
-					{@render meta(t.duration, video.duration)}
+					{@render meta(t.cat, (lang === "en" && video.categoriesEn?.length ? video.categoriesEn : video.categories).join(", ") || catLabel[video.cat][lang])}
+					{@render meta(t.duration, durText || "—")}
 					<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
 						<p class="kicker shrink-0 text-fg-muted">{t.tags}</p>
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
 							{#if kws.length}
 								{#each kws as kw (kw)}
-									<a href={`/photos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
+									<a href={`/archives?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
 									</a>
 								{/each}
@@ -420,34 +502,12 @@
 			</div>
 		</div>
 
-		<!-- ───────── Foto terkait ───────── -->
-		{#if related.length > 0}
-			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
-				<Reveal class="mb-8 flex items-end justify-between gap-6">
-					<div>
-						<p data-reveal class="kicker text-safelight">{t.related}</p>
-						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relPhotos}</h2>
-					</div>
-					<a data-reveal href="/photos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
-						{t.seeAll}
-					</a>
-				</Reveal>
-				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
-					{#each related as v (v.id)}
-						<div data-reveal>
-							<PhotoCard photo={v} landscape />
-						</div>
-					{/each}
-				</Reveal>
-			</section>
-		{/if}
-
-		<!-- ───────── Video terkait ───────── -->
+		<!-- ───────── Video terkait (di atas foto terkait) ───────── -->
 		{#if relVideos.length > 0}
 			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
 				<Reveal class="mb-8 flex items-end justify-between gap-6">
 					<div>
-						<p data-reveal class="kicker text-safelight">{t.related}</p>
+						<p data-reveal class="kicker text-safelight">{t.relVideo}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relVideos}</h2>
 					</div>
 					<a data-reveal href="/videos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
@@ -464,6 +524,28 @@
 			</section>
 		{/if}
 
+		<!-- ───────── Foto terkait ───────── -->
+		{#if related.length > 0}
+			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
+				<Reveal class="mb-8 flex items-end justify-between gap-6">
+					<div>
+						<p data-reveal class="kicker text-safelight">{t.relPhoto}</p>
+						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relPhotos}</h2>
+					</div>
+					<a data-reveal href="/photos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+						{t.seeAll}
+					</a>
+				</Reveal>
+				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{#each related as v (v.id)}
+						<div data-reveal>
+							<PhotoCard photo={v} landscape />
+						</div>
+					{/each}
+				</Reveal>
+			</section>
+		{/if}
+
 		<!-- ───────── Galeri kontributor ───────── -->
 		{#if contrib.length > 0 && video}
 			<section class="mx-auto max-w-[1500px] px-6 pb-28 lg:px-10">
@@ -471,10 +553,10 @@
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
-							{t.contribSub} <a href={`/videos?q=${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
+							{t.contribSub} <a href={`/archive/${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
 						</h2>
 					</div>
-					<a data-reveal href={`/videos?q=${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/archive/${encodeURIComponent(video.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>

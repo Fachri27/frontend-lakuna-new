@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
+	import { tick } from "svelte";
 	import { imgFor, type Video } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
 
@@ -21,9 +22,28 @@
 
 	let vid = $state<HTMLVideoElement>();
 	let card = $state<HTMLElement>();
+	/** src klip baru dipasang saat kartu mendekati layar (atau disentuh) — strip ini biasanya jauh di bawah. */
+	let armed = $state(false);
 
-	function play() {
+	$effect(() => {
+		const el = card;
+		if (!el || armed) return;
+		const io = new IntersectionObserver(
+			([en]) => {
+				if (en.isIntersecting) armed = true;
+			},
+			{ rootMargin: "300px 0px" },
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
+
+	async function play() {
 		if (reduceMotion) return;
+		if (!armed) {
+			armed = true;
+			await tick();
+		}
 		const v = vid;
 		if (!v?.src) return;
 		void v.play().catch(() => {});
@@ -78,7 +98,7 @@
 				<video
 					bind:this={vid}
 					data-preview
-					src={video.previewUrl}
+					src={armed ? video.previewUrl : undefined}
 					muted
 					loop
 					playsinline

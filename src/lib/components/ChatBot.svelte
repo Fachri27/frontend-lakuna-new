@@ -372,7 +372,7 @@
 		backdrop-filter: blur(12px);
 		box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
 		cursor: pointer;
-		transition: opacity 0.3s ease, transform 0.3s ease, color 0.2s ease, border-color 0.2s ease;
+		transition: opacity 0.3s ease, transform 0.3s ease, color 0.2s ease, border-color 0.2s ease, visibility 0.3s ease;
 	}
 	.cb-launchlabel {
 		display: none;
@@ -390,10 +390,14 @@
 		color: var(--safelight);
 		border-color: var(--safelight);
 	}
+	/* `visibility: hidden` setelah pudar (visibility ikut transisi 0.3s → tetap terlihat selama memudar): pada
+	   opasitas 0 saja Chrome tetap menggambar backdrop-filter-nya — blur ulang tiap frame di atas hero & globe,
+	   justru saat tombol ini disembunyikan. */
 	.cb-launch.is-hidden {
 		opacity: 0;
 		transform: translateY(1rem);
 		pointer-events: none;
+		visibility: hidden;
 	}
 
 	.cb-panel {

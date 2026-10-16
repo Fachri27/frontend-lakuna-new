@@ -149,7 +149,7 @@ class AppStore {
 	async removeFromCart(id: string) {
 		this.cart = this.cart.filter((p) => p.id !== id);
 		try {
-			await apiDelete(`/api/cart/${id}`);
+			await apiDelete(`/api/cart/${encodeURIComponent(id)}`);
 		} catch {
 			// already removed optimistically
 		}
@@ -172,7 +172,7 @@ class AppStore {
 			if (isFav) {
 				// Hapus langsung berdasar photoId — satu request idempoten,
 				// tanpa GET list dulu (setengah jendela race hilang).
-				await apiDelete(`/api/favorite/by-photo/${id}`);
+				await apiDelete(`/api/favorite/by-photo/${encodeURIComponent(id)}`);
 			} else {
 				await apiPost<ApiResponse<unknown>>("/api/favorite", { photoId: id });
 			}

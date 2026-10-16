@@ -1,30 +1,7 @@
 <script lang="ts">
-	import { getLenis } from "$lib/lenis";
+	import { scrollToTop } from "$lib/scrollTop";
 
 	let show = $state(false);
-
-	// Gulir ke atas melewati bagian globe: tanpa tanda ini, logika globe menganggapnya "naik dari peta",
-	// menahan gulir di awal globe, dan pengguna tak pernah sampai ke atas (lihat MapDescent onUpdate).
-	// Tanda dicabut saat sampai di atas, atau setelah 6 dtk (jaga-jaga bila gulir dibatalkan pengguna).
-	function toTop() {
-		const root = document.documentElement;
-		root.dataset.scrollingTop = "1";
-		const done = () => {
-			delete root.dataset.scrollingTop;
-			window.removeEventListener("scroll", check);
-			clearTimeout(timer);
-		};
-		const check = () => {
-			if (window.scrollY <= 1) done();
-		};
-		const timer = setTimeout(done, 6000);
-		window.addEventListener("scroll", check, { passive: true });
-		// Lenis memegang gulir di landing (inersia roda masih berjalan tepat setelah menggulir dan akan
-		// menimpa scrollTo bawaan); gunakan Lenis bila ada, kalau tidak gulir bawaan.
-		const lenis = getLenis();
-		if (lenis) lenis.scrollTo(0, { duration: 1.4, force: true });
-		else window.scrollTo({ top: 0, behavior: "smooth" });
-	}
 
 	$effect(() => {
 		// Penanda section globe (div[data-globe] di Home) dicari ulang tiap
@@ -47,12 +24,18 @@
 	});
 </script>
 
+<!-- Tersembunyi = `invisible`, bukan sekadar opacity-0: backdrop-blur tetap digambar Chrome pada opasitas 0 —
+	 blur ulang tiap frame di atas globe/hero. Tak ada beda terlihat: transisi efektifnya `.press` (transform saja,
+	 aturan tak ber-layer mengalahkan transition-all) jadi opasitas pun berganti seketika; tanpa .press (reduced
+	 motion), visibility ikut transition-all dan tetap terlihat selama memudar. -->
 <button
 	type="button"
-	onclick={toTop}
+	onclick={scrollToTop}
 	aria-label="Scroll to top"
+	data-no-hover-sound
+	data-no-click-sound
 	class={`press fab-mengambang fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-6 z-50 grid h-11 w-11 place-items-center rounded-full border border-hair bg-bg/80 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-safelight hover:text-safelight active:border-safelight active:text-safelight ${
-		show ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"
+		show ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none invisible"
 	}`}
 >
 	<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

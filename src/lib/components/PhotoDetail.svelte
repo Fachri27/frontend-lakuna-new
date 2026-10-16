@@ -6,41 +6,46 @@
 	import "glightbox/dist/css/glightbox.min.css";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
-	import { catLabel, fmtIDR, imgFor, USE_DUMMY_IMAGES, fetchPhotoById, fetchRelatedPhotos, fetchVideos, fetchContributorWorks, fetchActiveEvents, eventAmount, bestEvent, type Photo, type Video, type ApiEvent } from "$lib/data";
+	import { catLabel, fmtIDR, fmtTakenAt, imgFor, USE_DUMMY_IMAGES, fetchPhotoById, fetchRelatedPhotos, fetchRelatedVideos, fetchContributorWorks, fetchActiveEvents, eventAmount, bestEvent, type Photo, type Video, type ApiEvent } from "$lib/data";
 	import Reveal from "./Reveal.svelte";
 	import { subscribeModal } from "$lib/subscribeModal.svelte";
 	import { authModal } from "$lib/authModal.svelte";
 	import { page } from "$app/state";
 	import PhotoCard from "./PhotoCard.svelte";
 	import VideoCard from "./VideoCard.svelte";
+	import DetailTitle from "./DetailTitle.svelte";
+	import { mount, unmount } from "svelte";
+	import { apiGet } from "$lib/api";
+	import type { ApiResponse } from "$lib/types";
+	import { isScrambledUrl, scrambleKey, scrambledSize } from "$lib/photoScramble";
 
 	let { photoId }: { photoId: string } = $props();
 
 	const copy = {
 		id: {
 			back: "Kembali", by: "oleh", cat: "Kategori", tags: "Kata kunci",
-			dims: "Dimensi", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
+			dims: "Dimensi", taken: "Diambil", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
 			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Kuota unduhan bulanan",
 			addToCart: "Tambah ke keranjang", added: "Ditambahkan", buyNow: "Beli sekarang",
 			save: "Simpan", saved: "Tersimpan", download: "Unduh pratinjau",
 			slip: "Lembar lisensi", usage: "Jenis pakai", fee: "Biaya lisensi",
 			youGet: "Yang kamu terima", noWatermark: "tanpa tanda air",
-			related: "Bingkai terkait", byArtist: "Dari perajangga yang sama",
+			relPhoto: "Arsip foto", relVideo: "Arsip video", byArtist: "Dari perajangga yang sama",
 			relPhotos: "Foto terkait", relVideos: "Video terkait",
-			contrib: "Galeri kontributor", contribSub: "Karya lain dari",
+			contrib: "Arsip profil", contribSub: "Karya lain dari",
 			seeAll: "Lihat semua"
 		},
 		en: {
 			back: "Back", by: "by", cat: "Category", tags: "Keywords",
-			dims: "Dimensions", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
+			dims: "Dimensions", taken: "Taken", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
 			personalDesc: "Personal & social media use", commercialDesc: "Monthly download quota",
 			addToCart: "Add to cart", added: "Added", buyNow: "Buy now",
 			save: "Save", saved: "Saved", download: "Download preview",
 			slip: "Licence slip", usage: "Usage", fee: "Licence fee",
 			youGet: "What you get", noWatermark: "no watermark",
-			related: "Related frames", byArtist: "From the same image-maker",
+			relPhoto: "Photo archives", relVideo: "Video archives", byArtist: "From the same image-maker",
 			relPhotos: "Related photos", relVideos: "Related videos",
-			contrib: "Contributor gallery", contribSub: "More works from",
+			contrib: "Profile archives", contribSub: "More works from",
 			seeAll: "See all"
 		}
 	};
@@ -61,6 +66,8 @@
 	const kws = $derived(
 		lang === "en" && (photo?.keywordsEn?.length ?? 0) > 0 ? (photo?.keywordsEn ?? []) : (photo?.keywords ?? []),
 	);
+	// Tanggal & waktu pengambilan (opsional), tampil di bawah nama perajangga; "" = barisnya disembunyikan.
+	const takenText = $derived(fmtTakenAt(photo?.takenAt, lang));
 
 	let rootEl: HTMLDivElement | undefined = $state();
 	// Tombol asli di lembar lisensi. Rel bawah mobile hanya hadir saat tombol ini
@@ -73,6 +80,11 @@
 
 	$effect(() => {
 		fetchPhotoById(photoId).then((p) => {
+			// Tautan lama / dari luar ke /photos/<id video>: halaman detail video yang benar.
+			if (p?.assetType === "VIDEO") {
+				void goto(`/videos/${p.id}`, { replaceState: true });
+				return;
+			}
 			photo = p;
 			if (p) {
 				// Galeri kontributor butuh nama persis — diambil setelah foto ada.
@@ -81,13 +93,9 @@
 					.catch(() => {});
 			}
 		});
-		fetchRelatedPhotos(photoId).then((r) => (related = r)).catch(() => {});
-		// Video terkait: klip terbaru kecuali yang sedang dibuka.
-		fetchVideos(7)
-			.then((r) => {
-				relVideos = r.videos.filter((v) => v.id !== photoId).slice(0, 4);
-			})
-			.catch(() => {});
+		// "Foto terkait" hanya FOTO; video terkait (keyword sama) punya stripnya sendiri di bawahnya.
+		fetchRelatedPhotos(photoId, 8, "FOTO").then((r) => (related = r)).catch(() => {});
+		fetchRelatedVideos(photoId, 4).then((r) => (relVideos = r)).catch(() => {});
 		// Event diskon aktif khusus foto ini (targetType PHOTO).
 		fetchActiveEvents({ photoId }).then((e) => (events = e)).catch(() => (events = []));
 	});
@@ -99,22 +107,116 @@
 		let cancelled = false;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		let lb: any = null;
+		const src = imgFor(photo.seed, 1600, 2000, photo.watermarkUrl || photo.thumbUrl);
+		// Foto API datang TERACAK: GLightbox tak boleh memuatnya sebagai <img> (yang tampil hanya mozaik, dan
+		// URL-nya terbaca di Elements). Slide-nya jadi konten inline: kanvas ApiImage yang disusun ulang, seukuran
+		// slide gambar dulu (ukuran asli pratinjau, dibatasi layar — lihat .lk-lb-photo); versi tajamnya tetap
+		// naik bertingkat (photoId + sharpWatermark) supaya tak pernah direntangkan melebihi pikselnya.
+		const key = scrambleKey(src);
+		let box: HTMLDivElement | null = null;
+		let inner: ReturnType<typeof mount> | null = null;
+		let zoomOut: (() => void) | null = null;
+		if (key) {
+			const { w, h } = scrambledSize(src, key);
+			box = document.createElement("div");
+			box.className = "lk-lb-photo";
+			box.style.setProperty("--lb-w", `${w}px`);
+			box.style.setProperty("--lb-ar", `${w} / ${h}`);
+			// eager: berkas yang sama dengan pelat (sudah di cache) — kanvas sudah tersusun sebelum lightbox dibuka.
+			inner = mount(ApiImage, {
+				target: box,
+				props: { src, fill: true, eager: true, photoId: photo.id, sharpWatermark: true, style: "object-fit: contain;" }
+			});
+			// Klik-untuk-zoom seperti slide gambar GLightbox (ZoomImages, tak berlaku untuk slide inline): bila
+			// pratinjau tampil lebih kecil dari ukuran aslinya (layar > 768 px), klik → ukuran asli, seret → geser,
+			// klik lagi → kembali. Kelas `zoomed` di slide = state yang sama dengan GLightbox (seret antar-slide
+			// dimatikan, bayangan dilepas). Kanvasnya naik tier sendiri saat membesar (ResizeObserver ApiImage).
+			const el = box;
+			let zoomed = false;
+			let tx = 0;
+			let ty = 0;
+			let grab: { x: number; y: number } | null = null;
+			let moved = false;
+			const canZoom = () => window.innerWidth > 768 && el.getBoundingClientRect().width < w - 1;
+			const place = () => (el.style.transform = zoomed ? `translate3d(${tx}px, ${ty}px, 0)` : "");
+			const unzoom = () => {
+				zoomed = false;
+				tx = ty = 0;
+				el.style.width = "";
+				el.classList.remove("is-zoomed");
+				el.closest(".gslide")?.classList.remove("zoomed");
+				place();
+			};
+			zoomOut = unzoom;
+			el.addEventListener("pointerdown", (e) => {
+				if (!zoomed) return;
+				e.preventDefault();
+				grab = { x: e.clientX - tx, y: e.clientY - ty };
+				moved = false;
+				el.setPointerCapture(e.pointerId);
+				el.classList.add("dragging");
+			});
+			el.addEventListener("pointermove", (e) => {
+				if (!grab) {
+					if (!zoomed) el.classList.toggle("is-zoomable", canZoom());
+					return;
+				}
+				tx = e.clientX - grab.x;
+				ty = e.clientY - grab.y;
+				if (Math.abs(tx) + Math.abs(ty) > 2) moved = true;
+				place();
+			});
+			const release = () => {
+				grab = null;
+				el.classList.remove("dragging");
+			};
+			el.addEventListener("pointerup", release);
+			el.addEventListener("pointercancel", release);
+			el.addEventListener("click", () => {
+				if (moved) {
+					moved = false;
+					return;
+				}
+				if (zoomed) unzoom();
+				else if (canZoom()) {
+					zoomed = true;
+					el.style.width = `${w}px`;
+					el.classList.add("is-zoomed");
+					el.closest(".gslide")?.classList.add("zoomed");
+				}
+			});
+		}
 		void import("glightbox").then(({ default: GLightbox }) => {
 			if (cancelled) return;
-			const src = imgFor(photo!.seed, 1600, 2000, photo!.watermarkUrl || photo!.thumbUrl);
 			lb = GLightbox({
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				elements: [{ href: src, type: "image" }] as any,
+				elements: [
+					box ? { content: box, type: "inline", width: "auto", height: "auto" } : { href: src, type: "image" }
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				] as any,
 				skin: "clean",
 				openEffect: "zoom",
 				closeEffect: "fade"
 			});
+			// Slide inline bawaan berlatar putih + padding: ditandai supaya tampil seperti slide gambar.
+			if (box) {
+				lb.on("slide_before_load", (d: { slideNode?: HTMLElement }) => {
+					d.slideNode?.querySelector(".gslide-media")?.classList.add("lk-lb-media");
+				});
+				// ApiImage mengukur kebutuhan tier saat slide masih dianimasikan (zoom dari 0,3×) dan ResizeObserver
+				// tak melihat transform — sesudah animasi buka selesai, picu ukur ulang lewat event `load`-nya.
+				lb.on("slide_changed", () => {
+					box?.querySelector("canvas")?.dispatchEvent(new Event("load"));
+				});
+				// Dibuka lagi = mulai dari tampilan biasa (seperti ZoomImages).
+				lb.on("close", () => zoomOut?.());
+			}
 			lightbox = lb;
 		});
 		return () => {
 			cancelled = true;
 			lb?.close();
 			lightbox = null;
+			if (inner) void unmount(inner);
 		};
 	});
 
@@ -222,10 +324,22 @@
 	// tanda air hanya tersedia setelah pembelian (lihat modul download backend).
 	async function handleDownloadPreview() {
 		if (!photo || downloading) return;
-		const src = imgFor(photo.seed, 1600, 2000, photo.watermarkUrl || photo.thumbUrl);
+		let src: string | null = imgFor(photo.seed, 1600, 2000, photo.watermarkUrl || photo.thumbUrl);
 		if (!src) return;
 		downloading = true;
 		const filename = `lakuna-${photo.seed || photo.id}-pratinjau.jpg`;
+		// URL tampilan foto API berisi mozaik teracak — yang diunduh adalah pratinjau ber-watermark UTUH dari
+		// /comp (presigned attachment). Gagal + berkas tampilannya teracak → batal (jangan simpan mozaik).
+		if (!USE_DUMMY_IMAGES || isScrambledUrl(src)) {
+			const comp = await apiGet<ApiResponse<{ url: string }>>(`/api/photos/${encodeURIComponent(photo.id)}/comp`)
+				.then((r) => r.data?.url ?? null)
+				.catch(() => null);
+			src = comp ?? (isScrambledUrl(src) ? null : src);
+		}
+		if (!src) {
+			downloading = false;
+			return;
+		}
 		try {
 			const res = await fetch(src, { mode: "cors" });
 			if (!res.ok) throw new Error("fetch failed");
@@ -332,7 +446,9 @@
 							alt={photo.title[lang]}
 							fill
 							eager
-							class="object-contain transition-transform duration-[1400ms] ease-out group-hover:scale-[1.02]"
+							photoId={photo.id}
+							sharpWatermark
+							class="object-contain object-top transition-transform duration-[1400ms] ease-out group-hover:scale-[1.02]"
 						/>
 						<div class="grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-soft-light"></div>
 						<div class="pointer-events-none absolute inset-0 opacity-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.45)] transition-opacity duration-500 [.dark_&]:opacity-100"></div>
@@ -349,13 +465,18 @@
 				<!-- Keterangan cetakan: judul dan perajangga menempel pada foto,
 					bukan pada lembar lisensi — keduanya menjawab "ini foto apa",
 					sementara slip menjawab "berapa dan dapat apa". -->
-				<div class="mt-8 max-w-2xl">
-					<h1 class="font-display text-[clamp(2.2rem,4.2vw,3.6rem)] font-light leading-[1.02] tracking-[-0.02em] text-fg">
-						{photo.title[lang]}
-					</h1>
+				<!-- Judul paling banyak dua baris, selebar kolom foto (lihat DetailTitle). -->
+				<div class="mt-8">
+					<DetailTitle text={photo.title[lang]} />
 					<p class="mt-3 kicker text-fg-muted">
-						{t.by} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+						{t.by} <a href={`/archive/${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 					</p>
+					<!-- Tanggal & waktu pengambilan: baris sekunder tepat di bawah perajangga. -->
+					{#if takenText}
+						<p class="mt-1.5 kicker tabular-nums text-fg-muted/70">
+							{t.taken} <time datetime={photo.takenAt}>{takenText}</time>
+						</p>
+					{/if}
 				</div>
 			</div>
 
@@ -472,14 +593,14 @@
 					bahasa yang sama dengan lembar lisensi — bukan grid dua kolom
 					yang ragged karena nilainya panjang-pendek. -->
 				<div class="mt-8 border-t border-hair pt-2 sm:grid sm:grid-cols-3 sm:gap-x-8 sm:gap-y-5 sm:pt-8">
-					{@render meta(t.cat, photo.categories.join(", ") || catLabel[photo.cat][lang])}
+					{@render meta(t.cat, (lang === "en" && photo.categoriesEn?.length ? photo.categoriesEn : photo.categories).join(", ") || catLabel[photo.cat][lang])}
 					{@render meta(t.dims, `${photo.w} × ${photo.h} px`)}
 					<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
 						<p class="kicker shrink-0 text-fg-muted">{t.tags}</p>
 						<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
 							{#if kws.length}
 								{#each kws as kw (kw)}
-									<a href={`/photos?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
+									<a href={`/archives?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">
 										#{kw}
 									</a>
 								{/each}
@@ -497,7 +618,7 @@
 			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
 				<Reveal class="mb-8 flex items-end justify-between gap-6">
 					<div>
-						<p data-reveal class="kicker text-safelight">{t.related}</p>
+						<p data-reveal class="kicker text-safelight">{t.relPhoto}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relPhotos}</h2>
 					</div>
 					<a data-reveal href="/photos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
@@ -519,7 +640,7 @@
 			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
 				<Reveal class="mb-8 flex items-end justify-between gap-6">
 					<div>
-						<p data-reveal class="kicker text-safelight">{t.related}</p>
+						<p data-reveal class="kicker text-safelight">{t.relVideo}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relVideos}</h2>
 					</div>
 					<a data-reveal href="/videos" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
@@ -543,10 +664,10 @@
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
-							{t.contribSub} <a href={`/photos?q=${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
+							{t.contribSub} <a href={`/archive/${encodeURIComponent(photo.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{photo.author}</a>
 						</h2>
 					</div>
-					<a data-reveal href={`/photos?q=${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
+					<a data-reveal href={`/archive/${encodeURIComponent(photo.author)}`} class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">
 						{t.seeAll}
 					</a>
 				</Reveal>
@@ -589,3 +710,43 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* Lightbox foto teracak (slide inline berisi kanvas): tampil seperti slide gambar GLightbox — tanpa latar
+	   putih, padding, dan gulir bawaan slide inline. */
+	:global(.glightbox-container .gslide-media.lk-lb-media) {
+		max-height: none;
+		overflow: visible;
+		background: transparent;
+	}
+	:global(.lk-lb-media .ginlined-content) {
+		padding: 0;
+		overflow: visible;
+	}
+	/* Ukuran = slide gambar dulu: ukuran asli pratinjau (px CSS), dibatasi lebar layar dan 100vh (97vh di desktop). */
+	:global(.lk-lb-photo) {
+		position: relative;
+		width: min(var(--lb-w), 100vw, calc(100vh * var(--lb-ar)));
+		aspect-ratio: var(--lb-ar);
+		user-select: none;
+	}
+	@media (min-width: 769px) {
+		:global(.lk-lb-photo) {
+			width: min(var(--lb-w), 100vw, calc(97vh * var(--lb-ar)));
+		}
+	}
+	/* Zoom (lihat effect lightbox) — kursor & batas sama dengan img.zoomable GLightbox. */
+	:global(.lk-lb-photo.is-zoomable) {
+		cursor: zoom-in;
+	}
+	:global(.lk-lb-photo.is-zoomed) {
+		max-width: none;
+		cursor: grab;
+	}
+	:global(.lk-lb-photo.is-zoomed.dragging) {
+		cursor: grabbing;
+	}
+	:global(.zoomed .gslide-media.lk-lb-media) {
+		max-width: none;
+	}
+</style>

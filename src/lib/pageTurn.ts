@@ -2,7 +2,7 @@ import { access } from "./access.svelte";
 import { soundOn } from "./sound.svelte";
 
 /**
- * Bunyi balik halaman di orbit GsapGallery: static/sounds/page-turn.wav.
+ * Bunyi balik halaman di orbit GsapGallery: static/sounds/scroll.mp3 (Scroll Sound Effect).
  * Tiap foto berbunyi saat MUNCUL masuk orbit dan (lebih pelan) saat HILANG
  * keluar orbit — sampai foto terakhir, selama section masih terlihat.
  *
@@ -11,17 +11,12 @@ import { soundOn } from "./sound.svelte";
  * Kini kolam beberapa elemen, jadi bunyi boleh bertumpuk seperti kertas
  * yang dibalik beruntun; jarak minimum antarbunyi mencegah tumpukan riuh.
  */
-const SRC = "/sounds/page-turn.wav";
+const SRC = "/sounds/scroll.mp3";
 export const PAGE_TURN_VOLUME = 0.5;
 /** Foto keluar orbit: sama bunyinya, lebih pelan — gema dari yang pergi. */
 export const PAGE_TURN_EXIT_VOLUME = 0.28;
-/**
- * Berkas aslinya cuma ±0,45 dtk — lebih cepat habis daripada foto yang
- * masuk orbit, jadi terdengar kepotong. Diperlambat 0,5× (±0,9 dtk) ala
- * pita (pitch ikut turun, bukan time-stretch) supaya terasa seperti
- * kertas tebal.
- */
-const PLAYBACK_RATE = 0.5;
+/** Berkas ±0,23 dtk, diputar apa adanya (kecepatan normal). */
+const PLAYBACK_RATE = 1;
 const POOL_SIZE = 4;
 /** Jarak minimum antarbunyi — gulir sangat cepat tidak jadi dengung. */
 const MIN_GAP_MS = 30;
@@ -33,8 +28,7 @@ function make(): HTMLAudioElement {
 	const a = new Audio(SRC);
 	a.preload = "auto";
 	a.playbackRate = PLAYBACK_RATE;
-	a.preservesPitch = false;
-	return a;
+		return a;
 }
 
 function elements(): HTMLAudioElement[] {
