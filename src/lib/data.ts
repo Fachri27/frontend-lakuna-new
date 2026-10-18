@@ -49,9 +49,9 @@ export type Photo = {
   watermarkUrl?: string;
   /** Presigned file asli dari API (untuk VIDEO = mp4, dipakai hover-preview). */
   originalUrl?: string | null;
-  /** Klip kartu bersih (VIDEO): diputar saat hover di grid/contact sheet. */
+  /** Klip hover ber-watermark (VIDEO): diputar saat hover di grid/contact sheet. */
   clipUrl?: string | null;
-  /** Klip kartu potret 3:4 (VIDEO) untuk rel "Collection of videos". */
+  /** Klip kartu potret 3:4 bersih (VIDEO) untuk rel "Collection of videos" — API hanya mengisinya untuk video beranda. */
   cardClipUrl?: string | null;
   cardClipSmUrl?: string | null;
 };
@@ -156,7 +156,8 @@ const urlMemory = new Map<string, RememberedUrls>();
 // v2: aset publik diregenerasi (kecil + watermark + pita kredit) — URL lama
 // yang diingat menunjuk berkas versi lama di cache browser.
 // v6: foto dikirim TERACAK (lib/scramble.ts) — URL berkas bersih yang diingat versi lama tak boleh dipakai.
-const URLMEM_KEY = "lakuna:url-mem:v6";
+// v7: klip hover video kini ber-watermark — URL klip bersih yang diingat (bisa tersaji dari cache browser) dibuang.
+const URLMEM_KEY = "lakuna:url-mem:v7";
 let urlMemSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Ingatan URL persisten (localStorage): modul JS lahir ulang tiap reload,
@@ -165,7 +166,7 @@ let urlMemSaveTimer: ReturnType<typeof setTimeout> | null = null;
 // pernah dipakai. Dibatasi 500 foto terbaru.
 try {
   // Ingatan & snapshot versi sebelum foto diacak berisi URL berkas bersih — hapus dari penyimpanan.
-  for (const old of ["lakuna:url-mem:v5", "lakuna:home-snap:v9"]) localStorage.removeItem(old);
+  for (const old of ["lakuna:url-mem:v5", "lakuna:url-mem:v6", "lakuna:home-snap:v9", "lakuna:home-snap:v10"]) localStorage.removeItem(old);
   const raw = localStorage.getItem(URLMEM_KEY);
   if (raw) {
     const parsed = JSON.parse(raw) as Record<string, RememberedUrls>;
@@ -793,7 +794,8 @@ const SNAP_TTL = 45 * 60 * 1000;
 // picsum saat presign MinIO gagal) dibuang paksa — jangan turunkan versi ini
 // tanpa alasan.
 // v10: foto teracak — snapshot berisi URL berkas bersih (v9) dibuang.
-const SNAP_KEY = "lakuna:home-snap:v10";
+// v11: klip hover video ber-watermark — snapshot berisi URL klip bersih (v10) dibuang.
+const SNAP_KEY = "lakuna:home-snap:v11";
 let snapMem: HomeSnapshot | null = null;
 
 function snapshotApiBase(): string {

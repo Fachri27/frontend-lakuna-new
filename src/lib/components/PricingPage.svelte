@@ -3,7 +3,7 @@
 import { i18n, type Lang } from "$lib/i18n.svelte";
 import { fmtIDR, fetchPlans, fetchPhotos, fetchActiveEvents, fetchHomepage, eventAmount, bestEvent, type Plan, type HomepageSection } from "$lib/data";
 	import type { ApiEvent } from "$lib/data";
-	import { apiGet, apiPost, ApiError } from "$lib/api";
+	import { apiGet, ApiError, apiPostOnce } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse } from "$lib/types";
 	import { checkVoucher, type VoucherCheck } from "$lib/voucher.svelte";
@@ -217,7 +217,7 @@ import { fmtIDR, fetchPlans, fetchPhotos, fetchActiveEvents, fetchHomepage, even
 		if (isBuying) return;
 		isBuying = true;
 		message = "";
-		apiPost<ApiResponse<{ redirectUrl?: string | null; orderId: string; payOrderId?: string; requiresPayment?: boolean }>>(
+		apiPostOnce<ApiResponse<{ redirectUrl?: string | null; orderId: string; payOrderId?: string; requiresPayment?: boolean }>>(
 			"/api/subscription/standar",
 			{ voucherCode: stdAppliedVoucher?.code || undefined },
 		).then((res) => {
@@ -255,7 +255,7 @@ import { fmtIDR, fetchPlans, fetchPhotos, fetchActiveEvents, fetchHomepage, even
 		if (!selectedPlan || isBuying) return;
 		isBuying = true;
 		message = "";
-		apiPost<ApiResponse<{ redirectUrl?: string | null; orderId?: string; payOrderId?: string; requiresPayment?: boolean }>>(
+		apiPostOnce<ApiResponse<{ redirectUrl?: string | null; orderId?: string; payOrderId?: string; requiresPayment?: boolean }>>(
 			"/api/subscription",
 			{
 				planId: selectedPlan.id,

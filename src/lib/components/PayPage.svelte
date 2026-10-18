@@ -3,7 +3,7 @@
 	import { page } from "$app/state";
 	import { i18n } from "$lib/i18n.svelte";
 	import { authModal } from "$lib/authModal.svelte";
-	import { apiGet, apiPost, ApiError } from "$lib/api";
+	import { apiGet, apiPost, ApiError, apiPostOnce } from "$lib/api";
 	import { fmtIDR } from "$lib/data";
 	import type { ApiResponse } from "$lib/types";
 
@@ -471,7 +471,7 @@
 		charging = true;
 		error = null;
 		try {
-			const res = await apiPost<ApiResponse<Instructions>>(`/api/payment/pay/${encodeURIComponent(orderId)}/charge`, body);
+			const res = await apiPostOnce<ApiResponse<Instructions>>(`/api/payment/pay/${encodeURIComponent(orderId)}/charge`, body);
 			const r = res.data;
 			instr = r;
 			expired = false;

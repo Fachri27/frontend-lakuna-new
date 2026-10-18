@@ -24,7 +24,8 @@ const config = {
 		csp: {
 			mode: "auto",
 			directives: {
-				"script-src": ["self", "https://accounts.google.com", "unsafe-hashes", sha256("this.__e=event"), sha256(EARLY_SCRIPT)]
+				// Hanya pustaka GSI (rekomendasi CSP resmi Google), bukan seluruh accounts.google.com.
+				"script-src": ["self", "https://accounts.google.com/gsi/client", "unsafe-hashes", sha256("this.__e=event"), sha256(EARLY_SCRIPT)]
 			}
 		}
 	}

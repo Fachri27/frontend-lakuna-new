@@ -4,7 +4,7 @@
  * (planId + billing + payOption), TIDAK lewat keranjang — backend tak mengenal
  * item plan di keranjang lokal.
  */
-import { apiPost } from "$lib/api";
+import { apiPostOnce } from "$lib/api";
 import type { ApiResponse } from "$lib/types";
 
 export type Billing = "annual" | "monthly";
@@ -31,7 +31,7 @@ function isPaymentRedirect(raw: string | null | undefined): raw is string {
 
 /** Melempar ApiError bila gagal (401 = belum login). */
 export async function startSubscription(planId: string, billing: Billing, voucherCode?: string): Promise<SubscribeResult> {
-	const res = await apiPost<
+	const res = await apiPostOnce<
 		ApiResponse<{ redirectUrl?: string | null; orderId?: string; payOrderId?: string; requiresPayment?: boolean }>
 	>("/api/subscription", {
 		planId,

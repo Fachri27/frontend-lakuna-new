@@ -3,7 +3,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { fmtIDR, fetchCartEventDiscounts, pickTitle } from "$lib/data";
-	import { apiPost, ApiError } from "$lib/api";
+	import { ApiError, apiPostOnce } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiCreateOrderResult } from "$lib/types";
 	import Reveal from "./Reveal.svelte";
@@ -119,7 +119,7 @@
 		status = "processing";
 		error = null;
 		try {
-			const res = await apiPost<ApiResponse<ApiCreateOrderResult>>("/api/order", {
+			const res = await apiPostOnce<ApiResponse<ApiCreateOrderResult>>("/api/order", {
 				voucherCode: voucher.trim() || undefined,
 			});
 			if (res.success && res.data.orderId) {

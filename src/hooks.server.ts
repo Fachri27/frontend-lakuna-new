@@ -48,20 +48,30 @@ const MINIO_ORIGIN =
 	process.env.MINIO_PUBLIC_URL ||
 	"http://localhost:9000";
 
+// Sumber KHUSUS dev/tunnel (HMR Vite, quick tunnel acak, API/MinIO lokal) — tidak dipasang di Vercel (produksi):
+// `ws:`/`wss:` tanpa host = WebSocket ke host mana pun, dan *.trycloudflare.com bisa dibuat siapa saja gratis →
+// keduanya membuka kanal pengiriman token keluar bila suatu saat ada XSS. Tunnel yang sengaja dipakai di Vercel tetap
+// masuk lewat API_ORIGIN/MINIO_ORIGIN (env-nya diisi host tunnel aktif).
+const IS_PROD = !!process.env.VERCEL;
+const DEV_MEDIA = IS_PROD ? "" : "https://*.trycloudflare.com http://localhost:3100 http://localhost:9000";
+const DEV_CONNECT = IS_PROD ? "" : `${DEV_MEDIA} ws: wss:`;
+
 const CSP = [
 	"default-src 'self'",
 	// Pembayaran: tak ada skrip DOKU. Form kartu DOKU tampil sebagai iframe di halaman bayar (frame-src https:
 	// di bawah) — data kartu langsung ke DOKU, tak pernah lewat halaman/skrip Lakuna.
-	"script-src 'self' 'unsafe-inline' https://accounts.google.com",
+	// Hanya pustaka GSI (rekomendasi CSP resmi Google), bukan seluruh accounts.google.com (endpoint lain di host itu
+	// bisa dipakai memuat skrip lewat injeksi HTML).
+	"script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client",
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
- 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.trycloudflare.com https://*.googleusercontent.com https://*.up.railway.app " +
-		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
-	`media-src 'self' blob: https://*.trycloudflare.com https://*.up.railway.app ${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
+ 	"img-src 'self' data: blob: https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://*.googleusercontent.com https://*.up.railway.app " +
+		`${API_ORIGIN} ${MINIO_ORIGIN} ${DEV_MEDIA}`,
+	`media-src 'self' blob: https://*.up.railway.app ${API_ORIGIN} ${MINIO_ORIGIN} ${DEV_MEDIA}`,
 	"font-src 'self' data: https://fonts.gstatic.com",
 	// *.trycloudflare.com / *.up.railway.app (storage, sama dengan img-src): foto teracak diunduh lewat fetch CORS
 	// supaya di-decode di luar thread utama (lib/photoScramble.ts).
-	"connect-src 'self' https://gibs.earthdata.nasa.gov https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://*.trycloudflare.com https://*.up.railway.app ws: wss: " +
-		`${API_ORIGIN} ${MINIO_ORIGIN} http://localhost:3100 http://localhost:9000`,
+	"connect-src 'self' https://gibs.earthdata.nasa.gov https://picsum.photos https://fastly.picsum.photos https://server.arcgisonline.com https://services.arcgisonline.com https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://*.up.railway.app " +
+		`${API_ORIGIN} ${MINIO_ORIGIN} ${DEV_CONNECT}`,
 	// Form kartu DOKU + verifikasi 3DS tampil di iframe milik halaman bayar; halaman ACS
 	// bank berbeda-beda domainnya, jadi https: diizinkan untuk frame.
 	"frame-src 'self' https://accounts.google.com https:",

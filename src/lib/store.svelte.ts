@@ -199,11 +199,15 @@ class AppStore {
 		this.user = { name: u.username, email: u.email, id: u.id, role: u.role };
 	}
 
-	async googleLogin(idToken: string): Promise<{ registered: boolean; email?: string; name?: string }> {
+	/** `password`: hanya untuk penautan pertama ke akun berpassword (API menjawab GOOGLE_LINK_PASSWORD_REQUIRED). */
+	async googleLogin(
+		idToken: string,
+		password?: string
+	): Promise<{ registered: boolean; linkRequired?: boolean; email?: string; name?: string }> {
 		try {
 			const res = await api<{ success: boolean; data: { user: ApiUser; accessToken: string; refreshToken: string } }>(
 				"/api/auth/google",
-				{ method: "POST", body: JSON.stringify({ idToken }), noAuth: true }
+				{ method: "POST", body: JSON.stringify(password ? { idToken, password } : { idToken }), noAuth: true }
 			);
 			setAccessToken(res.data.accessToken);
 			setRefreshToken(res.data.refreshToken);
@@ -214,6 +218,10 @@ class AppStore {
 			if (err instanceof ApiError && err.code === "EMAIL_NOT_REGISTERED") {
 				const d = err.details as unknown as Record<string, string>;
 				return { registered: false, email: d?.email, name: d?.name };
+			}
+			if (err instanceof ApiError && err.code === "GOOGLE_LINK_PASSWORD_REQUIRED") {
+				const d = err.details as unknown as Record<string, string>;
+				return { registered: true, linkRequired: true, email: d?.email };
 			}
 			throw err;
 		}

@@ -43,13 +43,15 @@
 			passwordLabel: "Kata sandi", passwordPlaceholder: "Kata sandi",
 			showPw: "Tampilkan kata sandi", hidePw: "Sembunyikan kata sandi",
 			username: "Nama pengguna", usernameHint: "Minimal 3 karakter",
-			passwordHint: "Minimal 6 karakter",
+			passwordHint: "Minimal 8 karakter",
 			loginBtn: "Masuk", registerBtn: "Daftar", processing: "Memproses…",
 			or: "atau", google: "Lanjutkan dengan Google",
 			noAccountFree: "Belum punya akun gratis?", createAccount: "Buat akun",
 			hasAccountQ: "Sudah punya akun?", backToLogin: "Masuk",
 			error: "Terjadi kesalahan", success: "Pendaftaran berhasil! Silakan masuk",
 			googleNotRegistered: "Email belum terdaftar. Silakan daftar terlebih dahulu",
+			googleLink: "Akun ini terdaftar dengan kata sandi. Masukkan kata sandi sekali untuk menautkan login Google.",
+			googleLinkExpired: "Sesi Google kedaluwarsa. Klik tombol Google lagi.",
 		},
 		en: {
 			title: "Sign in or Register",
@@ -57,13 +59,15 @@
 			passwordLabel: "Password", passwordPlaceholder: "Password",
 			showPw: "Show password", hidePw: "Hide password",
 			username: "Username", usernameHint: "Minimum 3 characters",
-			passwordHint: "Minimum 6 characters",
+			passwordHint: "Minimum 8 characters",
 			loginBtn: "Sign in", registerBtn: "Sign up", processing: "Processing…",
 			or: "or", google: "Continue with Google",
 			noAccountFree: "Don't have a free account yet?", createAccount: "Create account",
 			hasAccountQ: "Already have an account?", backToLogin: "Sign in",
 			error: "An error occurred", success: "Registration successful! Please sign in",
 			googleNotRegistered: "Email not registered. Please sign up first",
+			googleLink: "This account was registered with a password. Enter it once to link Google sign-in.",
+			googleLinkExpired: "Google session expired. Click the Google button again.",
 		},
 	};
 
@@ -79,6 +83,8 @@
 	let error = $state("");
 	let success = $state("");
 	let gsiBox = $state<HTMLDivElement>();
+	/** Kredensial Google yang menunggu password akun (penautan pertama ke akun berpassword — lihat API). */
+	let pendingGoogle = $state<string | null>(null);
 
 	function finish() {
 		if (onDone) onDone();
@@ -89,7 +95,13 @@
 		error = "";
 		try {
 			const result = await store.googleLogin(response.credential);
-			if (result.registered) {
+			if (result.linkRequired) {
+				pendingGoogle = response.credential;
+				success = t.googleLink;
+				email = result.email || email;
+				password = "";
+				mode = "login";
+			} else if (result.registered) {
 				finish();
 			} else {
 				error = t.googleNotRegistered;
@@ -136,7 +148,13 @@
 		error = "";
 		success = "";
 		try {
-			if (mode === "login") {
+			if (mode === "login" && pendingGoogle) {
+				// Penautan Google: kredensial yang tertunda + password akun.
+				const result = await store.googleLogin(pendingGoogle, password);
+				if (result.linkRequired) throw new Error(t.googleLink);
+				pendingGoogle = null;
+				finish();
+			} else if (mode === "login") {
 				await store.login(email, password);
 				finish();
 			} else {
@@ -145,8 +163,14 @@
 				mode = "login";
 			}
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : t.error;
-			error = msg;
+			// Token Google berumur pendek (±1 jam): bila kedaluwarsa, minta klik Google lagi.
+			if (pendingGoogle && (err as { code?: string })?.code === "GOOGLE_TOKEN_EXPIRED") {
+				pendingGoogle = null;
+				error = t.googleLinkExpired;
+			} else {
+				const msg = err instanceof Error ? err.message : t.error;
+				error = msg;
+			}
 		} finally {
 			loading = false;
 		}

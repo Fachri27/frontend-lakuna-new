@@ -5,7 +5,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { fmtIDR, imgFor, fetchCategories, catName, pickTitle, type ApiCatItem } from "$lib/data";
-	import { api, apiGet, apiPost, apiPatch, apiDelete, ApiError, setAccessToken, setRefreshToken } from "$lib/api";
+	import { api, apiGet, apiPost, apiPatch, apiDelete, ApiError, setAccessToken, setRefreshToken, apiPostOnce } from "$lib/api";
 	import { authModal } from "$lib/authModal.svelte";
 	import type { ApiResponse, ApiFavorite, ApiDownload, ApiOrder, ApiSubscription, ApiUser } from "$lib/types";
 	import ApiImage from "./ApiImage.svelte";
@@ -28,7 +28,7 @@
 			realName: "Nama asli", editProfile: "Ubah profil", saveProfile: "Simpan perubahan", saving: "Menyimpan…",
 			profileOk: "Profil diperbarui", profileFail: "Gagal menyimpan profil. Coba lagi",
 			changePw: "Ganti kata sandi", currentPw: "Kata sandi saat ini", newPw: "Kata sandi baru", confirmPw: "Konfirmasi kata sandi baru",
-			pwMismatch: "Konfirmasi kata sandi tidak cocok", pwMin: "Kata sandi baru minimal 6 karakter",
+			pwMismatch: "Konfirmasi kata sandi tidak cocok", pwMin: "Kata sandi baru minimal 8 karakter",
 			pwOk: "Kata sandi berhasil diubah", pwFail: "Gagal mengganti kata sandi. Coba lagi",
 			nlTitle: "Nawala", nlBody: "Kabar kurasi dan promo dari Lakuna", nlOn: "Berlangganan", nlOff: "Berhenti", nlFail: "Gagal mengubah langganan nawala",
 			delTitle: "Hapus akun", delBody: "Tindakan ini permanen dan tidak bisa dibatalkan. Semua favorit, keranjang, dan riwayatmu ikut terhapus.",
@@ -95,7 +95,7 @@
 			realName: "Real name", editProfile: "Edit profile", saveProfile: "Save changes", saving: "Saving…",
 			profileOk: "Profile updated", profileFail: "Couldn't save profile. Try again",
 			changePw: "Change password", currentPw: "Current password", newPw: "New password", confirmPw: "Confirm new password",
-			pwMismatch: "Password confirmation doesn't match", pwMin: "New password must be at least 6 characters",
+			pwMismatch: "Password confirmation doesn't match", pwMin: "New password must be at least 8 characters",
 			pwOk: "Password changed", pwFail: "Couldn't change password. Try again",
 			nlTitle: "Newsletter", nlBody: "Curation news and promos from Lakuna", nlOn: "Subscribed", nlOff: "Unsubscribed", nlFail: "Couldn't change newsletter setting",
 			delTitle: "Delete account", delBody: "This is permanent and can't be undone. Your favourites, cart, and history go with it.",
@@ -340,7 +340,7 @@
 			pwErr = t.pwMismatch;
 			return;
 		}
-		if (pwNew.length < 6) {
+		if (pwNew.length < 8) {
 			pwErr = t.pwMin;
 			return;
 		}
@@ -527,7 +527,7 @@
 		subBusy = true;
 		subMsg = "";
 		try {
-			const res = await apiPost<ApiResponse<{ snapToken: string; redirectUrl: string; orderId?: string }>>(
+			const res = await apiPostOnce<ApiResponse<{ snapToken: string; redirectUrl: string; orderId?: string }>>(
 				"/api/subscription/installments/pay-remaining",
 				{},
 			);
@@ -1193,7 +1193,7 @@
 									type="password"
 									bind:value={pwNew}
 									required
-									minlength={6}
+									minlength={8}
 									maxlength={72}
 									autocomplete="new-password"
 									class="up-input"
@@ -1206,7 +1206,7 @@
 									type="password"
 									bind:value={pwConfirm}
 									required
-									minlength={6}
+									minlength={8}
 									maxlength={72}
 									autocomplete="new-password"
 									class="up-input"
