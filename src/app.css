@@ -654,6 +654,10 @@ img[src*="/watermark/"] {
   padding: clamp(4rem, 10vh, 7rem) 0 clamp(1.5rem, 3vh, 2.5rem);
   overflow: hidden;
 }
+@media (max-width: 639px) {
+  /* Ponsel: basuhan hero di atasnya sudah memberi napas; 10vh lagi membuat jurang gelap sebelum judul strip. */
+  .as { padding-top: 2.25rem; }
+}
 .as-inner {
   width: 100%;
   max-width: 1500px;
@@ -678,6 +682,10 @@ img[src*="/watermark/"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+@media (max-width: 479px) {
+  /* Satu baris di ponsel kecil memotong judul ("…without worc"): boleh dua baris. */
+  .as-title { white-space: normal; }
 }
 
 /* Dua baris poster yang berjalan berlawanan arah (lihat ImageAutoSlider). Kartu

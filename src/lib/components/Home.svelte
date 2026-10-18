@@ -1909,7 +1909,9 @@
 
 <div>
 	<Preloader heroReady={heroReady} />
-	<div class="hero-cover relative">
+	<!-- --hero-seam: tinggi basuhan hero → strip arsip (Seam + penanda heroEndEl, harus sama). Di ponsel 30vh (±250 px)
+		ditambah padding atas strip terbaca sebagai jurang gelap sebelum "Collection of photos" — dipendekkan. -->
+	<div class="hero-cover relative [--hero-seam:clamp(180px,30vh,340px)] max-sm:[--hero-seam:clamp(140px,20vh,340px)]">
 		<section
 			bind:this={heroSection}
 			data-hero
@@ -2013,8 +2015,10 @@
 
 				<!-- Rel bawah: hanya pencarian, tanpa garis datum maupun CTA
 					pendamping — hero murni tesis + satu aksi. -->
-				<div class="hero-anim mt-7 flex items-center gap-3 sm:mt-14 sm:gap-5 sm:justify-between">
-					<form role="search" onsubmit={onHeroSearch} class="min-w-0 flex-1 sm:max-w-[34rem] sm:flex-none sm:w-[34rem]">
+				<!-- < 320 px (mis. 280): kolom pencarian berbagi baris dengan pil suara hanya ±150 px — placeholder terpotong.
+					Di sana pencarian selebar penuh, pil turun ke baris sendiri (rata kanan). -->
+				<div class="hero-anim mt-7 flex items-center gap-3 max-[320px]:flex-wrap sm:mt-14 sm:gap-5 sm:justify-between">
+					<form role="search" onsubmit={onHeroSearch} class="min-w-0 flex-1 max-[320px]:basis-full sm:max-w-[34rem] sm:flex-none sm:w-[34rem]">
 						<div class="group flex items-center gap-3 border-b border-ivory/22 pb-3.5 transition-colors sm:pb-3 duration-500 focus-within:border-safelight">
 							<svg
 								width="18"
@@ -2036,7 +2040,7 @@
 								bind:value={q}
 								placeholder={c.nav.searchPlaceholder}
 								aria-label={c.hero.searchLabel}
-								class="flex-1 bg-transparent text-[0.95rem] text-ivory outline-none placeholder:text-ivory/40 sm:text-[1.05rem]"
+								class="min-w-0 flex-1 bg-transparent text-[0.95rem] text-ivory outline-none placeholder:text-ivory/40 max-[360px]:placeholder:text-[0.875rem] sm:text-[1.05rem]"
 							/>
 						</div>
 					</form>
@@ -2063,17 +2067,21 @@
 
 		</section>
 
-		<div class="relative z-10">
+		<!-- Tepi bawah wadah ini berimpit dengan tepi bawah hero sticky (keduanya = tepi bawah .hero-cover). Hero
+			dikomposit di lapisan sendiri, jadi pembulatan subpiksel bisa menyisakan satu baris piksel hero (langit/laut
+			biru) di bawah tepi ini — terbaca sebagai garis rambut selebar layar saat strip video masuk. ::after
+			mengecat --bg (nada akhir Seam di bawah) 1 px di atas s.d. 2 px di bawah tepi itu untuk menutupnya. -->
+		<div class="relative z-10 after:pointer-events-none after:absolute after:inset-x-0 after:top-[calc(100%-1px)] after:h-[3px] after:bg-bg">
 			<!-- Penanda batas pandang hero: setinggi Seam di bawah (bagian yang masih tembus). Begitu ia lewat
 				di atas layar, hero tertutup penuh oleh strip arsip — video latar dijeda (lihat heroUncovered). -->
-			<div bind:this={heroEndEl} aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-[clamp(180px,30vh,340px)]"></div>
+			<div bind:this={heroEndEl} aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-[var(--hero-seam)]"></div>
 			<!-- Hero itu lapisan sticky: sambungan ini lewat DI ATASNYA, jadi tepi
 				atasnya harus transparan. Kalau legam, ia memotong foto dan judul
 				hero di tengah huruf. -->
 			<Seam
 				from="transparent"
 				to="wash"
-				height="clamp(180px, 30vh, 340px)"
+				height="var(--hero-seam)"
 				rule={false}
 				darkOnly
 			/>
@@ -2204,7 +2212,7 @@
 	<!-- bg-bg + relative: section ini menumpang ekor pin galeri (margin
 		negatif di GsapGallery), jadi harus menutupi sisa orbit di belakangnya. -->
 	<div class="relative bg-bg">
-	<section class="relative mx-auto max-w-[1500px] px-6 pb-28 pt-[clamp(2rem,5vh,4rem)] lg:px-10 lg:pb-40">
+	<section class="relative mx-auto max-w-[1500px] px-6 pb-16 pt-[clamp(2rem,5vh,4rem)] sm:pb-28 lg:px-10 lg:pb-40">
 		<!-- Teaser daftar harga sebagai papan tarif lab cetak: dua baris pada satu
 			lembar, harga disejajarkan di satu kolom supaya bisa dibandingkan
 			sekilas. Opsi unggulan ditandai sekali saja (garis safelight di kiri),
@@ -2340,7 +2348,7 @@
 				adalah "watermark-nya hilang tidak?", jadi dijawab dengan file
 				sungguhan, bukan kalimat. Digeser sendiri oleh pembaca — gerak yang
 				menjawab aksi, bukan animasi yang jalan sendiri. -->
-		<Reveal class="relative z-10 mt-12 grid gap-8 lg:mt-16 lg:grid-cols-12 lg:items-stretch lg:gap-12">
+		<Reveal class="relative z-10 mt-12 grid grid-cols-[minmax(0,1fr)] gap-8 lg:mt-16 lg:grid-cols-12 lg:items-stretch lg:gap-12">
 			<figure data-reveal class="cmp @container relative flex flex-col lg:col-span-7 lg:mb-10 lg:h-full">
 				{#if bandingImg}
 					<div class="cmp-stage lg:flex-auto">
@@ -2548,6 +2556,25 @@
 	.hs-v {
 		color: #fff;
 		font-weight: 500;
+	}
+	/* Ponsel (< 640 px, sebelum baris hero melebar di sm): pil jadi ikon saja — label "Sound · Off" memakan ±90 px
+	   dari kolom pencarian di sebelahnya (placeholder terpotong, juga di 414 px). aria-label tombol tetap menyebut
+	   aksinya. Font input sendiri dipaksa 16 px di ponsel (app.css, cegah auto-zoom iOS); di < 360 px hanya
+	   placeholder-nya yang dikecilkan (lihat kelas input). Harus SESUDAH aturan dasar .hero-sound/.hs-label. */
+	@media (max-width: 639px) {
+		.hero-sound {
+			gap: 0;
+			padding: 0 0.85rem;
+		}
+		.hs-label {
+			display: none;
+		}
+	}
+	@media (max-width: 319px) {
+		.hero-sound {
+			margin-left: auto;
+			margin-top: 0.75rem;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.hs-bars.is-on i {
@@ -2804,6 +2831,17 @@
 		font-family: var(--font-display);
 		font-size: 1rem;
 		font-weight: 500;
+	}
+	/* Ponsel (< 640 px): kartu rel ±270–330 px — judul satu baris terpotong ("…on the Mentawai …"). Dua baris. */
+	@media (max-width: 639px) {
+		.dg-title {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			white-space: normal;
+			line-height: 1.25;
+		}
 	}
 	/* Nama fotografer di bawah judul: lebih kecil & redup supaya judul tetap yang utama. */
 	.dg-by {
@@ -3093,6 +3131,27 @@
 	}
 	.rate-unit {
 		margin-left: 0.35rem;
+	}
+	/* Ponsel kecil: "from Rp 250.000 /frame" satu baris (nowrap, ≥ 2rem) lebih lebar dari baris harga di layar
+	   320 px — satuannya terpotong dan memaksa grid benefits melebar keluar layar. Angkanya tetap utuh,
+	   satuannya boleh turun baris, dan ukurannya sedikit dikecilkan. */
+	@media (max-width: 399px) {
+		.rate-price {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			row-gap: 0.3rem;
+			white-space: normal;
+			font-size: clamp(1.7rem, 8.5vw, 2rem);
+		}
+		.ben-price {
+			flex-wrap: wrap;
+			row-gap: 0.3rem;
+		}
+		.rate-num,
+		.ben-num {
+			white-space: nowrap;
+		}
 	}
 	.rate-cta {
 		font-size: 0.95rem;

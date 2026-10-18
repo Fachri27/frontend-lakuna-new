@@ -33,7 +33,8 @@
 			{/if}
 		</div>
 	<div class="absolute inset-x-0 bottom-0 translate-y-2 p-3 opacity-0 sm:p-4 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 max-sm:translate-y-0 max-sm:opacity-100">
-		<h3 class="line-clamp-2 font-display text-[0.95rem] sm:text-lg font-light leading-tight tracking-[-0.01em] text-ivory">
+		<!-- < 360 px: kartu rel ±200 px — judul panjang butuh baris ketiga. -->
+		<h3 class="line-clamp-2 max-[360px]:line-clamp-3 font-display text-[0.95rem] sm:text-lg font-light leading-tight tracking-[-0.01em] text-ivory">
 			{photo.title[lang]}
 		</h3>
 		<p class="mt-0.5 truncate text-[0.7rem] text-ivory/60 sm:text-xs">{photo.author}</p>

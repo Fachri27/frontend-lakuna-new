@@ -599,7 +599,9 @@ import gsap from "gsap";
 		@media (max-width: 899px) {
 			.cg-section {
 				min-height: 375svh;
-				margin-bottom: -135svh;
+				/* Lingkaran ponsel kecil: ekor orbit (1–2 foto tersisa) kosong lebih lama daripada di desktop,
+				   jadi section berikutnya ditumpangkan 25svh lebih jauh (60svh ekstra, bukan 35). */
+				margin-bottom: -160svh;
 			}
 			.cg-pin {
 				height: 100svh;
@@ -616,6 +618,13 @@ import gsap from "gsap";
 				z-index: -1;
 				border-radius: 50%;
 				background: radial-gradient(58% 54% at 50% 50%, var(--bg) 46%, transparent 76%);
+			}
+		}
+		/* Ponsel pendek (≤ 700 px, mis. 320×568): orbit duduk di paruh bawah layar yang sempit, jadi ekornya
+		   (frasa sudah pergi, 1–2 foto) terbaca kosong lebih lama — section berikutnya masuk 15svh lebih awal. */
+		@media (max-width: 899px) and (max-height: 700px) {
+			.cg-section {
+				margin-bottom: -175svh;
 			}
 		}
 		.cg-accent-wrap .word {

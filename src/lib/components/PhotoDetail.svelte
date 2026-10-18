@@ -616,7 +616,8 @@
 		<!-- ───────── Foto terkait ───────── -->
 		{#if related.length > 0}
 			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
-				<Reveal class="mb-8 flex items-end justify-between gap-6">
+				<!-- < 360 px: judul (kata terpanjang ±120 px) + tombol "Lihat semua" (±116 px) tak muat berdampingan — tombol turun baris. -->
+				<Reveal class="mb-8 flex items-end justify-between gap-x-6 gap-y-4 max-[360px]:flex-wrap">
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.relPhoto}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relPhotos}</h2>
@@ -625,9 +626,11 @@
 						{t.seeAll}
 					</a>
 				</Reveal>
-				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+				<!-- < 400 px: rel geser (kartu 86% + intip kartu berikutnya). Dua kolom di sana hanya ±130 px per kartu —
+					judul terpotong di baris kedua, nama fotografer terpotong, tombol hati menimpa judul. -->
+				<Reveal stagger={0.08} class="grid grid-flow-col auto-cols-[86%] gap-3 overflow-x-auto snap-x snap-mandatory -mx-6 px-6 scroll-px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-[400px]:mx-0 min-[400px]:grid-flow-row min-[400px]:grid-cols-2 min-[400px]:gap-4 min-[400px]:overflow-visible min-[400px]:px-0 min-[400px]:pb-0 md:grid-cols-4">
 					{#each related as p (p.id)}
-						<div data-reveal>
+						<div data-reveal class="snap-start">
 							<PhotoCard photo={p} landscape />
 						</div>
 					{/each}
@@ -638,7 +641,7 @@
 		<!-- ───────── Video terkait ───────── -->
 		{#if relVideos.length > 0}
 			<section class="mx-auto max-w-[1500px] px-6 pb-20 lg:px-10">
-				<Reveal class="mb-8 flex items-end justify-between gap-6">
+				<Reveal class="mb-8 flex items-end justify-between gap-x-6 gap-y-4 max-[360px]:flex-wrap">
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.relVideo}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.relVideos}</h2>
@@ -647,9 +650,9 @@
 						{t.seeAll}
 					</a>
 				</Reveal>
-				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+				<Reveal stagger={0.08} class="grid grid-flow-col auto-cols-[86%] gap-3 overflow-x-auto snap-x snap-mandatory -mx-6 px-6 scroll-px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-[400px]:mx-0 min-[400px]:grid-flow-row min-[400px]:grid-cols-2 min-[400px]:gap-4 min-[400px]:overflow-visible min-[400px]:px-0 min-[400px]:pb-0 md:grid-cols-4">
 					{#each relVideos as v (v.id)}
-						<div data-reveal>
+						<div data-reveal class="snap-start">
 							<VideoCard video={v} />
 						</div>
 					{/each}
@@ -660,7 +663,7 @@
 		<!-- ───────── Galeri kontributor ───────── -->
 		{#if contrib.length > 0 && photo}
 			<section class="mx-auto max-w-[1500px] px-6 pb-28 lg:px-10">
-				<Reveal class="mb-8 flex items-end justify-between gap-6">
+				<Reveal class="mb-8 flex items-end justify-between gap-x-6 gap-y-4 max-[360px]:flex-wrap">
 					<div>
 						<p data-reveal class="kicker text-safelight">{t.contrib}</p>
 						<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">
@@ -671,9 +674,9 @@
 						{t.seeAll}
 					</a>
 				</Reveal>
-				<Reveal stagger={0.08} class="grid grid-cols-2 gap-4 md:grid-cols-4">
+				<Reveal stagger={0.08} class="grid grid-flow-col auto-cols-[86%] gap-3 overflow-x-auto snap-x snap-mandatory -mx-6 px-6 scroll-px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-[400px]:mx-0 min-[400px]:grid-flow-row min-[400px]:grid-cols-2 min-[400px]:gap-4 min-[400px]:overflow-visible min-[400px]:px-0 min-[400px]:pb-0 md:grid-cols-4">
 					{#each contrib as p (p.id)}
-						<div data-reveal>
+						<div data-reveal class="snap-start">
 							<PhotoCard photo={p} landscape />
 						</div>
 					{/each}

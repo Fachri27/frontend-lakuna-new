@@ -240,7 +240,7 @@ import SortSelect from "./SortSelect.svelte";
 	</div>
 </div>
 
-<section class="mx-auto max-w-[1500px] px-6 py-12 pb-28 lg:px-10 lg:py-16" data-no-hover-sound data-no-click-sound>
+<section class="mx-auto max-w-[1500px] px-6 py-12 sm:pb-28 lg:px-10 lg:py-16" data-no-hover-sound data-no-click-sound>
 	{#if videos.length > 0}
 	<!-- Masonry kolom-CSS: tiap kartu memakai rasio klipnya sendiri, jadi klip
 		tegak dan lebar tidak dipaksa masuk kotak 16:9 yang sama. Arahkan kursor

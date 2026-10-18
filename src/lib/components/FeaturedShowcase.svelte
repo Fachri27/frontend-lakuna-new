@@ -970,7 +970,9 @@
 			padding-bottom: 4.25rem;
 		}
 		.fs-title {
-			font-size: clamp(1.5rem, 6vh, 2.2rem);
+			/* min(…, 7.5vw): layar pendek DAN sempit (320×568) — 6vh saja (34 px) lebih besar dari ukuran bawaan
+			   ponsel, judul jadi empat baris dan tertimpa tombol melayang. */
+			font-size: clamp(1.5rem, min(6vh, 7.5vw), 2.2rem);
 		}
 		.fs-cta {
 			margin-top: 0.9rem;

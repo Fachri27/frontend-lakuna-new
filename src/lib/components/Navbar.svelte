@@ -148,7 +148,9 @@ import { i18n } from "$lib/i18n.svelte";
 			solid ? "bg-bg/85 backdrop-blur-md sm:backdrop-blur-xl" : "bg-transparent"
 		}`}
 	>
-		<nav class="relative mx-auto flex h-[var(--nav-h)] max-w-[1500px] items-center justify-between px-6 lg:px-10">
+		<!-- < 360 px (mis. 320): wordmark ±133 px + tiga tombol 44 px tak muat di px-6 — logo menimpa tombol suara.
+			Padding, tinggi logo (bukan lebarnya: max-w saja akan menggepengkan), dan jarak tombol dirapatkan. -->
+		<nav class="relative mx-auto flex h-[var(--nav-h)] max-w-[1500px] items-center justify-between px-6 max-[360px]:px-4 max-[300px]:px-3 lg:px-10">
 			<!-- Logo di beranda sendiri: gulir halus ke puncak seperti tombol "ke atas". Navigasi ke URL yang sama
 				dulu melompat ke 0 tanpa tanda scrollingTop → globe merebut gulir dan berhenti di awal globe. -->
 			<a
@@ -171,7 +173,7 @@ import { i18n } from "$lib/i18n.svelte";
 					width={200}
 					height={36}
 					eager
-					class={`no-cvd h-6 w-auto max-w-[44vw] transition-[filter] duration-500 sm:h-7 sm:max-w-none md:h-8 lg:h-8 ${logoFilter}`}
+					class={`no-cvd h-6 w-auto max-w-[44vw] transition-[filter] duration-500 max-[360px]:h-5 max-[300px]:h-[18px] sm:h-7 sm:max-w-none md:h-8 lg:h-8 ${logoFilter}`}
 				/>
 			</a>
 
@@ -261,7 +263,7 @@ import { i18n } from "$lib/i18n.svelte";
 				(keranjang + burger). Ikon akun dilepas — aksinya sudah punya
 				baris sendiri di lembar menu, dan tiga lingkaran + wordmark
 				membuat logo berdempetan tanpa jarak di layar 390px. -->
-			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-3">
+			<div class="flex items-center gap-1.5 max-[360px]:gap-1 sm:gap-2 lg:gap-3">
 				<div data-no-hover-sound data-no-click-sound class="contents">
 					<button
 						type="button"

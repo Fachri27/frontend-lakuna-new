@@ -59,8 +59,10 @@
 		style="height: var(--banner-h, 0px)"
 	>
 		<div class="relative mx-auto flex h-9 max-w-[1500px] items-center justify-center gap-3 px-10 text-[0.78rem]">
-			<span class="kicker text-ivory/80">{t.voucherKicker}</span>
-			<span class="font-mono font-semibold tracking-wide">{voucher?.code}</span>
+			<!-- Bar setinggi 36 px: di layar < 340 px label + kode tak muat satu baris (label pecah dua baris, terpotong).
+				Label dilepas di sana; kodenya tetap (aria-label bar sudah menyebut "voucher aktif"). -->
+			<span class="kicker whitespace-nowrap text-ivory/80 max-[340px]:hidden">{t.voucherKicker}</span>
+			<span class="whitespace-nowrap font-mono font-semibold tracking-wide">{voucher?.code}</span>
 			{#if voucher}
 				<span class="hidden text-ivory/90 sm:inline">— {discountLabel(voucher)}</span>
 			{/if}

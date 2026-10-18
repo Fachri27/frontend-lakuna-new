@@ -82,6 +82,10 @@
 		const fit = natH / (STREAM_PEAK * vw * dpr);
 		return Math.min(STREAM_EXIT, STREAM_EXIT * fit * 0.97);
 	});
+	// Ponsel (< 640 px): koridor dipendekkan (CSS .ft-stream: 160px + 50vw) dan sumbunya diturunkan supaya pita kartu
+	// (±25cqw di sekitar sumbu) duduk tepat di bawah tagline (±150 px) — dulu sumbu 55% dari 50svh menyisakan ±100 px
+	// kosong di bawah kartu sebelum kolom footer.
+	const streamAxis = $derived(vw < 640 ? Math.round((100 * (150 + 0.25 * vw)) / (160 + 0.5 * vw)) : 55);
 	const toUrls = (list: Photo[]) => list.map((ph) => sharpUrl.get(ph.id) ?? imgFor(ph.seed, 600, 800, ph.thumbUrl ?? ""));
 	const streamImages = $derived(toUrls(streamPhotos));
 	const streamImagesAlt = $derived(toUrls(streamPhotosAlt));
@@ -148,13 +152,13 @@
 <footer bind:this={footerEl} class="bg-bg" data-no-hover-sound data-no-click-sound>
 	<!-- pb-24 di ponsel: tombol Help (kiri) dan panah ke atas (kanan) melayang di dasar layar dan menimpa baris
 		hak cipta; ruang ekstra membuat baris itu bisa digulir ke atas mereka. -->
-	<div class="mx-auto max-w-[1500px] px-6 pb-24 pt-20 md:pb-6 lg:px-10">
+	<div class="mx-auto max-w-[1500px] px-6 pb-24 pt-10 md:pb-6 md:pt-20 lg:px-10">
 		<!-- Tagline besar di tengah koridor foto (khusus landing): dua rel foto
 			arsip melaju dari titik hilang ke arah penonton, tagline duduk di
 			atasnya. Label + judul memudar masuk/keluar bersama mengikuti gulir
 			(satu-satunya gerak mereka), lihat SliceHeadline. -->
 		{#if isLanding}
-		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} path={{ exitHeight: streamExit }} class="ft-stream">
+		<ImageStream images={streamImages} imagesAlt={streamImagesAlt} path={{ exitHeight: streamExit }} axis={streamAxis} class="ft-stream">
 			<div class="ft-stream-copy">
 				<SliceHeadline
 					kicker={c.nav.tagline}
@@ -167,10 +171,10 @@
 		</ImageStream>
 		{/if}
 
-		<div class="rule mt-14"></div>
+		<div class="rule mt-8 md:mt-14"></div>
 
 		<!-- Columns -->
-		<div class="mt-12 grid grid-cols-2 gap-10 md:grid-cols-4">
+		<div class="mt-8 grid grid-cols-2 gap-10 md:mt-12 md:grid-cols-4">
 			<div class="col-span-2 md:col-span-1">
 				<ApiImage
 					src="/logo1-sm.png"
@@ -303,6 +307,10 @@
 	@media (max-width: 639px) {
 		.ft-stream-copy :global(.sl) {
 			font-size: clamp(2.2rem, 10.5vw, 2.9rem);
+		}
+		/* Tagline (±150 px) + pita kartu (±50cqw) + napas — pasangannya streamAxis di skrip. */
+		:global(.ft-stream) {
+			height: calc(160px + 50vw);
 		}
 	}
 	/* Genangan gelap lembut di belakang tagline: kartu yang lewat di tengah

@@ -11,7 +11,9 @@
 	 *         terlalu timpang; yang paling seimbang menang;
 	 *      2. tak ada → baris pertama sedikit lebih panjang dari baris kedua, selisih sekecil mungkin,
 	 *         dan baris pertama tidak berakhir dengan kata sambung.
-	 *  - Tetap tidak muat → pemecahan browser, dipotong "…" di baris kedua (judul lengkap di tooltip).
+	 *  - Tak ada patahan dua baris yang muat (layar sangat sempit, mis. 280 px) → huruf dikecilkan (≤ 30%) sampai
+	 *    patahan paling seimbang muat. Masih tidak muat → pemecahan browser, dipotong "…" di baris kedua (judul
+	 *    lengkap di tooltip).
 	 */
 	let { text }: { text: string } = $props();
 
@@ -93,6 +95,23 @@
 				if (score < bestScore) {
 					bestScore = score;
 					best = k;
+				}
+			}
+			if (!phrase && !best) {
+				let k0 = 1;
+				let m0 = Infinity;
+				for (let k = 1; k < ws.length; k++) {
+					const m = Math.max(width(ws.slice(0, k).join(" ")), width(ws.slice(k).join(" ")));
+					if (m < m0) {
+						m0 = m;
+						k0 = k;
+					}
+				}
+				const scale = (maxW * 0.99) / m0;
+				if (scale >= 0.7) {
+					node.style.fontSize = `${parseFloat(cs.fontSize) * scale}px`;
+					breakAt = k0;
+					return;
 				}
 			}
 			breakAt = phrase || best;
