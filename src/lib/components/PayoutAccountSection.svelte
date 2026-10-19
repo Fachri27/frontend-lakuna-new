@@ -15,7 +15,7 @@
 	const copy = {
 		id: {
 			title: "Rekening pencairan",
-			body: "Ke rekening bank atau e-wallet ini bagi hasil karyamu dikirim. Pastikan nama pemilik sama persis dengan nama di rekening",
+			body: "Ke rekening bank atau e-wallet ini bagi hasil karyamu dikirim. Pastikan nama pemilik sama persis dengan nama di rekening — nama dicocokkan dengan data bank sebelum transfer, dan demi keamanan rekening yang baru diganti baru dipakai setelah 72 jam",
 			bank: "Bank", ewallet: "E-wallet", pickBank: "Pilih bank", pickEw: "Pilih e-wallet",
 		number: "No. rekening", numberEw: "No. HP terdaftar", name: "Nama pemilik", pw: "Kata sandi akun Lakuna",
 		pwHint: "Masukkan kata sandi login Lakuna kamu untuk konfirmasi — bukan PIN bank / e-wallet / CVV",
@@ -29,7 +29,7 @@
 		},
 		en: {
 			title: "Payout account",
-			body: "Your revenue share is sent to this bank account or e-wallet. Make sure the holder name matches the account exactly",
+			body: "Your revenue share is sent to this bank account or e-wallet. Make sure the holder name matches the account exactly — it is checked against the bank's records before each transfer, and for your security a newly changed account is used only after 72 hours",
 			bank: "Bank", ewallet: "E-wallet", pickBank: "Choose a bank", pickEw: "Choose an e-wallet",
 		number: "Account number", numberEw: "Registered phone no.", name: "Account holder", pw: "Lakuna account password",
 		pwHint: "Enter your Lakuna login password to confirm — not your bank / e-wallet PIN or card CVV",
