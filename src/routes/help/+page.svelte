@@ -1,12 +1,8 @@
 <script lang="ts">
+	import Seo from "$lib/components/Seo.svelte";
 	import HelpPage from "$lib/components/HelpPage.svelte";
 </script>
 
-<svelte:head>
-	<title>Bantuan | Lakuna</title>
-	<meta name="description" content="Panduan langkah demi langkah untuk membeli, berlangganan, dan mengunduh di Lakuna" />
-	<meta property="og:title" content="Bantuan | Lakuna" />
-	<meta property="og:description" content="Panduan langkah demi langkah untuk membeli, berlangganan, dan mengunduh di Lakuna" />
-</svelte:head>
+<Seo title="Bantuan" description="Panduan langkah demi langkah untuk membeli lisensi, berlangganan, memakai voucher, dan mengunduh foto & video di Lakuna Stock." />
 
 <HelpPage />

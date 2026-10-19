@@ -1,49 +1,74 @@
-// Port dari app/sitemap.ts (Next MetadataRoute.Sitemap) → SvelteKit endpoint.
-const BASE = "https://lakuna.id";
+import type { RequestHandler } from "./$types";
+import { assetImagePath, siteOrigin } from "$lib/seo";
+import { loadCatalog, loadCategories } from "$lib/server/seoData";
 
-type SitemapEntry = {
-	url: string;
-	lastModified: string;
-	changeFrequency: "weekly" | "monthly";
-	priority: number;
-};
+/**
+ * sitemap.xml dinamis: halaman publik + kategori + SEMUA foto/video yang tampil (dengan gambar pratinjaunya untuk
+ * Google Images). Dulu hanya 15 halaman statis dengan lastmod = "sekarang" di tiap permintaan (sinyal palsu yang
+ * membuat Google mengabaikan lastmod) dan domain lakuna.id yang belum aktif.
+ *
+ * Di-cache CDN 1 jam. changefreq/priority sengaja tak dipakai (diabaikan Google); lastmod hanya bila nyata.
+ */
 
-export function GET(): Response {
-	const now = new Date().toISOString();
+/** Halaman publik yang layak diindeks (transaksional/akun/noindex tidak dimasukkan). */
+const STATIC_PATHS = [
+	"/",
+	"/photos",
+	"/videos",
+	"/archives",
+	"/ecotourism",
+	"/pricing",
+	"/license",
+	"/contributor",
+	"/about",
+	"/faq",
+	"/help",
+	"/customer-service",
+	"/reviews",
+	"/rubrik",
+	"/terms",
+	"/privacy",
+	"/cookies",
+];
 
-	const entries: SitemapEntry[] = [
-		{ url: BASE, lastModified: now, changeFrequency: "weekly", priority: 1 },
-		{ url: `${BASE}/photos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-		{ url: `${BASE}/videos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-		{ url: `${BASE}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-		{ url: `${BASE}/ecotourism`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-		{ url: `${BASE}/terms`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
-		{ url: `${BASE}/cookies`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
-		{ url: `${BASE}/contributor`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-		{ url: `${BASE}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-		{ url: `${BASE}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-		{ url: `${BASE}/customer-service`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-		{ url: `${BASE}/reviews`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
-		{ url: `${BASE}/privacy`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
-		{ url: `${BASE}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
-		{ url: `${BASE}/rubrik`, lastModified: now, changeFrequency: "weekly", priority: 0.8 }
+const xmlEscape = (s: string) =>
+	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+
+function urlEntry(loc: string, lastmod?: string, image?: string): string {
+	const valid = lastmod && !Number.isNaN(Date.parse(lastmod)) ? new Date(lastmod).toISOString() : null;
+	return (
+		`  <url>\n    <loc>${xmlEscape(loc)}</loc>\n` +
+		(valid ? `    <lastmod>${valid}</lastmod>\n` : "") +
+		(image ? `    <image:image><image:loc>${xmlEscape(image)}</image:loc></image:image>\n` : "") +
+		`  </url>`
+	);
+}
+
+export const GET: RequestHandler = async ({ url, fetch }) => {
+	const origin = siteOrigin(url);
+	const [assets, cats] = await Promise.all([loadCatalog(fetch), loadCategories(fetch)]);
+
+	const entries = [
+		...STATIC_PATHS.map((p) => urlEntry(`${origin}${p}`)),
+		...cats.map((c) => urlEntry(`${origin}/categories/${encodeURIComponent(c.name)}`, c.updatedAt)),
+		...assets.map((a) =>
+			urlEntry(`${origin}/${a.type === "VIDEO" ? "videos" : "photos"}/${a.id}`, a.updatedAt, `${origin}${assetImagePath(a.id)}`)
+		),
 	];
 
 	const xml =
 		`<?xml version="1.0" encoding="UTF-8"?>\n` +
-		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-		entries
-			.map(
-				(e) =>
-					`  <url>\n    <loc>${e.url}</loc>\n    <lastmod>${e.lastModified}</lastmod>\n    <changefreq>${e.changeFrequency}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`
-			)
-			.join("\n") +
+		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+		entries.join("\n") +
 		`\n</urlset>\n`;
 
 	return new Response(xml, {
 		headers: {
-			"Content-Type": "application/xml",
-			"Cache-Control": "max-age=3600"
-		}
+			"Content-Type": "application/xml; charset=utf-8",
+			// API sedang tak terjangkau (hanya halaman statis) → cache singkat supaya cepat pulih.
+			"Cache-Control": assets.length
+				? "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+				: "public, max-age=0, s-maxage=300",
+		},
 	});
-}
+};

@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import PhotoDetail from "$lib/components/PhotoDetail.svelte";
+	import AssetHead from "$lib/components/AssetHead.svelte";
+	import type { PageProps } from "./$types";
 
-	// Legacy: generateMetadata → `${decodeURIComponent(id)} — Foto`.
+	let { data }: PageProps = $props();
 	const id = $derived(page.params.id ?? "");
-	const decodedId = $derived(decodeURIComponent(id));
 </script>
 
-<svelte:head>
-	<title>{decodedId} — Foto</title>
-	<meta name="description" content="Detail foto {decodedId} — Lakuna Nusantara" />
-</svelte:head>
+<AssetHead {data} kind="photo" />
 
 <PhotoDetail photoId={id} />

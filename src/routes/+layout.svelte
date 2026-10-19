@@ -23,11 +23,19 @@
 	import { installCreditCrop } from "$lib/creditCrop";
 	import { primeScrambleSound, playScrambleSound, playScrambleClick } from "$lib/scramble";
 	import { installHomeScrollRestore } from "$lib/homeScroll";
+	import { markHydrated } from "$lib/seo";
 
 	let { children }: { children: Snippet } = $props();
 
 	// Back ke landing: pulihkan gulir setelah tinggi halaman final (tanpa kilasan bagian yang salah).
 	installHomeScrollRestore();
+
+	// Sesudah hidrasi pertama, load halaman detail tak lagi menunggu data SEO (lihat isClientNavigation).
+	$effect(() => markHydrated());
+
+	// Verifikasi kepemilikan Google Search Console / Bing Webmaster — isi env-nya di Vercel bila sudah didaftarkan.
+	const GOOGLE_VERIFY = (import.meta.env.VITE_GOOGLE_SITE_VERIFICATION ?? "").trim();
+	const BING_VERIFY = (import.meta.env.VITE_BING_SITE_VERIFICATION ?? "").trim();
 
 	// Hydrate client-only state (localStorage → runes) sekali di sisi client.
 	$effect(() => {
@@ -168,6 +176,17 @@
 		};
 	});
 </script>
+
+<svelte:head>
+	<meta name="application-name" content="Lakuna Stock" />
+	<link rel="alternate" type="text/markdown" href="/llms.txt" title="Ringkasan situs untuk model bahasa (llms.txt)" />
+	{#if GOOGLE_VERIFY}
+		<meta name="google-site-verification" content={GOOGLE_VERIFY} />
+	{/if}
+	{#if BING_VERIFY}
+		<meta name="msvalidate.01" content={BING_VERIFY} />
+	{/if}
+</svelte:head>
 
 <svelte:window
 	onkeydown={(e) => {

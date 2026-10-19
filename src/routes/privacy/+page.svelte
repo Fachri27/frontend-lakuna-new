@@ -1,12 +1,8 @@
 <script lang="ts">
+	import Seo from "$lib/components/Seo.svelte";
 	import PrivacyPage from "$lib/components/PrivacyPage.svelte";
 </script>
 
-<svelte:head>
-	<title>Kebijakan Privasi | Lakuna</title>
-	<meta name="description" content="Data pribadi apa yang dikumpulkan Lakuna, untuk apa, dan pilihanmu" />
-	<meta property="og:title" content="Kebijakan Privasi | Lakuna" />
-	<meta property="og:description" content="Data pribadi apa yang dikumpulkan Lakuna, untuk apa, dan pilihanmu" />
-</svelte:head>
+<Seo title="Kebijakan Privasi" description="Data pribadi apa yang dikumpulkan Lakuna Stock, untuk apa, dan pilihanmu." />
 
 <PrivacyPage />

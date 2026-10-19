@@ -1,15 +1,12 @@
 <script lang="ts">
+	import Seo from "$lib/components/Seo.svelte";
 	import LicensePage from "$lib/components/LicensePage.svelte";
 </script>
 
-<svelte:head>
-	<title>Perjanjian Lisensi | Lakuna</title>
-	<meta
-		name="description"
-		content="Perjanjian Lisensi Konten Gambar Lakuna — hak, batasan, dan kepemilikan untuk lisensi Standar dan Subscription"
-	/>
-	<meta property="og:title" content="Perjanjian Lisensi | Lakuna" />
-	<meta property="og:description" content="Aturan pakai setiap bingkai yang kamu unduh dari Lakuna" />
-</svelte:head>
+<Seo
+	title="Perjanjian Lisensi Foto & Video"
+	description="Perjanjian Lisensi Konten Lakuna Stock — hak, batasan, dan kepemilikan untuk lisensi Standar dan Subscription, termasuk penggunaan komersial."
+	keywords={["lisensi foto komersial", "royalty free indonesia", "lisensi gambar", "hak cipta foto"]}
+/>
 
 <LicensePage />

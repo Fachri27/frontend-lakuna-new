@@ -1,15 +1,12 @@
 <script lang="ts">
+	import Seo from "$lib/components/Seo.svelte";
 	import ContributorPage from "$lib/components/ContributorPage.svelte";
 </script>
 
-<svelte:head>
-	<title>Jadi Kontributor | Lakuna</title>
-	<meta
-		name="description"
-		content="Kirim foto dan video yang belum pernah dilihat arsip Nusantara. 70% dari setiap penjualan kembali ke perajangga"
-	/>
-	<meta property="og:title" content="Jadi Kontributor | Lakuna" />
-	<meta property="og:description" content="70% dari setiap penjualan kembali ke perajangga" />
-</svelte:head>
+<Seo
+	title="Jadi Kontributor — Jual Foto & Video Anda"
+	description="Jual foto dan video Nusantara Anda di Lakuna Stock: 70% dari setiap penjualan kembali ke perajangga. Setiap karya dikurasi sebelum tayang."
+	keywords={["jual foto online", "kontributor foto stok", "jual video stok", "penghasilan fotografer"]}
+/>
 
 <ContributorPage />

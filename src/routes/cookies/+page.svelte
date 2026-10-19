@@ -1,12 +1,8 @@
 <script lang="ts">
+	import Seo from "$lib/components/Seo.svelte";
 	import CookiesPage from "$lib/components/CookiesPage.svelte";
 </script>
 
-<svelte:head>
-	<title>Preferensi Cookie | Lakuna</title>
-	<meta name="description" content="Apa yang tersimpan di perangkatmu saat memakai Lakuna, untuk apa, dan cara menghapusnya" />
-	<meta property="og:title" content="Preferensi Cookie | Lakuna" />
-	<meta property="og:description" content="Apa yang tersimpan di perangkatmu saat memakai Lakuna" />
-</svelte:head>
+<Seo title="Preferensi Cookie" description="Apa yang tersimpan di perangkatmu saat memakai Lakuna Stock, untuk apa, dan cara menghapusnya." />
 
 <CookiesPage />
