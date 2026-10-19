@@ -178,27 +178,29 @@ import gsap from "gsap";
 			// desktop (radius 0.34×lebar, foto 120px): kartunya terpotong tepi
 			// layar dan menabrak kalimat di tengah.
 			const imgW = Math.round(Math.min(Math.max(96, vw * (narrow ? 0.26 : 0.14)), 210));
-			// Radius mendatar dibatasi supaya kartu terjauh tetap utuh di layar.
-			const rxMax = vw / 2 - imgW / 2 - 16;
-			const rx = Math.min(vw * (narrow ? 0.3 : 0.34), rxMax);
+			// Radius mendatar dibatasi supaya kartu terjauh tetap utuh di layar. Di layar sempit orbitnya dilebarkan
+			// hampir selebar layar: di sisi kiri-kanan kartu berputar menyamping (rotY ±90°), jadi lebar tampaknya
+			// kecil dan boleh mendekati tepi.
+			const rxMax = narrow ? vw / 2 - imgW * 0.2 : vw / 2 - imgW / 2 - 16;
+			const rx = Math.min(vw * (narrow ? 0.4 : 0.34), rxMax);
 			// Kedalaman ditahan di layar sempit: makin besar rz, makin besar pula
 			// kartu terdepan diperbesar perspektif (900/(900−rz)) sampai menutupi
 			// separuh layar.
 			const rz = Math.round(Math.min(Math.max(210, vw * (narrow ? 0.42 : 0.55)), 500));
 			// Ayunan vertikal mengikuti tinggi layar: di layar pendek orbitnya
-			// ikut memendek, jadi kartu tidak keluar atas-bawah.
-			const tiltY = Math.round(Math.min(Math.max(90, vh * 0.16), 180));
+			// ikut memendek, jadi kartu tidak keluar atas-bawah. Ponsel (layar
+			// tinggi-sempit): lingkarannya dibuat lebih tinggi supaya mengelilingi
+			// kalimat, bukan pipih di bawahnya.
+			const tiltY = narrow
+				? Math.round(Math.min(Math.max(120, vh * 0.26), 240))
+				: Math.round(Math.min(Math.max(90, vh * 0.16), 180));
 			const offX = vw * 0.85;
 			const imgH = Math.round((imgW * 2) / 3);
-			// Di layar sempit orbitnya diturunkan ke bawah kalimat, jadi foto
-			// melintas di bawah teks alih-alih menabraknya di tengah.
-			const yOffset = narrow ? Math.round(imgH * 0.7 + 12) : 0;
-			// Kalimat di layar sempit: kartu terjauh orbit (y = yOffset, z = −rz) naik sampai sekitar garis tengah
-			// layar, jadi kalimat yang duduk di tengah selalu ditimpa foto. Kalimat diletakkan DI ATAS tepi atas
-			// orbit itu (diperkecil perspektif 900/(900+rz)) dan ayunan naik-turunnya dipendekkan.
-			const phraseTravel = narrow ? 56 : 200;
-			const ringTop = (yOffset - imgH / 2) * (900 / (900 + rz));
-			let phraseBase: number | null = narrow ? null : 0;
+			// Orbit (y = yOffset … yOffset + tiltY). Desktop: puncaknya di garis
+			// tengah. Layar sempit: lingkarannya DIPUSATKAN di tengah layar
+			// sehingga mengelilingi kalimat — dulu diturunkan ke bawah kalimat
+			// dan tampak pipih menumpuk di paruh bawah layar.
+			const yOffset = narrow ? -Math.round(tiltY / 2) : 0;
 			const orbitR = (rx + rz) / 2;
 			const bendRad = imgW / orbitR;
 			const cylR = orbitR;
@@ -482,10 +484,9 @@ import gsap from "gsap";
 							phraseEl.style.opacity = "0";
 						} else {
 							const globalP = (progress - phraseStart) / (phraseEnd - phraseStart);
-							// Tinggi kalimat dibaca sekali (orbit dibangun ulang saat lebar layar berubah).
-							phraseBase ??= Math.min(0, ringTop - 28 - phraseEl.offsetHeight / 2 - phraseTravel / 2);
-							const phraseY = phraseBase + phraseTravel * (0.5 - globalP);
-							phraseEl.style.transform = `translateY(${phraseY.toFixed(1)}px)`;
+							const travelY = 200;
+							const yOffset = travelY * (0.5 - globalP);
+							phraseEl.style.transform = `translateY(${yOffset.toFixed(1)}px)`;
 
 							const revealEnd = 0.4;
 							wordEls.forEach((w, wi) => {
@@ -600,10 +601,9 @@ import gsap from "gsap";
 		/* ── Mobile ──────────────────────────────────────────────────────
 		   Tetap ngorbit seperti desktop, hanya lingkarannya yang dikecilkan
 		   (lihat dimensi orbit di effect). Yang disesuaikan di sini hanya
-		   tipografi frasa + jarak scroll: frasa cukup lebar untuk dua baris
-		   ("The earth is an art," / "we're only a witness" — dulu 17ch
-		   memecahnya jadi empat baris yang menutupi orbit). Posisinya (di atas
-		   orbit) & opacity tetap digerakkan handler scroll. */
+		   tipografi frasa + jarak scroll: frasa lebih kecil dan kalimat penuh
+		   (max 17ch), tapi opacity/transform-nya tetap digerakkan handler
+		   scroll — tanpa override !important. */
 		@media (max-width: 899px) {
 			.cg-section {
 				min-height: 375svh;
@@ -615,9 +615,9 @@ import gsap from "gsap";
 				height: 100svh;
 			}
 			.cg-phrase {
-				font-size: clamp(21px, 6.4vw, 34px);
-				max-width: calc(100vw - 1.5rem);
-				padding: 0 0.75rem;
+				font-size: clamp(21px, 5vw, 30px);
+				max-width: 17ch;
+				padding: 0 1.25rem;
 			}
 			.cg-phrase::before {
 				content: "";
