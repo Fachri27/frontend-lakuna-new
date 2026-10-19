@@ -193,6 +193,12 @@ import gsap from "gsap";
 			// Di layar sempit orbitnya diturunkan ke bawah kalimat, jadi foto
 			// melintas di bawah teks alih-alih menabraknya di tengah.
 			const yOffset = narrow ? Math.round(imgH * 0.7 + 12) : 0;
+			// Kalimat di layar sempit: kartu terjauh orbit (y = yOffset, z = −rz) naik sampai sekitar garis tengah
+			// layar, jadi kalimat yang duduk di tengah selalu ditimpa foto. Kalimat diletakkan DI ATAS tepi atas
+			// orbit itu (diperkecil perspektif 900/(900+rz)) dan ayunan naik-turunnya dipendekkan.
+			const phraseTravel = narrow ? 56 : 200;
+			const ringTop = (yOffset - imgH / 2) * (900 / (900 + rz));
+			let phraseBase: number | null = narrow ? null : 0;
 			const orbitR = (rx + rz) / 2;
 			const bendRad = imgW / orbitR;
 			const cylR = orbitR;
@@ -476,9 +482,10 @@ import gsap from "gsap";
 							phraseEl.style.opacity = "0";
 						} else {
 							const globalP = (progress - phraseStart) / (phraseEnd - phraseStart);
-							const travelY = 200;
-							const yOffset = travelY * (0.5 - globalP);
-							phraseEl.style.transform = `translateY(${yOffset.toFixed(1)}px)`;
+							// Tinggi kalimat dibaca sekali (orbit dibangun ulang saat lebar layar berubah).
+							phraseBase ??= Math.min(0, ringTop - 28 - phraseEl.offsetHeight / 2 - phraseTravel / 2);
+							const phraseY = phraseBase + phraseTravel * (0.5 - globalP);
+							phraseEl.style.transform = `translateY(${phraseY.toFixed(1)}px)`;
 
 							const revealEnd = 0.4;
 							wordEls.forEach((w, wi) => {
@@ -593,9 +600,10 @@ import gsap from "gsap";
 		/* ── Mobile ──────────────────────────────────────────────────────
 		   Tetap ngorbit seperti desktop, hanya lingkarannya yang dikecilkan
 		   (lihat dimensi orbit di effect). Yang disesuaikan di sini hanya
-		   tipografi frasa + jarak scroll: frasa lebih kecil dan kalimat penuh
-		   (max 17ch), tapi opacity/transform-nya tetap digerakkan handler
-		   scroll — tanpa override !important. */
+		   tipografi frasa + jarak scroll: frasa cukup lebar untuk dua baris
+		   ("The earth is an art," / "we're only a witness" — dulu 17ch
+		   memecahnya jadi empat baris yang menutupi orbit). Posisinya (di atas
+		   orbit) & opacity tetap digerakkan handler scroll. */
 		@media (max-width: 899px) {
 			.cg-section {
 				min-height: 375svh;
@@ -607,9 +615,9 @@ import gsap from "gsap";
 				height: 100svh;
 			}
 			.cg-phrase {
-				font-size: clamp(21px, 5vw, 30px);
-				max-width: 17ch;
-				padding: 0 1.25rem;
+				font-size: clamp(21px, 6.4vw, 34px);
+				max-width: calc(100vw - 1.5rem);
+				padding: 0 0.75rem;
 			}
 			.cg-phrase::before {
 				content: "";
