@@ -184,6 +184,8 @@ export type AssetSeo = {
 	updatedAt: string;
 	categories: string[];
 	keywords: string[];
+	/** Dibuat dengan AI generatif → dilabeli (digitalSourceType) & tanpa lokasi/kreator orang. */
+	aiGenerated: boolean;
 };
 
 type ApiAsset = {
@@ -203,6 +205,7 @@ type ApiAsset = {
 	updatedAt?: string;
 	photoCategories?: { category?: { name?: string } }[];
 	photoKeywords?: { keyword?: { name?: string } }[];
+	aiGenerated?: boolean;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -252,6 +255,7 @@ export async function loadAssetSeo(fetchFn: typeof fetch, id: string): Promise<A
 			updatedAt: d.updatedAt ?? d.createdAt ?? new Date().toISOString(),
 			categories: uniq((d.photoCategories ?? []).map((c) => c.category?.name)),
 			keywords: uniq((d.photoKeywords ?? []).map((k) => k.keyword?.name)),
+			aiGenerated: d.aiGenerated === true,
 		};
 	} catch {
 		return null;
@@ -262,13 +266,17 @@ export const assetPath = (a: { id: string; kind: AssetKind }) => `/${a.kind === 
 /** Gambar pratinjau tautan per aset — ber-watermark & tak teracak (lihat routes/og/[file]/+server.ts). */
 export const assetImagePath = (id: string) => `/og/${id}.jpg`;
 
+const kindLabel = (a: AssetSeo) => (a.aiGenerated ? (a.kind === "video" ? "Video AI" : "Gambar AI") : a.kind === "video" ? "Video Stok" : "Foto Stok");
+
 export function assetTitle(a: AssetSeo): string {
-	return `${a.title} — ${a.kind === "video" ? "Video" : "Foto"} Stok${a.location ? ` ${a.location}` : ""}`;
+	return `${a.title} — ${kindLabel(a)}${a.location ? ` ${a.location}` : ""}`;
 }
 
 export function assetDescription(a: AssetSeo): string {
 	// Ekor (jenis, lokasi, lisensi) selalu utuh; yang dipendekkan deskripsinya.
-	const tail = `${a.kind === "video" ? "Video" : "Foto"} stok ${a.location ?? "Indonesia"}, berlisensi komersial di ${SITE_NAME}.`;
+	const tail = a.aiGenerated
+		? `${kindLabel(a)} berlisensi komersial di ${SITE_NAME}.`
+		: `${a.kind === "video" ? "Video" : "Foto"} stok ${a.location ?? "Indonesia"}, berlisensi komersial di ${SITE_NAME}.`;
 	const en = a.titleEn && a.titleEn.toLowerCase() !== a.title.toLowerCase() ? ` (${stripEnd(a.titleEn)})` : "";
 	const lead = clip(`${stripEnd(a.description || a.title)}${en}`, Math.max(60, 159 - tail.length));
 	return `${/[.…]$/.test(lead) ? lead : `${lead}.`} ${tail}`;
@@ -283,8 +291,8 @@ export function assetLd(origin: string, a: AssetSeo): Record<string, unknown> {
 	const image = absUrl(origin, assetImagePath(a.id));
 	const isVideo = a.kind === "video";
 	const owner = a.photographer || COMPANY;
-	// Karya tim sendiri (fotografer = nama perusahaan) → Organization, bukan Person.
-	const inHouse = !a.photographer || a.photographer.toLowerCase() === COMPANY.toLowerCase();
+	// Karya tim sendiri (fotografer = nama perusahaan) atau karya AI (dibuat & dikurasi Lakuna) → Organization, bukan Person.
+	const inHouse = a.aiGenerated || !a.photographer || a.photographer.toLowerCase() === COMPANY.toLowerCase();
 	const person = inHouse ? { "@id": orgId(origin) } : { "@type": "Person", name: a.photographer };
 	const year = new Date(a.takenAt || a.createdAt).getFullYear();
 	const description = [a.description, a.descriptionEn].filter(Boolean).join(" — ") || assetDescription(a);
@@ -301,14 +309,19 @@ export function assetLd(origin: string, a: AssetSeo): Record<string, unknown> {
 		datePublished: a.createdAt,
 		dateModified: a.updatedAt,
 		dateCreated: a.takenAt || undefined,
+		// Karya AI bukan rekaman tempat nyata → tanpa lokasi bawaan.
 		contentLocation: a.location
 			? { "@type": "Place", name: a.location, address: { "@type": "PostalAddress", addressCountry: "ID" } }
-			: { "@type": "Country", name: "Indonesia" },
+			: a.aiGenerated
+				? undefined
+				: { "@type": "Country", name: "Indonesia" },
 		locationCreated: a.location ? { "@type": "Place", name: `${a.location}, Indonesia` } : undefined,
 		keywords: uniq([...a.categories, ...a.keywords, a.location]).join(", "),
 		genre: a.categories,
 		creator: person,
-		creditText: inHouse ? SITE_NAME : `${a.photographer} / ${SITE_NAME}`,
+		creditText: a.aiGenerated ? `${SITE_NAME} (AI generated)` : inHouse ? SITE_NAME : `${a.photographer} / ${SITE_NAME}`,
+		// IPTC Digital Source Type: media buatan model AI terlatih — label "dibuat dengan AI" untuk mesin pencari.
+		digitalSourceType: a.aiGenerated ? "https://schema.org/TrainedAlgorithmicMediaDigitalSource" : undefined,
 		copyrightHolder: person,
 		copyrightYear: Number.isFinite(year) ? year : undefined,
 		copyrightNotice: `© ${Number.isFinite(year) ? `${year} ` : ""}${owner}. Lisensi melalui ${SITE_NAME}.`,

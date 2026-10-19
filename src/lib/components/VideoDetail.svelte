@@ -19,7 +19,7 @@
 
 	const copy = {
 		id: {
-			back: "Kembali", by: "oleh", cat: "Kategori", duration: "Durasi", resolution: "Resolusi", taken: "Diambil",
+			back: "Kembali", by: "oleh", cat: "Kategori", duration: "Durasi", resolution: "Resolusi", taken: "Diambil", ai: "Dibuat dengan AI", aiHint: "Karya ini dibuat dengan AI generatif lalu dikurasi tim Lakuna.",
 			format: "Format", tags: "Kata kunci", license: "Lisensi", personal: "Standar", commercial: "Premium", subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
 			personalDesc: "Pakai pribadi & media sosial", commercialDesc: "Kuota unduhan bulanan",
 			addToCart: "Tambah ke keranjang", added: "Ditambahkan", buyNow: "Beli sekarang",
@@ -34,7 +34,7 @@
 			fmtValue: "File master asli"
 		},
 		en: {
-			back: "Back", by: "by", cat: "Category", duration: "Duration", resolution: "Resolution", taken: "Taken",
+			back: "Back", by: "by", cat: "Category", duration: "Duration", resolution: "Resolution", taken: "Taken", ai: "Made with AI", aiHint: "This work was created with generative AI and curated by the Lakuna team.",
 			format: "Format", tags: "Keywords", license: "License", personal: "Standard", commercial: "Premium", subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
 			personalDesc: "Personal & social media use", commercialDesc: "Monthly download quota",
 			addToCart: "Add to cart", added: "Added", buyNow: "Buy now",
@@ -383,6 +383,10 @@
 					<DetailTitle text={video.title[lang]} />
 					<p class="mt-3 kicker text-fg-muted">
 						{t.by} <a href={`/archive/${encodeURIComponent(video.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{video.author}</a>
+						<!-- Karya AI diberi label jelas (juga digitalSourceType di JSON-LD, lihat seo.ts). -->
+						{#if video.aiGenerated}
+							<span title={t.aiHint} class="ml-2 inline-flex items-center rounded-full border border-hair px-2 py-0.5 align-middle text-[10px] tracking-[0.12em] text-fg">{t.ai}</span>
+						{/if}
 					</p>
 					<!-- Tanggal & waktu pengambilan: baris sekunder tepat di bawah perajangga. -->
 					{#if takenText}

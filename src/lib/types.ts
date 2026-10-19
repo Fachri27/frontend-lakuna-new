@@ -1,6 +1,8 @@
 export type ApiPhoto = {
   id: string;
   title: string;
+  /** Dibuat dengan AI generatif (Studio → AI Generate) — label publik "Dibuat dengan AI". */
+  aiGenerated?: boolean;
   /** Versi Inggris (opsional); kosong = situs memakai versi Indonesia. */
   titleEn?: string | null;
   description: string | null;

@@ -22,6 +22,8 @@ export type Photo = {
   id: string;
   title: Localized;
   author: string;
+  /** Dibuat dengan AI generatif — label "Dibuat dengan AI" di halaman detail. */
+  aiGenerated?: boolean;
   location?: string;
   /** Tanggal & waktu pengambilan (ISO) dari API; null = tidak diisi (baris meta disembunyikan). */
   takenAt?: string | null;
@@ -60,6 +62,8 @@ export type Video = {
   id: string;
   title: Localized;
   author: string;
+  /** Dibuat dengan AI generatif — label "Dibuat dengan AI" di halaman detail. */
+  aiGenerated?: boolean;
   cat: Cat;
   seed: string;
   duration: string;
@@ -252,6 +256,7 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     id: api.id,
     title: titleOf(api),
     author: api.photographer || "Unknown",
+    aiGenerated: !!api.aiGenerated,
     location: api.location || undefined,
     takenAt: api.takenAt ?? null,
     assetType: api.type === "VIDEO" ? "VIDEO" : "FOTO",
@@ -317,6 +322,7 @@ export function adaptVideo(api: ApiPhoto): Video {
     id: api.id,
     title: titleOf(api),
     author: api.photographer || "Unknown",
+    aiGenerated: !!api.aiGenerated,
     cat: "cinema",
     seed: api.id,
     duration: "02:00",
