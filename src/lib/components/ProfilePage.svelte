@@ -32,7 +32,7 @@
 			pwOk: "Kata sandi berhasil diubah", pwFail: "Gagal mengganti kata sandi. Coba lagi",
 			nlTitle: "Nawala", nlBody: "Kabar kurasi dan promo dari Lakuna", nlOn: "Berlangganan", nlOff: "Berhenti", nlFail: "Gagal mengubah langganan nawala",
 			delTitle: "Hapus akun", delBody: "Tindakan ini permanen dan tidak bisa dibatalkan. Semua favorit, keranjang, dan riwayatmu ikut terhapus.",
-			delType: "Ketik DELETE untuk yakin", delPw: "Kata sandi akun", delGo: "Hapus permanen", delFail: "Gagal menghapus akun. Coba lagi",
+			delType: "Ketik DELETE untuk yakin", delPw: "Kata sandi akun", delPwWrong: "Kata sandi salah", delGo: "Hapus permanen", delFail: "Gagal menghapus akun. Coba lagi",
 			quota: "Kuota", downloadsEmpty: "Unduhanmu akan muncul di sini setelah pembelian", manage: "Kelola langganan",
 			subEmpty: "Kamu belum berlangganan", subEmptyCta: "Lihat paket", billingMonthly: "Bulanan", billingAnnual: "Tahunan",
 			subStarted: "Mulai", subExpires: "Berakhir", subStatusActive: "Aktif", subStatusExpired: "Kedaluwarsa", subStatusCancelled: "Dibatalkan", subStatusInactive: "Nonaktif",
@@ -99,7 +99,7 @@
 			pwOk: "Password changed", pwFail: "Couldn't change password. Try again",
 			nlTitle: "Newsletter", nlBody: "Curation news and promos from Lakuna", nlOn: "Subscribed", nlOff: "Unsubscribed", nlFail: "Couldn't change newsletter setting",
 			delTitle: "Delete account", delBody: "This is permanent and can't be undone. Your favourites, cart, and history go with it.",
-			delType: "Type DELETE to confirm", delPw: "Account password", delGo: "Delete permanently", delFail: "Couldn't delete account. Try again",
+			delType: "Type DELETE to confirm", delPw: "Account password", delPwWrong: "Incorrect password", delGo: "Delete permanently", delFail: "Couldn't delete account. Try again",
 			quota: "Quota", downloadsEmpty: "Your downloads will appear here after purchase", manage: "Manage membership",
 			subEmpty: "You don't have a subscription yet", subEmptyCta: "See plans", billingMonthly: "Monthly", billingAnnual: "Annual",
 			subStarted: "Started", subExpires: "Expires", subStatusActive: "Active", subStatusExpired: "Expired", subStatusCancelled: "Cancelled", subStatusInactive: "Inactive",
@@ -374,7 +374,12 @@
 			await store.logout();
 			await goto("/", { replaceState: true });
 		} catch (err) {
-			delErr = err instanceof ApiError && err.message ? err.message : t.delFail;
+			delErr =
+				err instanceof ApiError && err.code === "INVALID_PASSWORD"
+					? t.delPwWrong
+					: err instanceof ApiError && err.message
+						? err.message
+						: t.delFail;
 			delBusy = false;
 		}
 	}
@@ -1351,6 +1356,7 @@
 								type="password"
 								bind:value={delPw}
 								autocomplete="current-password"
+								placeholder="••••••••"
 								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
 							/>
 						</label>
