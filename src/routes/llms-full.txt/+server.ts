@@ -1,9 +1,11 @@
 import type { RequestHandler } from "./$types";
 import { siteOrigin } from "$lib/seo";
 import { buildLlms } from "$lib/server/llms";
+import { redirectToCleanPath } from "$lib/server/seoData";
 
 /** /llms-full.txt — ringkasan situs untuk model bahasa (GEO). Lihat $lib/server/llms.ts. */
 export const GET: RequestHandler = async ({ url, fetch }) =>
+	redirectToCleanPath(url) ??
 	new Response(await buildLlms(siteOrigin(url), fetch, true), {
 		headers: {
 			"Content-Type": "text/markdown; charset=utf-8",

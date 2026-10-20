@@ -5,7 +5,8 @@
 	import { breadcrumbLd, collectionLd, siteOrigin } from "$lib/seo";
 
 	// Arsip satu fotografer — halaman sendiri, bukan query.
-	const name = $derived(decodeURIComponent(page.params.name ?? ""));
+	// params sudah di-decode SvelteKit — decode kedua membuat "%25" → URIError (500 saat SSR).
+	const name = $derived(page.params.name ?? "");
 	const origin = $derived(siteOrigin(page.url));
 </script>
 

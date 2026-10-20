@@ -13,6 +13,16 @@ export type CatalogRow = {
 export type CategoryRow = { name: string; nameEn?: string | null; description?: string | null; descriptionEn?: string | null; updatedAt?: string };
 export type PlanRow = { name: string; quota: number; priceMonthly: number; priceAnnual: number; description?: string | null; isActive?: boolean };
 
+/**
+ * Endpoint yang di-cache CDN (sitemap, llms, /og) tak membaca query string — tapi CDN menjadikannya bagian kunci
+ * cache, jadi `?n=1..N` selalu sampai ke fungsi dan ke API (kuota rate-limit API per IP dibagi semua pengunjung
+ * karena semua datang dari IP Vercel). Arahkan ke alamat bersih yang sudah ter-cache.
+ */
+export function redirectToCleanPath(url: URL): Response | null {
+	if (!url.search) return null;
+	return new Response(null, { status: 301, headers: { Location: url.pathname, "Cache-Control": "public, max-age=86400" } });
+}
+
 export async function getJson<T>(fetchFn: typeof fetch, path: string, ms: number): Promise<T | null> {
 	try {
 		const r = await fetchFn(`${apiBase()}${path}`, { signal: AbortSignal.timeout(ms) });

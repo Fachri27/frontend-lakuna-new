@@ -6,7 +6,8 @@
 
 	// Halaman kategori khusus — terpisah dari /photos dan /videos.
 	// Dibuka dari menu Categories di navbar; judul mengikuti nama kategori.
-	const name = $derived(decodeURIComponent(page.params.name ?? ""));
+	// params sudah di-decode SvelteKit — decode kedua membuat "%25" → URIError (500 saat SSR).
+	const name = $derived(page.params.name ?? "");
 	const origin = $derived(siteOrigin(page.url));
 </script>
 

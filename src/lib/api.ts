@@ -89,8 +89,9 @@ export async function api<T>(
 ): Promise<T> {
 	const { noAuth, ...init } = options;
 	// Segmen "." / ".." (mentah atau %2e) dari parameter URL (mis. /photos/..%2Fdownloads%2Fx) bisa
-	// membelokkan request bertoken ke endpoint lain — tolak sebelum dikirim.
-	if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(path.split(/[?#]/)[0])) {
+	// membelokkan request bertoken ke endpoint lain — tolak sebelum dikirim. `\` ikut: parser URL browser
+	// memperlakukannya sama dengan `/` (`/photos/..\downloads\x` → `/downloads/x`).
+	if (/(^|[\\/])(\.|%2e){1,2}([\\/]|$)/i.test(path.split(/[?#]/)[0])) {
 		throw new ApiError(400, "BAD_PATH", "Path tidak valid");
 	}
 	const headers = new Headers(init.headers);

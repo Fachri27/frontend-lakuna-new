@@ -1,6 +1,6 @@
 import type { RequestHandler } from "./$types";
 import { assetImagePath, siteOrigin } from "$lib/seo";
-import { loadCatalog, loadCategories } from "$lib/server/seoData";
+import { loadCatalog, loadCategories, redirectToCleanPath } from "$lib/server/seoData";
 
 /**
  * sitemap.xml dinamis: halaman publik + kategori + SEMUA foto/video yang tampil (dengan gambar pratinjaunya untuk
@@ -45,6 +45,8 @@ function urlEntry(loc: string, lastmod?: string, image?: string): string {
 }
 
 export const GET: RequestHandler = async ({ url, fetch }) => {
+	const clean = redirectToCleanPath(url);
+	if (clean) return clean;
 	const origin = siteOrigin(url);
 	const [assets, cats] = await Promise.all([loadCatalog(fetch), loadCategories(fetch)]);
 

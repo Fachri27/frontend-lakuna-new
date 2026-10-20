@@ -32,7 +32,7 @@
 			pwOk: "Kata sandi berhasil diubah", pwFail: "Gagal mengganti kata sandi. Coba lagi",
 			nlTitle: "Nawala", nlBody: "Kabar kurasi dan promo dari Lakuna", nlOn: "Berlangganan", nlOff: "Berhenti", nlFail: "Gagal mengubah langganan nawala",
 			delTitle: "Hapus akun", delBody: "Tindakan ini permanen dan tidak bisa dibatalkan. Semua favorit, keranjang, dan riwayatmu ikut terhapus.",
-			delType: "Ketik DELETE untuk yakin", delGo: "Hapus permanen", delFail: "Gagal menghapus akun. Coba lagi",
+			delType: "Ketik DELETE untuk yakin", delPw: "Kata sandi akun", delGo: "Hapus permanen", delFail: "Gagal menghapus akun. Coba lagi",
 			quota: "Kuota", downloadsEmpty: "Unduhanmu akan muncul di sini setelah pembelian", manage: "Kelola langganan",
 			subEmpty: "Kamu belum berlangganan", subEmptyCta: "Lihat paket", billingMonthly: "Bulanan", billingAnnual: "Tahunan",
 			subStarted: "Mulai", subExpires: "Berakhir", subStatusActive: "Aktif", subStatusExpired: "Kedaluwarsa", subStatusCancelled: "Dibatalkan", subStatusInactive: "Nonaktif",
@@ -99,7 +99,7 @@
 			pwOk: "Password changed", pwFail: "Couldn't change password. Try again",
 			nlTitle: "Newsletter", nlBody: "Curation news and promos from Lakuna", nlOn: "Subscribed", nlOff: "Unsubscribed", nlFail: "Couldn't change newsletter setting",
 			delTitle: "Delete account", delBody: "This is permanent and can't be undone. Your favourites, cart, and history go with it.",
-			delType: "Type DELETE to confirm", delGo: "Delete permanently", delFail: "Couldn't delete account. Try again",
+			delType: "Type DELETE to confirm", delPw: "Account password", delGo: "Delete permanently", delFail: "Couldn't delete account. Try again",
 			quota: "Quota", downloadsEmpty: "Your downloads will appear here after purchase", manage: "Manage membership",
 			subEmpty: "You don't have a subscription yet", subEmptyCta: "See plans", billingMonthly: "Monthly", billingAnnual: "Annual",
 			subStarted: "Started", subExpires: "Expires", subStatusActive: "Active", subStatusExpired: "Expired", subStatusCancelled: "Cancelled", subStatusInactive: "Inactive",
@@ -277,9 +277,11 @@
 	const canPayout = $derived(user?.role === "ADMIN" || user?.role === "CONTRIBUTOR");
 
 	let delInput = $state("");
+	// Server meminta password (token curian saja tak cukup untuk menghapus akun permanen).
+	let delPw = $state("");
 	let delBusy = $state(false);
 	let delErr = $state("");
-	const delArmed = $derived(delInput.trim() === "DELETE");
+	const delArmed = $derived(delInput.trim() === "DELETE" && delPw.length > 0);
 
 	function fillProfileFromMe(me: { username?: string; realName?: string | null; newsletter?: boolean }) {
 		if (!profLoaded) {
@@ -366,8 +368,9 @@
 		delBusy = true;
 		delErr = "";
 		try {
-			await apiDelete<ApiResponse<unknown>>("/api/users/me");
+			await api<ApiResponse<unknown>>("/api/users/me", { method: "DELETE", body: JSON.stringify({ password: delPw }) });
 			delInput = "";
+			delPw = "";
 			await store.logout();
 			await goto("/", { replaceState: true });
 		} catch (err) {
@@ -1339,6 +1342,15 @@
 								bind:value={delInput}
 								placeholder="DELETE"
 								autocomplete="off"
+								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
+							/>
+						</label>
+						<label class="mt-4 block">
+							<span class="kicker text-fg-muted">{t.delPw}</span>
+							<input
+								type="password"
+								bind:value={delPw}
+								autocomplete="current-password"
 								class="up-input mt-2 w-full rounded-[10px] border border-hair px-4 py-3"
 							/>
 						</label>
