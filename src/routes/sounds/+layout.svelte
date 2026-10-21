@@ -13,6 +13,6 @@
 {@render children()}
 
 <!-- Ruang di bawah konten supaya baris terakhir tak tertutup bilah pemutar. -->
-{#if player.track}<div class="h-20" aria-hidden="true"></div>{/if}
+{#if player.track}<div class="h-32" aria-hidden="true"></div>{/if}
 
 <SoundPlayerBar />
