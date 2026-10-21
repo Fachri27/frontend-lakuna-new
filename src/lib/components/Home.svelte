@@ -16,6 +16,7 @@
 	import Parallax from "./Parallax.svelte";
 	import ParallaxImage from "./ParallaxImage.svelte";
 	import GsapGallery from "./GsapGallery.svelte";
+	import HomeSounds from "./HomeSounds.svelte";
 	import RevealText from "./RevealText.svelte";
 	import ArchiveStrip from "./ArchiveStrip.svelte";
 	import Magnetic from "./Magnetic.svelte";
@@ -2212,6 +2213,8 @@
 	<!-- bg-bg + relative: section ini menumpang ekor pin galeri (margin
 		negatif di GsapGallery), jadi harus menutupi sisa orbit di belakangnya. -->
 	<div class="relative bg-bg">
+	<!-- Cuplikan Sounds: piringan hitam yang memutar pratinjau audio terbaru (lihat HomeSounds). -->
+	<HomeSounds />
 	<section class="relative mx-auto max-w-[1500px] px-6 pb-16 pt-[clamp(2rem,5vh,4rem)] sm:pb-28 lg:px-10 lg:pb-40">
 		<!-- Teaser daftar harga sebagai papan tarif lab cetak: dua baris pada satu
 			lembar, harga disejajarkan di satu kolom supaya bisa dibandingkan
