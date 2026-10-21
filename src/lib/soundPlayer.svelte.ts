@@ -2,7 +2,7 @@ import { fetchPhotoOriginal, type Sound } from "./data";
 
 /**
  * Pemutar halaman Sounds — SATU elemen <audio> untuk seluruh situs: memutar lagu lain menghentikan yang sedang
- * jalan, dan bilah pemutar bawah (SoundPlayerBar) tetap hidup saat pindah antara /sounds dan /sounds/<id>.
+ * jalan, dan kartu pemutar (SoundPlayerBar) tetap hidup saat pindah antara /sounds dan /sounds/<id>.
  *
  * Yang diputar selalu PRATINJAU (MP3 128 kbps bertanda denting dari API); berkas asli hanya lewat unduhan
  * berlisensi. URL pratinjau presigned berumur 1 jam — bila gagal dimuat (kedaluwarsa), URL baru diminta sekali
@@ -19,6 +19,8 @@ class SoundPlayer {
 	duration = $state(0);
 	volume = $state(0.9);
 	error = $state(false);
+	/** Pratinjau selesai diputar sampai habis — pemutar menawarkan lisensi (pola "Enjoyed the preview?" acuan). */
+	ended = $state(false);
 
 	#audio: HTMLAudioElement | null = null;
 	#retried = new Set<string>();
@@ -38,7 +40,10 @@ class SoundPlayer {
 		const a = new Audio();
 		a.preload = "metadata";
 		a.volume = this.volume;
-		a.addEventListener("play", () => (this.playing = true));
+		a.addEventListener("play", () => {
+			this.playing = true;
+			this.ended = false;
+		});
 		a.addEventListener("pause", () => (this.playing = false));
 		a.addEventListener("waiting", () => (this.loading = true));
 		a.addEventListener("seeking", () => (this.loading = true));
@@ -49,9 +54,10 @@ class SoundPlayer {
 		a.addEventListener("loadedmetadata", () => {
 			if (Number.isFinite(a.duration) && a.duration > 0) this.duration = a.duration;
 		});
+		// Selesai → berhenti & tawarkan lisensi (tidak lanjut otomatis, sama dengan acuan coveomusic.com).
 		a.addEventListener("ended", () => {
 			this.playing = false;
-			this.next(true);
+			this.ended = true;
 		});
 		a.addEventListener("error", () => void this.#recover());
 		this.#audio = a;
@@ -94,6 +100,7 @@ class SoundPlayer {
 		}
 		this.track = track;
 		this.error = false;
+		this.ended = false;
 		this.time = 0;
 		this.duration = track.duration || 0;
 		this.loading = true;
@@ -170,6 +177,7 @@ class SoundPlayer {
 		this.track = null;
 		this.playing = false;
 		this.loading = false;
+		this.ended = false;
 		this.time = 0;
 	}
 }

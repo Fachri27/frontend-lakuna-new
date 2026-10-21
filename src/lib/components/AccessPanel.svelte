@@ -333,8 +333,10 @@
 	aria-modal="true"
 	aria-label={t.panelTitle}
 	aria-hidden={!access.panelOpen}
-	class={`fixed inset-y-0 right-0 z-[95] flex w-full max-w-md flex-col border-l border-hair bg-bg shadow-[0_0_80px_-20px_rgba(11,31,42,0.5)] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-		access.panelOpen ? "translate-x-0" : "translate-x-full"
+	class={`fixed inset-y-0 right-0 z-[95] flex w-full max-w-md flex-col border-l border-hair bg-bg transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+		/* Bayangan hanya saat terbuka: saat tertutup (di luar layar kanan) bayangannya merembes jadi pita abu di
+		   tepi kanan halaman — terlihat jelas di halaman terang (/sounds). */
+		access.panelOpen ? "translate-x-0 shadow-[0_0_80px_-20px_rgba(11,31,42,0.5)]" : "translate-x-full"
 	}`}
 >
 	<!-- header -->

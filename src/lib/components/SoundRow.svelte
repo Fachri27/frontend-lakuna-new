@@ -1,194 +1,259 @@
 <script lang="ts">
 	/**
-	 * Satu baris katalog Sounds — pola daftar rilis coveomusic.com: nomor urut, sampul bersudut bulat, judul
-	 * huruf kapital, lalu di kanan tanggal · jenis · durasi panjang dan tombol "Pratinjau" berbentuk pil.
-	 * Ditambah kebutuhan toko Lakuna: kreator, harga, keranjang, dan simpan. Pemutarannya lewat `player`
-	 * bersama, jadi hanya satu audio yang berbunyi.
+	 * Satu baris katalog Sounds — tiruan dekat baris rilis coveomusic.com: garis titik-titik, nomor monospace,
+	 * sampul 72 px bersudut 12 px, judul kapital tebal, detail redup (tanggal · jenis · durasi panjang) di kanan,
+	 * dan pil "Pratinjau" kaca buram. Arahkan kursor → baris sedikit membesar dengan latar abu lembut.
+	 * Seluruh baris menuju halaman detail (lisensi & pembelian ada di sana); pil memutar pratinjau.
 	 */
 	import { i18n } from "$lib/i18n.svelte";
-	import { store } from "$lib/store.svelte";
-	import { announcer } from "$lib/stores/announce.svelte";
 	import { player } from "$lib/soundPlayer.svelte";
-	import { fmtIDR, type Sound } from "$lib/data";
+	import type { Sound } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
 
 	let { sound, queue, index }: { sound: Sound; queue: Sound[]; index?: number } = $props();
 
 	const copy = {
-		id: { preview: "Pratinjau", pause: "Jeda", addToCart: "Tambah ke keranjang", added: "Ditambahkan ke keranjang", save: "Simpan", unsave: "Hapus dari simpanan", music: "Musik", sfx: "Efek suara", min: "menit", sec: "detik", by: "oleh" },
-		en: { preview: "Preview", pause: "Pause", addToCart: "Add to cart", added: "Added to cart", save: "Save", unsave: "Remove from saved", music: "Music", sfx: "Sound effect", min: "minutes", sec: "seconds", by: "by" },
+		id: { preview: "Pratinjau", pause: "Jeda", music: "Musik", sfx: "Efek suara", min: "menit", sec: "detik" },
+		en: { preview: "Preview", pause: "Pause", music: "Music", sfx: "Sound effect", min: "minutes", sec: "seconds" },
 	};
 	const lang = $derived(i18n.lang);
 	const t = $derived(copy[lang]);
 
-	const current = $derived(player.isCurrent(sound.id));
-	const playingNow = $derived(current && player.playing);
-	const fav = $derived(store.isFavorite(sound.id));
+	const playingNow = $derived(player.isCurrent(sound.id) && player.playing);
 	const title = $derived(sound.title[lang]);
-	const href = $derived(`/sounds/${sound.id}`);
 	const no = $derived(index !== undefined ? String(index + 1).padStart(3, "0") : "");
 	const date = $derived(
 		sound.createdAt
 			? new Intl.DateTimeFormat(lang === "en" ? "en-US" : "id-ID", { month: "long", year: "numeric" }).format(new Date(sound.createdAt))
 			: ""
 	);
-	const kindText = $derived(`${sound.kind === "SFX" ? t.sfx : t.music}${sound.bpm ? `, ${sound.bpm} BPM` : ""}`);
+	const kindText = $derived(`${sound.kind === "SFX" ? t.sfx : t.music}${sound.bpm ? `, ${sound.bpm} bpm` : ""}`);
 	// "3 menit 19 detik" — durasi panjang seperti acuan.
 	const longDur = $derived.by(() => {
 		const s = Math.max(0, Math.round(sound.duration));
 		const m = Math.floor(s / 60);
 		return m ? `${m} ${t.min} ${s % 60} ${t.sec}` : `${s} ${t.sec}`;
 	});
-
-	let added = $state(false);
-	function addToCart() {
-		void store.addToCart({ id: sound.id, kind: "sound", title, price: sound.price, meta: sound.id, thumbUrl: sound.cover });
-		added = true;
-		announcer.announce(`${title} — ${t.added}`);
-		setTimeout(() => (added = false), 1600);
-	}
 </script>
 
-<div
-	class={`snd-row group relative grid items-center gap-x-4 rounded-[14px] px-3 py-3 transition-colors duration-300 sm:gap-x-6 ${
-		current ? "bg-fg/[0.07]" : "hover:bg-fg/[0.04]"
-	}`}
->
-	<span class="hidden w-8 font-mono text-[0.72rem] tabular-nums text-fg-muted sm:block">{no}</span>
-
-	<!-- Sampul = tombol putar juga. -->
-	<button
-		type="button"
-		onclick={() => player.play(sound, queue)}
-		aria-label={`${playingNow ? t.pause : t.preview} — ${title}`}
-		class="relative h-14 w-14 shrink-0 overflow-hidden rounded-[22%] bg-ocean focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight sm:h-[4.5rem] sm:w-[4.5rem]"
-	>
-		{#if sound.cover}
-			<ApiImage src={sound.cover} alt="" fill class="object-cover object-top transition-transform duration-500 group-hover:scale-[1.05]" />
-		{/if}
-		{#if current}
-			<span class="absolute inset-0 grid place-items-center bg-ocean-deep/45 text-ivory">
+<li class="cv-release">
+	<div class="cv-release__container">
+		<a href={`/sounds/${sound.id}`} class="cv-release__link">
+			<div class="cv-release__info">
+				{#if no}<p class="cv-mono cv-muted cv-index">{no}</p>{/if}
+				<span class="cv-art">
+					{#if sound.cover}<ApiImage src={sound.cover} alt="" fill class="object-cover object-top" />{/if}
+				</span>
+				<div class="cv-release__title">
+					<p class="cv-title">{title}</p>
+					<div class="cv-details">
+						{#if date}<p>{date}</p>{/if}
+						<p>{kindText}</p>
+						<p>{longDur}</p>
+					</div>
+				</div>
+			</div>
+		</a>
+		<div class="cv-ctas">
+			<button
+				type="button"
+				class="cv-btn"
+				aria-pressed={playingNow}
+				aria-label={`${playingNow ? t.pause : t.preview} — ${title}`}
+				onclick={() => player.play(sound, queue)}
+			>
 				{#if playingNow}
-					<span class="snd-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+					<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M10 8.5v7M14 8.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
 				{:else}
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11.03-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" /></svg>
+					<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></svg>
 				{/if}
-			</span>
-		{/if}
-	</button>
-
-	<!-- Judul (kapital) + kreator; layar sempit: jenis & durasi di bawahnya. -->
-	<div class="min-w-0">
-		<a {href} class="block truncate text-[0.9rem] font-semibold uppercase tracking-[0.02em] text-fg transition-colors hover:text-safelight">{title}</a>
-		<p class="mt-1 truncate text-xs text-fg-muted">
-			{t.by} <a href={`/archive/${encodeURIComponent(sound.author)}`} class="transition-colors hover:text-safelight">{sound.author}</a>
-		</p>
-		<p class="mt-1 truncate text-[0.66rem] font-medium uppercase tracking-[0.04em] text-fg/70 lg:hidden">{kindText} · {longDur} · {fmtIDR(sound.price)}</p>
+				{playingNow ? t.pause : t.preview}
+			</button>
+		</div>
 	</div>
-
-	<!-- Meta kanan (layar lebar): tanggal · jenis · durasi · harga. -->
-	<p class="hidden items-center justify-end gap-5 whitespace-nowrap text-[0.7rem] font-medium uppercase tracking-[0.04em] text-fg/80 lg:flex">
-		{#if date}<span class="hidden xl:inline">{date}</span>{/if}
-		<span>{kindText}</span>
-		<span>{longDur}</span>
-		<span class="font-mono tabular-nums text-fg-muted">{fmtIDR(sound.price)}</span>
-	</p>
-
-	<!-- Aksi: pil Pratinjau + keranjang + simpan. -->
-	<div class="flex items-center justify-end gap-1 sm:gap-2">
-		<button
-			type="button"
-			onclick={() => player.play(sound, queue)}
-			aria-label={`${playingNow ? t.pause : t.preview} — ${title}`}
-			aria-pressed={playingNow}
-			class={`press inline-flex h-10 items-center gap-2.5 rounded-full px-3 font-mono text-[0.7rem] uppercase tracking-[0.06em] transition-colors sm:px-4 ${
-				playingNow ? "bg-safelight text-ivory" : "bg-fg/[0.08] text-fg hover:bg-fg/[0.14]"
-			}`}
-		>
-			{#if playingNow}
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9.2" /><path d="M10 9v6M14 9v6" stroke-linecap="round" /></svg>
-			{:else}
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9.2" /><path d="M10.2 8.6v6.8l5.3-3.4z" fill="currentColor" stroke-linejoin="round" /></svg>
-			{/if}
-			<span class="hidden sm:inline">{playingNow ? t.pause : t.preview}</span>
-		</button>
-		<button type="button" onclick={addToCart} aria-label={`${t.addToCart} — ${title}`} title={t.addToCart} class="snd-act grid place-items-center">
-			{#if added}
-				<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-			{:else}
-				<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2.5 3h2.2l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.3L21 7H6" /></svg>
-			{/if}
-		</button>
-		<button type="button" onclick={() => store.toggleFavorite(sound.id)} aria-label={`${fav ? t.unsave : t.save} — ${title}`} aria-pressed={fav} title={fav ? t.unsave : t.save} class="snd-act grid place-items-center max-sm:hidden">
-			<svg width="17" height="17" viewBox="0 0 24 24" fill={fav ? "currentColor" : "none"} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
-		</button>
-	</div>
-</div>
+</li>
 
 <style>
-	.snd-row {
-		grid-template-columns: auto minmax(0, 1fr) auto;
+	.cv-release {
+		position: relative;
+		z-index: 2;
+		list-style: none;
+		border-bottom: 1px dotted rgba(0, 0, 0, 0.07);
+		transform: scale(1);
+		transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+		color: #1d1812;
+		font-family: "Inter", sans-serif;
+		font-size: 12px;
 	}
-	@media (min-width: 640px) {
-		.snd-row {
-			grid-template-columns: auto auto minmax(0, 1fr) auto;
-		}
+	.cv-release:first-of-type {
+		border-top: 1px dotted rgba(0, 0, 0, 0.07);
 	}
-	@media (min-width: 1024px) {
-		.snd-row {
-			grid-template-columns: auto auto minmax(0, 1fr) auto auto;
-		}
-	}
-	/* Tanpa `display`: gaya komponen (tak ber-layer) mengalahkan utilitas Tailwind seperti `max-sm:hidden`. */
-	.snd-act {
-		height: 2.25rem;
-		width: 2.25rem;
-		border-radius: 9999px;
-		color: var(--fg-muted);
+	.cv-release::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		border-radius: 8px;
+		background: rgba(0, 0, 0, 0.05);
+		opacity: 0;
+		transform: scale(0.98);
 		transition:
-			background-color 0.2s,
-			color 0.2s;
+			transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 0.2s ease;
+		pointer-events: none;
 	}
-	.snd-act:hover {
-		color: var(--safelight);
-		background: color-mix(in srgb, var(--safelight) 12%, transparent);
+	.cv-release:hover {
+		transform: scale(1.01);
+		border-color: transparent;
 	}
-	.snd-act:focus-visible {
-		outline: 2px solid var(--safelight);
-		outline-offset: 1px;
+	.cv-release:hover::after {
+		transform: scale(1);
+		opacity: 1;
 	}
-	/* Batang equalizer kecil di sampul saat diputar. */
-	.snd-eq {
-		display: inline-flex;
-		align-items: flex-end;
-		gap: 2px;
-		height: 14px;
+	.cv-release__container {
+		display: flex;
+		align-items: center;
+		gap: 2em;
+		padding-right: 1em;
 	}
-	.snd-eq i {
-		width: 3px;
-		background: currentColor;
-		border-radius: 1px;
-		animation: snd-eq 0.9s ease-in-out infinite;
+	.cv-release__link {
+		position: relative;
+		z-index: 2;
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		padding: 1em 0 1em 1em;
+		color: inherit;
+		text-decoration: none;
 	}
-	.snd-eq i:nth-child(2) {
-		animation-delay: -0.3s;
+	.cv-release__info {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		gap: 2em;
+		font-weight: 600;
 	}
-	.snd-eq i:nth-child(3) {
-		animation-delay: -0.6s;
+	.cv-index {
+		margin: 0;
+		font-weight: 400;
+		font-size: 0.85em;
 	}
-	@keyframes snd-eq {
-		0%,
-		100% {
-			height: 30%;
+	.cv-art {
+		position: relative;
+		flex-shrink: 0;
+		height: 72px;
+		width: 72px;
+		overflow: hidden;
+		border-radius: 12px;
+		background: #dddddd;
+	}
+	.cv-release__title {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
+		justify-content: space-between;
+		gap: 2em;
+	}
+	.cv-title {
+		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-transform: uppercase;
+	}
+	.cv-details {
+		display: flex;
+		flex-shrink: 0;
+		gap: 2em;
+		color: #524d46;
+		font-size: 0.85em;
+		font-weight: 500;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+	.cv-details p {
+		margin: 0;
+	}
+	.cv-ctas {
+		position: relative;
+		z-index: 2;
+	}
+	.cv-btn {
+		display: flex;
+		align-items: center;
+		gap: 2em;
+		padding: 1em 1.8em;
+		border: 0;
+		border-radius: 40px;
+		background: rgba(0, 0, 0, 0.1);
+		color: #1d1812;
+		font-family: ui-monospace, Menlo, Monaco, monospace;
+		font-size: 0.85em;
+		text-transform: uppercase;
+		cursor: pointer;
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+		transition: background 0.4s ease;
+		white-space: nowrap;
+	}
+	.cv-btn:hover {
+		background: rgba(0, 0, 0, 0.2);
+	}
+	.cv-btn[aria-pressed="true"] {
+		background: #1d1812;
+		color: #eeeeee;
+	}
+	.cv-btn svg {
+		height: 18px;
+		width: 18px;
+	}
+	.cv-btn:focus-visible,
+	.cv-release__link:focus-visible {
+		outline: 2px solid #1d1812;
+		outline-offset: 2px;
+	}
+	.cv-mono {
+		font-family: ui-monospace, Menlo, Monaco, monospace;
+	}
+	.cv-muted {
+		color: #524d46;
+	}
+
+	@media (max-width: 768px) {
+		.cv-release__container {
+			gap: 1em;
 		}
-		50% {
-			height: 100%;
+		.cv-index {
+			display: none;
 		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.snd-eq i {
-			animation: none;
-			height: 70%;
+		.cv-release__info {
+			gap: 1em;
+		}
+		.cv-art {
+			height: 48px;
+			width: 48px;
+			border-radius: 8px;
+		}
+		.cv-release__title {
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: flex-start;
+			gap: 0.5em;
+		}
+		.cv-title {
+			max-width: 100%;
+		}
+		.cv-details p:nth-of-type(n + 2) {
+			display: none;
+		}
+		.cv-btn svg {
+			display: none;
+		}
+		.cv-btn {
+			padding: 1em 1.4em;
 		}
 	}
 </style>

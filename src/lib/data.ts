@@ -357,7 +357,7 @@ export type Sound = {
   /** Detik (dari berkas); 0 = belum diketahui. */
   duration: number;
   bpm: number | null;
-  /** Puncak gelombang 0–100 (±160 titik) — digambar <Waveform>. */
+  /** Puncak gelombang 0–100 (±160 titik) dari API; belum ditampilkan di halaman bergaya Coveo. */
   waveform: number[];
   price: number;
   desc: Localized;
