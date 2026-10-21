@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Section Sounds di landing (di bawah galeri orbit): judul berpola section landing lain (kicker + judul besar +
-	 * ringkasan + tautan) lalu karusel cakram (SoundDiscs).
+	 * tautan) lalu karusel cakram (SoundDiscs, tanpa tombol filter).
 	 *
 	 * Mulai md: judul + karusel tepat SATU LAYAR (100svh): karusel mengisi sisa tinggi di bawah judul dan cakramnya
 	 * diukur dari tinggi layar, jadi tombol putar & kontrol di bawah tak terpotong. Ponsel: judul lalu karusel
@@ -16,14 +16,12 @@
 		id: {
 			kicker: "Sounds",
 			heading: "Dengarkan arsipnya",
-			sub: "Musik dan efek suara bebas royalti dari hutan, laut, pasar, dan panggung budaya Nusantara. Putar pratinjaunya di sini, lalu lisensikan berkas aslinya di halaman Sounds.",
 			seeAll: "Lihat semua audio",
 			empty: "Belum ada audio di arsip. Koleksi musik dan efek suara segera hadir.",
 		},
 		en: {
 			kicker: "Sounds",
 			heading: "Listen to the archive",
-			sub: "Royalty-free music and sound effects from the forests, seas, markets and stages of the archipelago. Preview them here, then license the original files on the Sounds page.",
 			seeAll: "See all audio",
 			empty: "No audio in the archive yet. Music and sound effects are coming soon.",
 		},
@@ -57,19 +55,19 @@
 					/>
 				</div>
 			</div>
-			<div class="lg:col-span-5">
-				<p data-reveal class="max-w-[46ch] text-[0.98rem] leading-relaxed text-fg-muted">{t.sub}</p>
+			<!-- Tanpa paragraf ringkasan (permintaan pemilik): cukup tautan ke katalog, sejajar dasar judul. -->
+			<div class="lg:col-span-5 lg:text-right">
 				{#if loaded && !count}
 					<!-- Katalog masih kosong: pesan di sini (bukan di atas cakram hias), tanpa tautan ke halaman kosong. -->
-					<p data-reveal class="mt-4 text-[0.98rem] text-fg">{t.empty}</p>
+					<p data-reveal class="text-[0.98rem] text-fg">{t.empty}</p>
 				{:else}
-					<a data-reveal href="/sounds" class="hs-link mt-4 inline-block">{t.seeAll}</a>
+					<a data-reveal href="/sounds" class="hs-link inline-block">{t.seeAll}</a>
 				{/if}
 			</div>
 		</Reveal>
 	</div>
 	<div class="hs-stage">
-		<SoundDiscs landing bind:loaded bind:count />
+		<SoundDiscs landing filters={false} bind:loaded bind:count />
 	</div>
 </section>
 
