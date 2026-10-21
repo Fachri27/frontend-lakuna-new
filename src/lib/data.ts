@@ -1,6 +1,7 @@
 import type { ApiPhoto, ApiPlan, ApiCategory, ApiEvent, ApiResponse, HomepageSection } from "./types";
 export type { HomepageSection, ApiEvent };
 import { apiGet, cleanApiBase } from "./api";
+import { zoneOf, type EcoBandId } from "./ecoBands";
 import { DUMMY_API_PHOTOS, DUMMY_CATEGORIES } from "./dummy";
 
 export type Cat = "nature" | "urban" | "people" | "travel" | "business" | "cinema";
@@ -343,6 +344,118 @@ export function adaptVideo(api: ApiPhoto): Video {
     cardClipUrl: urls.cardClipUrl ?? null,
     cardClipSmUrl: urls.cardClipSmUrl ?? null,
   };
+}
+
+/* ───────────────────────── Ekowisata (destinasi) ───────────────────────── */
+
+/** Bentuk mentah API /api/ecotourism (daftar) dan /api/ecotourism/:slug (lengkap). */
+export type ApiEcoDestination = {
+  id: string;
+  slug: string;
+  name: string;
+  nameEn?: string | null;
+  zone: string;
+  region: string;
+  area?: string | null;
+  elevation?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  summary: string;
+  summaryEn?: string | null;
+  bestTime?: string | null;
+  bestTimeEn?: string | null;
+  cover?: ApiPhoto | null;
+  photoCount?: number;
+  updatedAt?: string;
+  story?: string;
+  storyEn?: string | null;
+  access?: string | null;
+  accessEn?: string | null;
+  activities?: string[];
+  activitiesEn?: string[];
+  rules?: string[];
+  rulesEn?: string[];
+  manager?: string | null;
+  website?: string | null;
+  photos?: ApiPhoto[];
+  related?: ApiEcoDestination[];
+};
+
+export type EcoDestination = {
+  id: string;
+  slug: string;
+  name: Localized;
+  zone: EcoBandId;
+  region: string;
+  area: string | null;
+  /** m dpl; negatif = di bawah laut; null = tak diisi. */
+  elevation: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  summary: Localized;
+  bestTime: Localized | null;
+  cover: Photo | null;
+  photoCount: number;
+  updatedAt?: string;
+};
+
+export type EcoDestinationFull = EcoDestination & {
+  story: Localized;
+  access: Localized | null;
+  activities: { id: string[]; en: string[] };
+  rules: { id: string[]; en: string[] };
+  manager: string | null;
+  website: string | null;
+  photos: Photo[];
+  related: EcoDestination[];
+};
+
+const loc2 = (id: string, en?: string | null): Localized => ({ id, en: en?.trim() || id });
+const locOpt = (id?: string | null, en?: string | null): Localized | null => (id?.trim() ? loc2(id.trim(), en) : null);
+/** Daftar EN kosong → daftar ID (sama dengan teks lain). */
+const list2 = (id?: string[], en?: string[]) => ({ id: id ?? [], en: en?.length ? en : (id ?? []) });
+
+export function adaptEcoDestination(a: ApiEcoDestination): EcoDestination {
+  return {
+    id: a.id,
+    slug: a.slug,
+    name: loc2(a.name, a.nameEn),
+    zone: zoneOf(a.zone),
+    region: a.region,
+    area: a.area?.trim() || null,
+    elevation: typeof a.elevation === "number" ? a.elevation : null,
+    latitude: typeof a.latitude === "number" ? a.latitude : null,
+    longitude: typeof a.longitude === "number" ? a.longitude : null,
+    summary: loc2(a.summary, a.summaryEn),
+    bestTime: locOpt(a.bestTime, a.bestTimeEn),
+    cover: a.cover ? adaptPhoto(a.cover) : null,
+    photoCount: a.photoCount ?? 0,
+    updatedAt: a.updatedAt,
+  };
+}
+
+export function adaptEcoDestinationFull(a: ApiEcoDestination): EcoDestinationFull {
+  return {
+    ...adaptEcoDestination(a),
+    story: loc2(a.story ?? "", a.storyEn),
+    access: locOpt(a.access, a.accessEn),
+    activities: list2(a.activities, a.activitiesEn),
+    rules: list2(a.rules, a.rulesEn),
+    manager: a.manager?.trim() || null,
+    website: a.website?.trim() || null,
+    photos: (a.photos ?? []).map(adaptPhoto),
+    related: (a.related ?? []).map(adaptEcoDestination),
+  };
+}
+
+/** Destinasi terbit (urut zona → urutan CMS). Gagal = daftar kosong (halaman tetap tampil dari arsip). */
+export async function fetchEcoDestinations(zone?: EcoBandId): Promise<EcoDestination[]> {
+  try {
+    const res = await apiGet<ApiResponse<ApiEcoDestination[]>>(`/api/ecotourism${zone ? `?zone=${zone.toUpperCase()}` : ""}`);
+    return (res.data ?? []).map(adaptEcoDestination);
+  } catch {
+    return [];
+  }
 }
 
 /* ───────────────────────── Sounds (AUDIO) ───────────────────────── */

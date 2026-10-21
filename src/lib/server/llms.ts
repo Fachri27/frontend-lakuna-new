@@ -1,7 +1,7 @@
 import { FAQ } from "$lib/faq";
 import { ADDRESS, COMPANY, CONTACT_EMAIL } from "$lib/contact";
 import { DEFAULT_DESCRIPTION, SITE_ALT_NAMES, SITE_NAME, absUrl, assetPath, isAssetId, kindOfType } from "$lib/seo";
-import { idr, loadCatalog, loadCategories, loadPlans } from "./seoData";
+import { idr, loadCatalog, loadCategories, loadEcoDestinations, loadPlans } from "./seoData";
 
 /**
  * llms.txt (https://llmstxt.org) — ringkasan situs dalam Markdown untuk model bahasa & mesin jawab AI (GEO).
@@ -14,7 +14,7 @@ const plain = (s: string | null | undefined) =>
 	(s ?? "").replace(/[\r\n\t]+/g, " ").replace(/[[\]()<>`*_#|\\]/g, "").replace(/\s{2,}/g, " ").trim().slice(0, 140);
 
 export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boolean): Promise<string> {
-	const [catalog, cats, plans] = await Promise.all([loadCatalog(fetchFn), loadCategories(fetchFn), loadPlans(fetchFn)]);
+	const [catalog, cats, plans, ecos] = await Promise.all([loadCatalog(fetchFn), loadCategories(fetchFn), loadPlans(fetchFn), loadEcoDestinations(fetchFn)]);
 	const u = (p: string) => absUrl(origin, p);
 	const videos = catalog.filter((a) => a.type === "VIDEO").length;
 	const sounds = catalog.filter((a) => a.type === "AUDIO").length;
@@ -61,6 +61,10 @@ export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boo
 		`- [Cari arsip](${u("/archives")}): pencarian kata kunci, mis. ${u("/archives?q=bali")} (parameter \`q\`).`,
 		`- [Ekowisata Nusantara](${u("/ecotourism")}): pegunungan, hutan hujan, danau, pantai, dan terumbu karang Indonesia.`
 	);
+	if (ecos.length) {
+		L.push("- Destinasi ekowisata:");
+		for (const d of ecos) L.push(`  - [${plain(d.name)}](${u(`/ecotourism/${d.slug}`)}) — ${plain(d.region)}: ${plain(d.summary)}`);
+	}
 	if (cats.length) {
 		L.push(`- Kategori: ${cats.map((c) => `[${plain(c.nameEn && c.nameEn.toLowerCase() !== c.name.toLowerCase() ? `${c.name} / ${c.nameEn}` : c.name)}](${u(`/categories/${encodeURIComponent(c.name)}`)})`).join(", ")}.`);
 	}

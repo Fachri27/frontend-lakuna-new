@@ -1,6 +1,6 @@
 import type { RequestHandler } from "./$types";
 import { assetImagePath, assetPath, kindOfType, siteOrigin } from "$lib/seo";
-import { loadCatalog, loadCategories, redirectToCleanPath } from "$lib/server/seoData";
+import { loadCatalog, loadCategories, loadEcoDestinations, redirectToCleanPath } from "$lib/server/seoData";
 
 /**
  * sitemap.xml dinamis: halaman publik + kategori + SEMUA foto/video yang tampil (dengan gambar pratinjaunya untuk
@@ -49,11 +49,12 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 	const clean = redirectToCleanPath(url);
 	if (clean) return clean;
 	const origin = siteOrigin(url);
-	const [assets, cats] = await Promise.all([loadCatalog(fetch), loadCategories(fetch)]);
+	const [assets, cats, ecos] = await Promise.all([loadCatalog(fetch), loadCategories(fetch), loadEcoDestinations(fetch)]);
 
 	const entries = [
 		...STATIC_PATHS.map((p) => urlEntry(`${origin}${p}`)),
 		...cats.map((c) => urlEntry(`${origin}/categories/${encodeURIComponent(c.name)}`, c.updatedAt)),
+		...ecos.map((d) => urlEntry(`${origin}/ecotourism/${d.slug}`, d.updatedAt, d.cover ? `${origin}${assetImagePath(d.cover.id)}` : undefined)),
 		...assets.map((a) =>
 			urlEntry(`${origin}${assetPath({ id: a.id, kind: kindOfType(a.type) })}`, a.updatedAt, `${origin}${assetImagePath(a.id)}`)
 		),

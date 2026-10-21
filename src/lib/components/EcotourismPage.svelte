@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { i18n, type Lang } from "$lib/i18n.svelte";
-	import { fetchPhotos, imgFor, type Photo } from "$lib/data";
+	import { fetchEcoDestinations, fetchPhotos, imgFor, type EcoDestination, type Photo } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
-	import { ECO_BAND_TERMS } from "$lib/ecoBands";
+	import { ECO_BAND_TERMS, ECO_ZONE } from "$lib/ecoBands";
 
 	/**
 	 * Ekowisata sebagai SATU garis turun: puncak → karang. Lima zona; altimeter
@@ -22,40 +22,40 @@
 
 	const BANDS: Band[] = [
 		{
-			id: "mountain", from: 3200, to: 1500, tone: [20, 27, 40], terms: ECO_BAND_TERMS.mountain,
-			name: { id: "Pegunungan", en: "Mountains" },
+			id: "mountain", from: 3200, to: 1500, tone: ECO_ZONE.mountain.tone, terms: ECO_BAND_TERMS.mountain,
+			name: ECO_ZONE.mountain.name,
 			note: {
 				id: "Kawah, savana di ketinggian, dan jalur pendakian yang kuotanya dibatasi supaya tanahnya sempat pulih",
 				en: "Craters, high savannah, and climbing routes with visitor quotas, so the ground has time to recover",
 			},
 		},
 		{
-			id: "forest", from: 1500, to: 200, tone: [12, 28, 21], terms: ECO_BAND_TERMS.forest,
-			name: { id: "Hutan hujan", en: "Rainforest" },
+			id: "forest", from: 1500, to: 200, tone: ECO_ZONE.forest.tone, terms: ECO_BAND_TERMS.forest,
+			name: ECO_ZONE.forest.name,
 			note: {
 				id: "Rumah orangutan, harimau, dan burung rangkong. Jalan setapaknya dipandu warga desa yang menjaganya",
 				en: "Home to orangutans, tigers, and hornbills. The trails are guided by the villagers who look after them",
 			},
 		},
 		{
-			id: "water", from: 200, to: 0, tone: [10, 30, 36], terms: ECO_BAND_TERMS.water,
-			name: { id: "Danau dan sungai", en: "Lakes and rivers" },
+			id: "water", from: 200, to: 0, tone: ECO_ZONE.water.tone, terms: ECO_BAND_TERMS.water,
+			name: ECO_ZONE.water.name,
 			note: {
 				id: "Perahu tanpa mesin, kampung di atas air, dan sungai yang masih menjadi jalan utama",
 				en: "Boats without engines, villages on stilts, and rivers that are still the main road",
 			},
 		},
 		{
-			id: "coast", from: 0, to: -5, tone: [31, 26, 17], terms: ECO_BAND_TERMS.coast,
-			name: { id: "Pantai dan mangrove", en: "Beaches and mangroves" },
+			id: "coast", from: 0, to: -5, tone: ECO_ZONE.coast.tone, terms: ECO_BAND_TERMS.coast,
+			name: ECO_ZONE.coast.name,
 			note: {
 				id: "Penyu bertelur, bakau yang menahan gelombang, dan kampung nelayan yang menjual hasil lautnya langsung",
 				en: "Turtles nesting, mangroves holding back the waves, and fishing villages that sell their catch directly",
 			},
 		},
 		{
-			id: "reef", from: -5, to: -30, tone: [5, 22, 40], terms: ECO_BAND_TERMS.reef,
-			name: { id: "Terumbu karang", en: "Coral reefs" },
+			id: "reef", from: -5, to: -30, tone: ECO_ZONE.reef.tone, terms: ECO_BAND_TERMS.reef,
+			name: ECO_ZONE.reef.name,
 			note: {
 				id: "Dari Raja Ampat sampai Wakatobi: penyelaman di zona lindung, dengan tambat jangkar supaya karang tak patah",
 				en: "From Raja Ampat to Wakatobi: diving in protected zones, with mooring buoys so the coral isn't broken",
@@ -67,7 +67,7 @@
 		title: string; lede: string; metaFrames: (n: number) => string; empty: string; emptyCta: string;
 		seeAll: string; principlesTitle: string; principles: { say: string; body: string }[];
 		ctaTitle: string; ctaBody: string; contribute: string; browse: string;
-		unitAbove: string; unitBelow: string; altimeter: string;
+		unitAbove: string; unitBelow: string; altimeter: string; destinations: string; fromArchive: string;
 	}> = {
 		id: {
 			title: "Ekowisata, dari puncak ke karang",
@@ -89,6 +89,8 @@
 			unitAbove: "m dpl",
 			unitBelow: "m di bawah laut",
 			altimeter: "Altimeter: posisimu di garis turun",
+			destinations: "Destinasi",
+			fromArchive: "Bingkai dari arsip",
 		},
 		en: {
 			title: "Ecotourism, from summit to reef",
@@ -110,6 +112,8 @@
 			unitAbove: "m above sea level",
 			unitBelow: "m below sea level",
 			altimeter: "Altimeter: your position on the descent",
+			destinations: "Destinations",
+			fromArchive: "Frames from the archive",
 		},
 	};
 
@@ -118,6 +122,9 @@
 
 	// ── Isi zona dari arsip ───────────────────────────────────────────────
 	let byBand = $state<Record<string, { photos: Photo[]; total: number; done: boolean }>>({});
+	// Destinasi dari CMS (Studio › Ekowisata), dikelompokkan per zona — tiap kartu menuju /ecotourism/<slug>.
+	let dests = $state<EcoDestination[]>([]);
+	const destsOf = (zone: string) => dests.filter((x) => x.zone === zone);
 
 	onMount(() => {
 		let alive = true;
@@ -127,7 +134,7 @@
 		// Tampilan ditutup selama menunggu supaya tak ada lompatan yang terlihat.
 		const wanted = location.hash.startsWith("#eco-") ? BANDS.findIndex((b) => `eco-${b.id}` === location.hash.slice(1)) : -1;
 		const root = document.documentElement;
-		let pending = BANDS.length;
+		let pending = BANDS.length + 1;
 		let jumped = false;
 		let guard: ReturnType<typeof setTimeout> | undefined;
 		const toBand = () => {
@@ -153,6 +160,11 @@
 			guard = setTimeout(jump, 3000); // jaring pengaman bila ada zona yang lambat/gagal memuat
 		}
 
+		void fetchEcoDestinations().then((list) => {
+			if (!alive) return;
+			dests = list;
+			if (--pending === 0) jump();
+		});
 		for (const b of BANDS) {
 			byBand[b.id] = { photos: [], total: 0, done: false };
 			Promise.all(b.terms.map((q) => fetchPhotos({ search: q, limit: 5 }).catch(() => ({ photos: [] as Photo[], total: 0, totalPages: 0 }))))
@@ -667,6 +679,35 @@
 				<p class="eco-band-note">{b.note[lang]}</p>
 			</div>
 
+			{#if destsOf(b.id).length}
+				<div class="eco-dests">
+					<h3 class="eco-sub">{t.destinations}</h3>
+					<ul class="eco-dest-list">
+						{#each destsOf(b.id) as x (x.id)}
+							<li>
+								<a href={`/ecotourism/${x.slug}`} class="eco-dest">
+									<span class="eco-dest-img">
+										{#if x.cover}
+											<ApiImage
+												src={imgFor(x.cover.seed, 900, 640, x.cover.thumbUrl)}
+												alt=""
+												fill
+												photoId={x.cover.assetType === "VIDEO" ? undefined : x.cover.id}
+												class="object-cover"
+											/>
+										{/if}
+									</span>
+									<span class="eco-dest-name">{x.name[lang]}</span>
+									<span class="eco-dest-meta">{x.region}{x.elevation !== null ? ` · ${fmtM(x.elevation)} m` : ""}</span>
+									<span class="eco-dest-sum">{x.summary[lang]}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</div>
+				{#if d && d.photos.length}<h3 class="eco-sub eco-sub--archive">{t.fromArchive}</h3>{/if}
+			{/if}
+
 			{#if d && d.photos.length}
 				<div class="eco-frames" class:is-few={d.photos.length < 3}>
 					{#each d.photos as p, k (p.id)}
@@ -688,7 +729,8 @@
 					{/each}
 				</div>
 				<a href={`/archives?q=${encodeURIComponent(b.terms[0] ?? "")}`} class="eco-link">{t.seeAll}</a>
-			{:else if d?.done}
+			{:else if d?.done && !destsOf(b.id).length}
+				<!-- Zona yang sudah punya destinasi tak perlu ajakan "belum ada bingkai". -->
 				<div class="eco-empty">
 					<p>{t.empty}</p>
 					<a href="/contributor" class="eco-link">{t.emptyCta}</a>
@@ -828,6 +870,95 @@
 	}
 
 	/* ── Bingkai ─────────────────────────────────────────────────────── */
+	.eco-dests {
+		position: relative;
+		margin-top: clamp(2.5rem, 6vh, 4rem);
+	}
+	.eco-sub {
+		position: relative;
+		font-size: 0.9rem;
+		font-weight: 400;
+		color: color-mix(in srgb, var(--fg, #f1efe9) 62%, transparent);
+	}
+	.eco-sub--archive {
+		margin-top: clamp(3rem, 7vh, 4.5rem);
+	}
+	.eco-sub--archive + .eco-frames {
+		margin-top: 1.25rem;
+	}
+	.eco-dest-list {
+		display: grid;
+		gap: clamp(1rem, 2vw, 1.75rem);
+		margin: 1.25rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	@media (min-width: 720px) {
+		.eco-dest-list {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (min-width: 1100px) {
+		.eco-dest-list {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+	.eco-dest {
+		display: block;
+		color: inherit;
+		text-decoration: none;
+	}
+	.eco-dest-img {
+		position: relative;
+		display: block;
+		aspect-ratio: 3 / 2;
+		overflow: hidden;
+		border-radius: 3px;
+		background: rgba(0, 0, 0, 0.25);
+	}
+	.eco-dest-img :global(img),
+	.eco-dest-img :global(canvas) {
+		transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+	}
+	@media (hover: hover) {
+		.eco-dest:hover .eco-dest-img :global(img),
+		.eco-dest:hover .eco-dest-img :global(canvas) {
+			transform: scale(1.04);
+		}
+		.eco-dest:hover .eco-dest-name {
+			color: var(--safelight);
+		}
+	}
+	.eco-dest:focus-visible {
+		outline: 2px solid var(--safelight);
+		outline-offset: 4px;
+	}
+	.eco-dest-name {
+		display: block;
+		margin-top: 0.9rem;
+		font-family: var(--font-display);
+		font-size: clamp(1.3rem, 2vw, 1.6rem);
+		font-weight: 300;
+		line-height: 1.15;
+		transition: color 0.25s ease;
+	}
+	.eco-dest-meta {
+		display: block;
+		margin-top: 0.3rem;
+		font-size: 0.85rem;
+		color: color-mix(in srgb, var(--fg, #f1efe9) 55%, transparent);
+	}
+	.eco-dest-sum {
+		display: -webkit-box;
+		margin-top: 0.6rem;
+		overflow: hidden;
+		font-size: 0.95rem;
+		line-height: 1.55;
+		color: color-mix(in srgb, var(--fg, #f1efe9) 80%, transparent);
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
+	}
 	.eco-frames {
 		position: relative;
 		display: grid;

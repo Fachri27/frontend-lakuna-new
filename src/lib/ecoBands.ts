@@ -37,3 +37,23 @@ export function ecoHrefFor(p: Pick<Photo, "title" | "keywords" | "keywordsEn">):
 	const b = ecoBandOf(p);
 	return b ? `/ecotourism#eco-${b}` : "/ecotourism";
 }
+
+/**
+ * Nama, warna latar, dan rentang ketinggian tiap zona — dipakai halaman Ekowisata (pita zona) dan halaman
+ * destinasi (/ecotourism/<slug>) supaya keduanya satu bahasa visual.
+ */
+export const ECO_ZONE: Record<EcoBandId, { name: { id: string; en: string }; tone: [number, number, number]; from: number; to: number }> = {
+	mountain: { name: { id: "Pegunungan", en: "Mountains" }, tone: [20, 27, 40], from: 3200, to: 1500 },
+	forest: { name: { id: "Hutan hujan", en: "Rainforest" }, tone: [12, 28, 21], from: 1500, to: 200 },
+	water: { name: { id: "Danau dan sungai", en: "Lakes and rivers" }, tone: [10, 30, 36], from: 200, to: 0 },
+	coast: { name: { id: "Pantai dan mangrove", en: "Beaches and mangroves" }, tone: [31, 26, 17], from: 0, to: -5 },
+	reef: { name: { id: "Terumbu karang", en: "Coral reefs" }, tone: [5, 22, 40], from: -5, to: -30 },
+};
+
+export const ECO_ORDER: EcoBandId[] = ORDER;
+
+/** Zona dari API ("MOUNTAIN") → id pita ("mountain"). */
+export function zoneOf(api: string | null | undefined): EcoBandId {
+	const z = (api ?? "").toLowerCase() as EcoBandId;
+	return (ORDER as string[]).includes(z) ? z : "mountain";
+}

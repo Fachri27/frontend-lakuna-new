@@ -56,5 +56,13 @@ export async function loadPlans(fetchFn: typeof fetch): Promise<PlanRow[]> {
 	return (res?.data ?? []).filter((p) => p?.name && p.isActive !== false);
 }
 
+export type EcoRow = { slug: string; name: string; nameEn?: string | null; region: string; summary: string; updatedAt?: string; cover?: { id: string } | null };
+
+/** Destinasi ekowisata yang terbit (sitemap, llms.txt). */
+export async function loadEcoDestinations(fetchFn: typeof fetch): Promise<EcoRow[]> {
+	const res = await getJson<{ data?: EcoRow[] }>(fetchFn, "/api/ecotourism", 6_000);
+	return (res?.data ?? []).filter((d) => d?.slug && d.name);
+}
+
 export const idr = (n: number) =>
 	new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
