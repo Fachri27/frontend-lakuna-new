@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
-	 * Karusel cakram Sounds (<DiscCascadeCarousel>) — dipakai section Sounds di landing (HomeSounds) DAN bagian atas
-	 * halaman /sounds, supaya keduanya sama persis. Tiap audio terbaru (16) jadi satu cakram bercetak: sampulnya
+	 * Karusel cakram Sounds (<DiscCascadeCarousel>) untuk section Sounds di landing (HomeSounds). Halaman /sounds
+	 * sengaja tanpa karusel (keputusan pemilik) — di sana daftar lengkap. Tiap audio terbaru (16) jadi satu cakram bercetak: sampulnya
 	 * label, judulnya di busur atas (musik) atau bertumpuk (efek suara), kredit di busur bawah. Cakram terpilih
 	 * diputar lewat tombol di tengah bawah (atau klik cakramnya); yang berbunyi berputar cepat. Selama ada yang
 	 * berbunyi, berpindah cakram ikut memindah pemutaran (seperti jukebox), dan lagu yang selesai lanjut ke
@@ -9,7 +9,7 @@
 	 *
 	 * Pemutaran lewat `player` bersama (satu <audio> untuk seluruh situs). `landing`: landing tak punya bilah
 	 * pemutar, jadi pratinjau dijeda saat karusel keluar layar dan dihentikan saat meninggalkan landing (kecuali ke
-	 * /sounds). Tinggi = 100% pembungkus — induk yang menentukan (lihat HomeSounds / SoundsPage).
+	 * /sounds). Tinggi = 100% pembungkus — induk yang menentukan (lihat HomeSounds).
 	 */
 	import { untrack } from "svelte";
 	import { beforeNavigate } from "$app/navigation";
@@ -234,7 +234,9 @@
 	const STAGE_BG = "var(--bg)";
 </script>
 
-<div bind:this={root} class="relative h-full {className}">
+<!-- Mulai md, pemutar (footer) turun ke dekat tepi bawah: di tengah ia tak bertabrakan dengan tombol Bantuan /
+	ke-atas di pojok. Ponsel: tetap di atas tombol-tombol itu (--dcc-bottom induk). -->
+<div bind:this={root} class="relative h-full md:[--dcc-foot-bottom:clamp(1rem,3vh,2rem)] {className}">
 	{#if discs.length}
 		<DiscCascadeCarousel
 			items={discs}
@@ -256,6 +258,7 @@
 			onSelect={(_, i) => list[i] && toggle(list[i])}
 			{playingIndex}
 			reviews={false}
+			controls={false}
 			hint={t.hint}
 			ariaLabel={t.region}
 			navLabel={t.region}

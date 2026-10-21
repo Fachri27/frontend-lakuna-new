@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Section Sounds di landing (di bawah galeri orbit): judul berpola section landing lain (kicker + judul besar +
-	 * ringkasan + tautan) lalu karusel cakram bersama (SoundDiscs — sama dengan bagian atas /sounds).
+	 * ringkasan + tautan) lalu karusel cakram (SoundDiscs).
 	 *
 	 * Mulai md: judul + karusel tepat SATU LAYAR (100svh): karusel mengisi sisa tinggi di bawah judul dan cakramnya
 	 * diukur dari tinggi layar, jadi tombol putar & kontrol di bawah tak terpotong. Ponsel: judul lalu karusel

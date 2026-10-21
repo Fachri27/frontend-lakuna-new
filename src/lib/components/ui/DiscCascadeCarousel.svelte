@@ -563,6 +563,7 @@
 	tabindex="0"
 	data-dragging={dragging ? "" : undefined}
 	data-spin={spin > 0 ? "" : undefined}
+	data-ctl={controls && n > 1 ? "" : undefined}
 	onkeydown={onKeyDown}
 	onpointerdown={onPointerDown}
 	onpointermove={onPointerMove}
@@ -1196,9 +1197,10 @@
 		text-transform: uppercase;
 		text-wrap: balance;
 	}
+	/* --dcc-foot-bottom: induk boleh menurunkan footer sendiri (mis. ke tepi bawah) tanpa ikut menggeser kontrol. */
 	.dcc-foot {
 		position: absolute;
-		bottom: calc(var(--dcc-pad) * 1.1 + var(--dcc-b));
+		bottom: var(--dcc-foot-bottom, calc(var(--dcc-pad) * 1.1 + var(--dcc-b)));
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 5;
@@ -1303,9 +1305,10 @@
 			font-size: clamp(18px, 2.1cqw, 28px);
 		}
 	}
+	/* Layar sempit: kutipan/footer naik di atas tombol sebelum/berikutnya — hanya bila tombolnya ada. */
 	@container (max-width: 420px) {
-		.dcc-revs,
-		.dcc-foot {
+		.dcc-root[data-ctl] .dcc-revs,
+		.dcc-root[data-ctl] .dcc-foot {
 			bottom: calc(var(--dcc-pad) * 4.4 + var(--dcc-b));
 		}
 	}
