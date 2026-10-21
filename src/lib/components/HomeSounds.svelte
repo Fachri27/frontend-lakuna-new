@@ -196,7 +196,8 @@
 
 	// Saat belum ada audio (atau masih memuat): cakram hias buatan tanpa judul, tak bisa difokus (inert).
 	const blanks: DiscCascadeItem[] = Array.from({ length: 6 }, (_, i) => ({ key: "b" + i, title: "", label: "", fine: "" }));
-	const STAGE_BG = "radial-gradient(120% 90% at 50% 40%, #1d1d21, var(--bg))";
+	// Latar sama dengan halaman (hitam --bg), tanpa sorotan abu — tak ada sambungan terlihat dengan section di atasnya.
+	const STAGE_BG = "var(--bg)";
 	const HEIGHT = "clamp(680px, 100svh, 980px)";
 	// Di ponsel cakram sedikit lebih besar dari bawaan (38vw terlalu kecil di layar sempit yang tinggi).
 	const DISC = "clamp(180px, min(50vmin, 46vw), 420px)";
