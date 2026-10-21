@@ -1,52 +1,53 @@
 <script lang="ts">
 	/**
-	 * Pemutar halaman Sounds — tiruan dekat pemutar coveomusic.com.
-	 *  - Layar lebar: kartu kaca di tengah bawah (maks 620 px) berisi "Memutar pratinjau" + judul, piringan vinyl
-	 *    (warna dari sampul, label = sampul) yang menyembul setengah dan berputar, waktu monospace, tombol bulat
-	 *    berisi batang equalizer (berubah jadi ikon putar/jeda saat disorot). Pratinjau habis → "Suka pratinjaunya?"
-	 *    + tombol lisensi menggantikan piringan.
-	 *  - Ponsel: panel hitam 450 px di bawah dengan piringan besar, tombol kaca, waktu, dan tombol tutup bulat.
-	 * Tetap hidup saat pindah antara /sounds dan /sounds/<id> (dipasang di routes/sounds/+layout.svelte).
+	 * Bilah pemutar bawah halaman Sounds — muncul begitu sebuah lagu diputar, tetap ada saat pindah antara daftar
+	 * dan halaman detail (dipasang di routes/sounds/+layout.svelte). Ponsel: sampul, judul, putar/jeda, tutup,
+	 * dengan garis progres di tepi atas; layar lebar: + maju/mundur, gelombang yang bisa digeser, waktu, volume,
+	 * dan tombol keranjang.
 	 */
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { i18n } from "$lib/i18n.svelte";
+	import { store } from "$lib/store.svelte";
+	import { announcer } from "$lib/stores/announce.svelte";
 	import { player } from "$lib/soundPlayer.svelte";
+	import { fmtDuration, fmtIDR } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
+	import Waveform from "./Waveform.svelte";
 
 	const copy = {
-		id: { region: "Pemutar audio", now: "Memutar pratinjau", play: "Putar", pause: "Jeda", close: "Tutup pemutar", upsell: "Suka pratinjaunya?", license: "Lisensikan", error: "Pratinjau tak bisa diputar" },
-		en: { region: "Audio player", now: "Previewing", play: "Play", pause: "Pause", close: "Close player", upsell: "Enjoyed the preview?", license: "License it", error: "Preview can't be played" },
+		id: { region: "Pemutar audio", play: "Putar", pause: "Jeda", prev: "Sebelumnya", next: "Berikutnya", close: "Tutup pemutar", volume: "Volume", seek: "Posisi putar", addToCart: "Tambah ke keranjang", added: "Ditambahkan", error: "Pratinjau tak bisa diputar", previewTag: "Pratinjau" },
+		en: { region: "Audio player", play: "Play", pause: "Pause", prev: "Previous", next: "Next", close: "Close player", volume: "Volume", seek: "Playback position", addToCart: "Add to cart", added: "Added", error: "Preview can't be played", previewTag: "Preview" },
 	};
 	const lang = $derived(i18n.lang);
 	const t = $derived(copy[lang]);
 	const track = $derived(player.track);
 	const total = $derived(player.duration || track?.duration || 0);
-	const clock = (sec: number) => {
-		const s = Math.max(0, Math.round(sec || 0));
-		return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-	};
 
-	// Spasi = putar/jeda, Esc = tutup (di luar kolom isian & tombol yang sedang difokus).
-	function onKey(e: KeyboardEvent) {
+	let added = $state(false);
+	function addToCart() {
 		if (!track) return;
+		const title = track.title[lang];
+		void store.addToCart({ id: track.id, kind: "sound", title, price: track.price, meta: track.id, thumbUrl: track.cover });
+		added = true;
+		announcer.announce(`${title} — ${t.added}`);
+		setTimeout(() => (added = false), 1600);
+	}
+
+	// Spasi = putar/jeda (di luar kolom isian & tombol yang sedang difokus).
+	function onKey(e: KeyboardEvent) {
+		if (!track || e.code !== "Space" || e.repeat) return;
 		const el = e.target as HTMLElement | null;
-		if (e.key === "Escape") {
-			player.close();
-			return;
-		}
-		if (e.code !== "Space" || e.repeat) return;
-		if (el?.closest("input, textarea, select, button, a, [contenteditable=true]")) return;
+		if (el?.closest("input, textarea, select, button, a, [role=slider], [contenteditable=true]")) return;
 		e.preventDefault();
 		player.toggle();
 	}
 
-	// Tombol mengambang (bantuan, ke atas) naik melewati pemutar.
+	// Tombol mengambang (chat, ke atas) ikut naik supaya tak tertutup bilah ini.
 	$effect(() => {
 		const up = !!track;
-		const mobile = window.matchMedia("(max-width: 768px)").matches;
 		const els = [...document.querySelectorAll<HTMLElement>(".fab-mengambang")];
-		for (const el of els) el.style.bottom = up ? (mobile ? "29.5rem" : "9.5rem") : "";
+		for (const el of els) el.style.bottom = up ? "6.5rem" : "";
 		return () => {
 			for (const el of els) el.style.bottom = "";
 		};
@@ -55,492 +56,105 @@
 
 <svelte:window onkeydown={onKey} />
 
+{#snippet ctl(label: string, onclick: () => void, path: string, cls = "")}
+	<button type="button" {onclick} aria-label={label} title={label} class={`grid h-9 w-9 place-items-center rounded-full text-fg/80 transition-colors hover:bg-fg/[0.06] hover:text-safelight focus-visible:outline-2 focus-visible:outline-safelight ${cls}`}>
+		<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={path} /></svg>
+	</button>
+{/snippet}
+
 {#if track}
 	<div
 		role="region"
 		aria-label={t.region}
-		class="cv-player"
-		class:cv-player--paused={!player.playing}
-		class:cv-player--upsell={player.ended}
-		class:cv-player--loading={player.loading && player.playing}
 		data-no-hover-sound
 		data-no-click-sound
-		transition:fly={{ y: 160, duration: 900, easing: cubicOut }}
+		transition:fly={{ y: 80, duration: 320, easing: cubicOut }}
+		class="fixed inset-x-0 bottom-0 z-40 border-t border-hair bg-bg/92 backdrop-blur-xl"
 	>
-		<div class="cv-player__contents">
-			<div class="cv-player__info">
-				<p class="cv-player__label">{player.error ? t.error : t.now}</p>
-				<a href={`/sounds/${track.id}`} class="cv-player__title">{track.title[lang]}</a>
-			</div>
-
-			<!-- Piringan -->
-			<div class="cv-record-wrap">
-				<a href={`/sounds/${track.id}`} class="cv-record-offset" tabindex="-1" aria-hidden="true">
-					<span class="cv-record">
-						{#if track.cover}
-							<span class="cv-record__colour"><ApiImage src={track.cover} alt="" fill class="object-cover" /></span>
-						{/if}
-						<span class="cv-record__art">
-							{#if track.cover}<ApiImage src={track.cover} alt="" fill class="object-cover object-top" />{/if}
-						</span>
+		<!-- Garis progres (ponsel). -->
+		<div class="absolute inset-x-0 top-0 h-[2px] bg-fg/10 lg:hidden" aria-hidden="true">
+			<div class="h-full bg-safelight" style={`width: ${player.progress * 100}%`}></div>
+		</div>
+		<div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-5 sm:px-6 lg:px-10">
+			<!-- Sampul + judul -->
+			<a href={`/sounds/${track.id}`} class="flex min-w-0 items-center gap-3 lg:w-[17rem] lg:shrink-0">
+				<span class="relative h-11 w-11 shrink-0 overflow-hidden rounded-[3px] bg-ocean sm:h-12 sm:w-12">
+					{#if track.cover}<ApiImage src={track.cover} alt="" fill class="object-cover object-top" />{/if}
+				</span>
+				<span class="min-w-0">
+					<span class="block truncate text-sm text-fg">{track.title[lang]}</span>
+					<span class="block truncate text-xs text-fg-muted">
+						{#if player.error}<span class="text-safelight">{t.error}</span>{:else}{track.author}{/if}
 					</span>
-				</a>
+				</span>
+			</a>
+
+			<!-- Kontrol -->
+			<div class="ml-auto flex shrink-0 items-center gap-1 lg:ml-0">
+				{@render ctl(t.prev, () => player.prev(), "M6 5h2v14H6zM20 6.2v11.6a1 1 0 0 1-1.53.85L10 13.2a1.4 1.4 0 0 1 0-2.4l8.47-5.45A1 1 0 0 1 20 6.2z", "hidden sm:grid")}
+				<button
+					type="button"
+					onclick={() => player.toggle()}
+					aria-label={player.playing ? t.pause : t.play}
+					class="grid h-11 w-11 place-items-center rounded-full bg-safelight text-ivory shadow-[0_10px_30px_-10px_var(--safelight-glow)] transition-transform hover:scale-[1.05] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
+				>
+					{#if player.loading && player.playing}
+						<span class="h-5 w-5 animate-spin rounded-full border-2 border-ivory/30 border-t-ivory"></span>
+					{:else if player.playing}
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+					{:else}
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11.03-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" /></svg>
+					{/if}
+				</button>
+				{@render ctl(t.next, () => player.next(), "M16 5h2v14h-2zM4 6.2v11.6a1 1 0 0 0 1.53.85L14 13.2a1.4 1.4 0 0 0 0-2.4L5.53 5.35A1 1 0 0 0 4 6.2z", "hidden sm:grid")}
 			</div>
 
-			<!-- Tawaran lisensi saat pratinjau habis -->
-			<div class="cv-upsell">
-				<p>{t.upsell}</p>
-				<a href={`/sounds/${track.id}`} class="cv-upsell__btn">{t.license}</a>
+			<!-- Gelombang + waktu (layar lebar) -->
+			<div class="hidden min-w-0 flex-1 items-center gap-4 lg:flex">
+				<span class="w-10 shrink-0 text-right font-mono text-[0.74rem] tabular-nums text-fg-muted">{fmtDuration(player.time)}</span>
+				<Waveform peaks={track.waveform} progress={player.progress} active label={t.seek} onseek={(r) => player.seek(r)} bars={140} class="h-9 min-w-0 flex-1" />
+				<span class="w-10 shrink-0 font-mono text-[0.74rem] tabular-nums text-fg-muted">{fmtDuration(total)}</span>
 			</div>
 
-			<div class="cv-player__controls">
-				<p class="cv-mono cv-player__time">{clock(player.time)} / {clock(total)}</p>
-				<button type="button" class="cv-audio-btn" onclick={() => player.toggle()} aria-label={player.playing ? t.pause : t.play}>
-					<span class="cv-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-					<span class="cv-state" aria-hidden="true">
-						{#if player.playing}
-							<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="1" width="3" height="10" rx="0.6" /><rect x="7" y="1" width="3" height="10" rx="0.6" /></svg>
-						{:else}
-							<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 1.4v9.2a.6.6 0 0 0 .9.5l7.3-4.6a.6.6 0 0 0 0-1L3.9.9a.6.6 0 0 0-.9.5z" /></svg>
-						{/if}
-					</span>
+			<!-- Volume + keranjang + tutup -->
+			<div class="flex shrink-0 items-center gap-1 sm:gap-3">
+				<label class="hidden items-center gap-2 xl:flex">
+					<span class="sr-only">{t.volume}</span>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="text-fg-muted" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></svg>
+					<input
+						type="range"
+						min="0"
+						max="1"
+						step="0.05"
+						value={player.volume}
+						oninput={(e) => player.setVolume(Number(e.currentTarget.value))}
+						class="snd-vol w-24"
+					/>
+				</label>
+				<button
+					type="button"
+					onclick={addToCart}
+					class="hidden items-center gap-2 rounded-full border border-hair px-4 py-2 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight sm:inline-flex"
+				>
+					{#if added}✓ {t.added}{:else}<span aria-hidden="true">+</span> {fmtIDR(track.price)}{/if}
+				</button>
+				<button
+					type="button"
+					onclick={() => player.close()}
+					aria-label={t.close}
+					title={t.close}
+					class="grid h-9 w-9 place-items-center rounded-full text-fg-muted transition-colors hover:bg-fg/[0.06] hover:text-safelight focus-visible:outline-2 focus-visible:outline-safelight"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
 				</button>
 			</div>
-
-			<button type="button" class="cv-close" onclick={() => player.close()} aria-label={t.close}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-			</button>
 		</div>
 	</div>
 {/if}
 
 <style>
-	.cv-player {
-		--recordSize: 220px;
-		position: fixed;
-		bottom: 24px;
-		left: 50%;
-		z-index: 60;
-		width: 90%;
-		max-width: 620px;
-		transform: translateX(-50%);
-		color: #1d1812;
-		font-family: "Inter", sans-serif;
-		font-size: 12px;
-	}
-	.cv-mono {
-		font-family: ui-monospace, Menlo, Monaco, monospace;
-	}
-	.cv-player__contents {
-		position: relative;
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
-		align-items: center;
-		width: 100%;
-		padding: 18px 24px;
-		border-radius: 8px;
-		background:
-			linear-gradient(0deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7)),
-			rgba(0, 0, 0, 0.15);
-		box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07);
-		backdrop-filter: blur(24px);
-		-webkit-backdrop-filter: blur(24px);
-	}
-	.cv-player__info {
-		display: flex;
-		min-width: 0;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.2em;
-		padding-right: 1em;
-	}
-	.cv-player__label {
-		margin: 0;
-		color: #524d46;
-		font-size: 0.8em;
-		font-weight: 600;
-		text-transform: uppercase;
-	}
-	.cv-player__title {
-		max-width: 100%;
-		overflow: hidden;
-		color: inherit;
-		font-size: 1em;
-		font-weight: 600;
-		text-decoration: none;
-		text-overflow: ellipsis;
-		text-transform: uppercase;
-		white-space: nowrap;
-	}
-
-	/* ── Piringan ── */
-	.cv-record-wrap {
-		position: absolute;
-		bottom: 0;
-		left: 50%;
-		width: var(--recordSize);
-		height: calc(var(--recordSize) / 2);
-		transform: translateX(-50%);
-		clip-path: inset(-20% 0 0 0);
-		pointer-events: none;
-	}
-	.cv-record-offset {
-		position: relative;
-		display: block;
-		width: var(--recordSize);
-		height: var(--recordSize);
-		transform: translateY(0);
-		transition: transform 0.4s ease;
-		pointer-events: auto;
-	}
-	.cv-record-wrap:hover .cv-record-offset {
-		transform: translateY(-10%);
-	}
-	.cv-player--upsell .cv-record-offset,
-	.cv-player--loading .cv-record-offset {
-		transform: translateY(50%);
-	}
-	.cv-record {
-		position: relative;
-		display: flex;
-		width: 100%;
-		aspect-ratio: 1;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		border-radius: 100%;
-		background: #1d1812;
-		animation: cv-spin 3s linear infinite;
-	}
-	.cv-player--paused .cv-record {
-		animation-play-state: paused;
-	}
-	.cv-record__colour {
-		position: absolute;
-		inset: -20%;
-		filter: blur(14px) saturate(1.3);
-		opacity: 0.85;
-	}
-	/* Alur piringan + kilau. */
-	.cv-record::before {
-		content: "";
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		border-radius: 100%;
-		background-image: repeating-radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.1) 0 1px, rgba(252, 255, 255, 0.08) 1px 2.2px);
-	}
-	.cv-record::after {
-		content: "";
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		border-radius: 100%;
-		background-image: linear-gradient(135deg, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0) 80%);
-	}
-	.cv-record__art {
-		position: relative;
-		z-index: 2;
-		width: 35%;
-		aspect-ratio: 1;
-		overflow: hidden;
-		border-radius: 100%;
-		background: #eeeeee;
-	}
-	.cv-record__art::before,
-	.cv-record__art::after {
-		content: "";
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		z-index: 3;
-		aspect-ratio: 1;
-		border-radius: 100%;
-		transform: translate(-50%, -50%);
-	}
-	.cv-record__art::before {
-		width: 30%;
-		background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.2) 100%);
-	}
-	.cv-record__art::after {
-		width: 25%;
-		background: #eeeeee;
-	}
-	@keyframes cv-spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	/* ── Tawaran lisensi ── */
-	.cv-upsell {
-		grid-column: 2;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.6em;
-		visibility: hidden;
-	}
-	.cv-player--upsell .cv-upsell {
-		visibility: visible;
-	}
-	.cv-upsell p {
-		margin: 0;
-	}
-	.cv-upsell__btn {
-		padding: 0.8em 1.6em;
-		border-radius: 40px;
-		background: #1d1812;
-		color: #eeeeee;
-		font-weight: 600;
-		text-decoration: none;
-		text-transform: uppercase;
-	}
-
-	/* ── Kontrol ── */
-	.cv-player__controls {
-		grid-column: 3;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.6em;
-	}
-	.cv-player__time {
-		margin: 0;
-		color: #524d46;
-	}
-	.cv-audio-btn {
-		position: relative;
-		display: flex;
-		height: 36px;
-		width: 36px;
-		align-items: center;
-		justify-content: space-between;
-		padding: 10px;
-		border: 1px solid rgba(0, 0, 0, 0.07);
-		border-radius: 100%;
-		background: none;
-		color: #1d1812;
-		cursor: pointer;
-		transition: border-color 0.4s ease;
-	}
-	.cv-audio-btn:hover,
-	.cv-audio-btn:focus-visible {
-		border-color: #1d1812;
-		outline: none;
-	}
-	.cv-player--upsell .cv-audio-btn {
-		display: none;
-	}
-	.cv-bars {
-		display: flex;
-		height: 100%;
-		width: 100%;
-		align-items: center;
-		justify-content: space-between;
-		transition:
-			transform 0.2s ease,
-			opacity 0.2s ease;
-	}
-	.cv-bars i {
-		width: 1.5px;
-		height: 10%;
-		background: currentColor;
-		animation: cv-bars 0.5s ease infinite alternate;
-	}
-	.cv-bars i:nth-child(1) {
-		--min: 5%;
-		--max: 75%;
-		animation-delay: -0.5s;
-	}
-	.cv-bars i:nth-child(2) {
-		--min: 35%;
-		--max: 100%;
-	}
-	.cv-bars i:nth-child(3) {
-		--min: 15%;
-		--max: 50%;
-		animation-delay: -0.8s;
-	}
-	.cv-bars i:nth-child(4) {
-		--min: 40%;
-		--max: 90%;
-		animation-delay: -0.3s;
-	}
-	@keyframes cv-bars {
-		from {
-			height: var(--min);
-		}
-		to {
-			height: var(--max);
-		}
-	}
-	.cv-player--paused .cv-bars i {
-		animation: none;
-		height: 10%;
-	}
-	.cv-state {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		display: grid;
-		opacity: 0;
-		transform: translate(-50%, -50%) scale(1.2);
-		transition:
-			transform 0.4s ease,
-			opacity 0.4s ease;
-	}
-	.cv-state svg {
-		fill: currentColor;
-	}
-	.cv-audio-btn:hover .cv-bars,
-	.cv-audio-btn:focus-visible .cv-bars,
-	.cv-player--paused .cv-bars {
-		transform: scale(0.5);
-		opacity: 0;
-	}
-	.cv-audio-btn:hover .cv-state,
-	.cv-audio-btn:focus-visible .cv-state,
-	.cv-player--paused .cv-state {
-		transform: translate(-50%, -50%) scale(1);
-		opacity: 1;
-	}
-	.cv-player--loading .cv-player__contents::after {
-		content: "";
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		height: 18px;
-		width: 18px;
-		border: 2px solid rgba(0, 0, 0, 0.2);
-		border-top-color: #000;
-		border-radius: 100%;
-		transform: translate(-50%, -50%);
-		animation: cv-load 1s linear infinite;
-	}
-	@keyframes cv-load {
-		to {
-			transform: translate(-50%, -50%) rotate(360deg);
-		}
-	}
-	.cv-close {
-		display: none;
-	}
-
-	/* ── Ponsel: panel hitam ── */
-	@media (max-width: 768px) {
-		.cv-player {
-			left: 0;
-			bottom: 0;
-			width: 100%;
-			max-width: none;
-			height: 450px;
-			transform: none;
-			background: #000000;
-			color: #ffffff;
-			overflow: hidden;
-		}
-		/* Tepi bawah halaman yang membulat di atas panel (acuan). */
-		.cv-player::after {
-			content: "";
-			position: absolute;
-			top: 0;
-			left: 0;
-			height: 24px;
-			width: 100%;
-			border-radius: 0 0 24px 24px;
-			background: #eeeeee;
-		}
-		.cv-player__contents {
-			height: 100%;
-			grid-template-columns: unset;
-			grid-template-rows: auto 1fr auto auto;
-			justify-items: center;
-			gap: 0.6em;
-			padding: 52px 24px 24px;
-			border-radius: 0;
-			background: none;
-			box-shadow: none;
-			backdrop-filter: none;
-			-webkit-backdrop-filter: none;
-		}
-		.cv-player__info {
-			align-items: center;
-			padding: 0;
-		}
-		.cv-player__label {
-			color: #747474;
-		}
-		.cv-player__title {
-			color: #ffffff;
-		}
-		.cv-record-wrap {
-			position: relative;
-			bottom: auto;
-			left: auto;
-			height: var(--recordSize);
-			transform: none;
-			clip-path: none;
-		}
-		.cv-record {
-			background: #101010;
-		}
-		.cv-record__art::before {
-			background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.2) 100%);
-		}
-		.cv-record__art::after {
-			background: #000000;
-		}
-		.cv-player--upsell .cv-record-offset,
-		.cv-player--loading .cv-record-offset {
-			transform: translateY(200%);
-		}
-		.cv-upsell {
-			position: absolute;
-			top: 52px;
-			bottom: 120px;
-			left: 0;
-			right: 0;
-			color: #ffffff;
-		}
-		.cv-upsell__btn {
-			background: #ffffff;
-			color: #1d1812;
-		}
-		.cv-player__controls {
-			grid-column: auto;
-			justify-content: center;
-		}
-		.cv-player__time {
-			color: #747474;
-		}
-		.cv-audio-btn {
-			position: absolute;
-			top: 30%;
-			right: 22%;
-			border-color: rgba(255, 255, 255, 0.2);
-			background: rgba(255, 255, 255, 0.2);
-			color: #ffffff;
-			backdrop-filter: blur(10px);
-			-webkit-backdrop-filter: blur(10px);
-		}
-		.cv-close {
-			display: grid;
-			height: 42px;
-			width: 42px;
-			place-items: center;
-			border: 1px solid rgba(255, 255, 255, 0.3);
-			border-radius: 100%;
-			background: none;
-			color: #ffffff;
-			cursor: pointer;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.cv-record,
-		.cv-bars i {
-			animation: none;
-		}
+	.snd-vol {
+		accent-color: var(--safelight);
+		height: 1rem;
 	}
 </style>

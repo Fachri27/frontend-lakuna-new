@@ -1,73 +1,73 @@
 <script lang="ts">
 	/**
-	 * Detail satu audio — tiruan dekat halaman rilis coveomusic.com: tombol rumah, tulisan tangan di latar, sampul
-	 * miring, nama kreator + judul besar, deretan pil (di acuan "Listen on …"; di sini aksi lisensi Lakuna), kartu
-	 * hitam besar berisi sampul + tombol Pratinjau, baris data (jenis · tanggal · durasi), kartu geser (tentang,
-	 * polaroid, kredit), lalu daftar semua audio.
+	 * Detail satu audio — susunan halaman detail video (pelat, judul, lembar lisensi, data karya, karya terkait)
+	 * dengan pelat berupa pemutar: sampul + gelombang besar yang bisa digeser. Pemutarannya lewat `player`
+	 * bersama, jadi bilah pemutar bawah ikut menampilkan lagu ini.
 	 */
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import gsap from "gsap";
+	import { backNav } from "$lib/backNav";
 	import { i18n } from "$lib/i18n.svelte";
 	import { store } from "$lib/store.svelte";
 	import { authModal } from "$lib/authModal.svelte";
 	import { subscribeModal } from "$lib/subscribeModal.svelte";
-	import { announcer } from "$lib/stores/announce.svelte";
 	import { player } from "$lib/soundPlayer.svelte";
 	import { assetPath, kindOfType } from "$lib/seo";
-	import { fetchSoundById, fetchSounds, fmtIDR, type Sound } from "$lib/data";
+	import { fetchRelatedSounds, fetchSoundById, fmtDuration, fmtIDR, type Sound } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
+	import DetailTitle from "./DetailTitle.svelte";
+	import Reveal from "./Reveal.svelte";
 	import SoundRow from "./SoundRow.svelte";
+	import Waveform from "./Waveform.svelte";
 
 	let { soundId }: { soundId: string } = $props();
 
 	const copy = {
 		id: {
-			script: "inilah suara kami", home: "Semua audio",
-			buy: "Beli lisensi", addToCart: "Tambah ke keranjang", added: "Ditambahkan", save: "Simpan", saved: "Tersimpan",
-			premium: "Premium", from: "mulai", perMonth: "/bulan",
-			preview: "Pratinjau", pause: "Jeda",
-			type: "Jenis", date: "Tanggal terbit", runtime: "Durasi total",
-			music: "Musik", sfx: "Efek suara", min: "menit", sec: "detik",
-			about: "Tentang audio ini", making: "Di balik rekaman", credits: "Kredit",
-			aboutFallback: (k: string, d: string) => `${k} berdurasi ${d}, dikurasi tim Lakuna. Dengarkan pratinjaunya, lalu lisensikan berkas aslinya untuk video, podcast, iklan, atau karya kamu.`,
-			creator: "Kreator", format: "Format", tempo: "Tempo", license: "Lisensi", licenseVal: "Standar & Premium", category: "Kategori", keywords: "Kata kunci",
-			source: "Sumber: Lakuna Stock",
-			ai: "Dibuat dengan AI",
-			order: "Semua audio — terbaru dulu",
+			back: "Kembali", by: "oleh", ai: "Dibuat dengan AI", aiHint: "Karya ini dibuat dengan AI generatif lalu dikurasi tim Lakuna.",
+			play: "Putar pratinjau", pause: "Jeda", seek: "Posisi putar",
+			music: "Musik", sfx: "Efek suara", cat: "Kategori", duration: "Durasi", tempo: "Tempo", format: "Format", kind: "Jenis", tags: "Kata kunci",
+			slip: "Lembar lisensi", usage: "Jenis pakai", fee: "Biaya lisensi", personal: "Standar", commercial: "Premium",
+			personalDesc: "Video, podcast, media sosial & iklan", commercialDesc: "Kuota unduhan bulanan",
+			subscribe: "Berlangganan", fromPrice: "mulai", perMonth: "/bulan",
+			buyNow: "Beli sekarang", addToCart: "Tambah ke keranjang", added: "Ditambahkan", save: "Simpan", saved: "Tersimpan",
+			youGet: "Yang kamu terima", original: "Berkas asli",
+			previewNote: "Pratinjau diputar sebagai MP3 dengan denting penanda tiap 10 detik. Berkas asli tanpa penanda bisa diunduh setelah pembelian",
+			related: "Audio terkait", relatedKicker: "Dengarkan juga", seeAll: "Lihat semua",
 			missing: "Audio tidak ditemukan atau belum tayang",
-			prev: "Sebelumnya", next: "Berikutnya",
 		},
 		en: {
-			script: "these are our sounds", home: "All sounds",
-			buy: "Buy licence", addToCart: "Add to cart", added: "Added", save: "Save", saved: "Saved",
-			premium: "Premium", from: "from", perMonth: "/month",
-			preview: "Preview", pause: "Pause",
-			type: "Sound type", date: "Release date", runtime: "Total runtime",
-			music: "Music", sfx: "Sound effect", min: "minutes", sec: "seconds",
-			about: "Behind the sound", making: "The making of", credits: "Credits",
-			aboutFallback: (k: string, d: string) => `A ${k.toLowerCase()} of ${d}, curated by the Lakuna team. Listen to the preview, then license the original file for your videos, podcasts, ads or projects.`,
-			creator: "Creator", format: "Format", tempo: "Tempo", license: "Licence", licenseVal: "Standard & Premium", category: "Category", keywords: "Keywords",
-			source: "Source: Lakuna Stock",
-			ai: "Made with AI",
-			order: "All sounds — ordered by newest first",
+			back: "Back", by: "by", ai: "Made with AI", aiHint: "This work was created with generative AI and curated by the Lakuna team.",
+			play: "Play preview", pause: "Pause", seek: "Playback position",
+			music: "Music", sfx: "Sound effect", cat: "Category", duration: "Length", tempo: "Tempo", format: "Format", kind: "Type", tags: "Keywords",
+			slip: "Licence slip", usage: "Usage", fee: "Licence fee", personal: "Standard", commercial: "Premium",
+			personalDesc: "Video, podcasts, social media & ads", commercialDesc: "Monthly download quota",
+			subscribe: "Subscribe", fromPrice: "from", perMonth: "/month",
+			buyNow: "Buy now", addToCart: "Add to cart", added: "Added", save: "Save", saved: "Saved",
+			youGet: "What you get", original: "Original file",
+			previewNote: "The preview plays as an MP3 with a marker chime every 10 seconds. The clean original file is available to download after purchase",
+			related: "Related sounds", relatedKicker: "Listen next", seeAll: "See all",
 			missing: "This sound wasn't found or isn't published yet",
-			prev: "Previous", next: "Next",
 		},
 	};
 	const lang = $derived(i18n.lang);
 	const t = $derived(copy[lang]);
+	const back = backNav("/sounds");
 
 	let sound = $state<Sound | null>(null);
 	let missing = $state(false);
-	let all = $state<Sound[]>([]);
-	let allTotal = $state(0);
+	let related = $state<Sound[]>([]);
+	let license = $state<"personal" | "commercial">("personal");
 	let added = $state(false);
+	let rootEl: HTMLDivElement | undefined = $state();
 
 	$effect(() => {
 		const id = soundId;
 		let alive = true;
 		fetchSoundById(id).then(({ sound: s, type }) => {
 			if (!alive) return;
+			// Tautan /sounds/<id foto/video> → halaman yang benar.
 			if (!s && type) {
 				void goto(assetPath({ id, kind: kindOfType(type) }), { replaceState: true });
 				return;
@@ -77,651 +77,279 @@
 				return;
 			}
 			sound = s;
+			fetchRelatedSounds(id, s.kind, 6).then((r) => alive && (related = r));
 		});
-		fetchSounds({ limit: 30 })
-			.then((r) => {
-				if (!alive) return;
-				all = r.sounds;
-				allTotal = r.total;
-			})
-			.catch(() => {});
 		return () => {
 			alive = false;
 		};
 	});
-	$effect(() => {
-		void subscribeModal.load();
-	});
 
-	const playingNow = $derived(!!sound && player.isCurrent(sound.id) && player.playing);
+	const current = $derived(!!sound && player.isCurrent(sound.id));
+	const playingNow = $derived(current && player.playing);
 	const fav = $derived(sound ? store.isFavorite(sound.id) : false);
-	const kindLabel = $derived(sound?.kind === "SFX" ? t.sfx : t.music);
-	const longDur = $derived.by(() => {
-		const s = Math.max(0, Math.round(sound?.duration ?? 0));
-		const m = Math.floor(s / 60);
-		return m ? `${m} ${t.min} ${s % 60} ${t.sec}` : `${s} ${t.sec}`;
-	});
-	const dateText = $derived(
-		sound?.createdAt
-			? new Intl.DateTimeFormat(lang === "en" ? "en-US" : "id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(sound.createdAt))
-			: "—"
-	);
-	const monthYear = $derived(
-		sound?.createdAt ? new Intl.DateTimeFormat(lang === "en" ? "en-US" : "id-ID", { month: "long", year: "numeric" }).format(new Date(sound.createdAt)) : ""
-	);
-	const aboutText = $derived.by(() => {
-		if (!sound) return "";
-		const d = sound.desc[lang];
-		return d && d !== sound.title.id && d !== sound.title.en ? d : t.aboutFallback(kindLabel, longDur);
-	});
-	const cats = $derived(lang === "en" && sound?.categoriesEn?.length ? sound.categoriesEn : (sound?.categories ?? []));
 	const kws = $derived(lang === "en" && sound?.keywordsEn?.length ? sound.keywordsEn : (sound?.keywords ?? []));
-	const premiumFrom = $derived(subscribeModal.fromMonthly);
+	const cats = $derived(lang === "en" && sound?.categoriesEn?.length ? sound.categoriesEn : (sound?.categories ?? []));
+	const catalogNo = $derived(sound ? sound.id.slice(-6).toUpperCase() : "");
+	const kindLabel = $derived(sound?.kind === "SFX" ? t.sfx : t.music);
+	const queue = $derived(sound ? [sound, ...related] : []);
 
-	function addToCart() {
+	function toggle() {
+		if (sound) player.play(sound, queue);
+	}
+	function seek(r: number) {
+		if (!sound) return;
+		if (!current) player.play(sound, queue);
+		player.seek(r);
+	}
+
+	// Pelat masuk sekali begitu datanya ada.
+	$effect(() => {
+		if (!sound) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const plate = rootEl?.querySelector<HTMLElement>("[data-plate]");
+		if (plate) gsap.fromTo(plate, { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 1.1, ease: "power3.out" });
+	});
+
+	function handleAdd() {
 		if (!sound) return;
 		void store.addToCart({ id: sound.id, kind: "sound", title: sound.title[lang], price: sound.price, meta: sound.id, thumbUrl: sound.cover });
 		added = true;
-		announcer.announce(`${sound.title[lang]} — ${t.added}`);
 		setTimeout(() => (added = false), 1800);
 	}
-	async function buyNow() {
+	// Beli langsung: masuk keranjang lalu ke checkout. Belum masuk → login, tetap di halaman ini.
+	async function handleBuyNow() {
 		if (!store.user) {
 			authModal.open(page.url.pathname + page.url.search);
 			return;
 		}
-		addToCart();
+		handleAdd();
 		await goto("/checkout");
 	}
-
-	let cardsEl: HTMLDivElement | undefined = $state();
-	function slide(dir: 1 | -1) {
-		cardsEl?.scrollBy({ left: dir * Math.min(cardsEl.clientWidth * 0.8, 480), behavior: "smooth" });
+	// Premium = langganan berkuota (sama dengan halaman foto & video).
+	const isPremium = $derived(license === "commercial");
+	const premiumFrom = $derived(subscribeModal.fromMonthly);
+	const premiumRowLabel = $derived(premiumFrom ? `${fmtIDR(premiumFrom)}${t.perMonth}` : "…");
+	function handlePrimary() {
+		if (isPremium) subscribeModal.open();
+		else void handleBuyNow();
 	}
+	$effect(() => {
+		void subscribeModal.load();
+	});
 </script>
 
-<div class="cvd" data-no-hover-sound data-no-click-sound>
+{#snippet meta(label: string, value: string)}
+	<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
+		<p class="kicker shrink-0 text-fg-muted">{label}</p>
+		<p class="text-right text-sm text-fg sm:mt-1.5 sm:text-left">{value}</p>
+	</div>
+{/snippet}
+
+{#snippet licenseRow(active: boolean, onpick: () => void, title: string, desc: string, priceLabel: string)}
+	<button
+		type="button"
+		role="radio"
+		aria-checked={active}
+		onclick={onpick}
+		class="group/row flex w-full items-start justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-fg/[0.03] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-safelight"
+	>
+		<span class="flex items-start gap-3">
+			<span class={`mt-[3px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border transition-colors ${active ? "border-safelight" : "border-fg-muted/50 group-hover/row:border-fg-muted"}`}>
+				<span class={`h-1.5 w-1.5 rounded-full transition-colors ${active ? "bg-safelight" : "bg-transparent"}`}></span>
+			</span>
+			<span>
+				<span class={`block text-sm ${active ? "text-fg" : "text-fg/80"}`}>{title}</span>
+				<span class="mt-0.5 block text-xs leading-relaxed text-fg-muted">{desc}</span>
+			</span>
+		</span>
+		<span class="shrink-0 pt-px text-right font-mono text-[0.82rem] tabular-nums">{priceLabel}</span>
+	</button>
+{/snippet}
+
+<div data-no-hover-sound data-no-click-sound>
 	{#if !sound}
-		<div class="cvd-empty">
-			{#if missing}<p>{t.missing}</p>{/if}
+		<div class="min-h-screen pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] sm:pt-28">
+			{#if missing}
+				<p class="mx-auto max-w-xl px-6 py-32 text-center font-display text-2xl font-light text-fg-muted">{t.missing}</p>
+			{/if}
 		</div>
 	{:else}
-		<!-- ───────── Kepala rilis ───────── -->
-		<section class="cvd-header">
-			<div class="cvd-script" aria-hidden="true"><span>{t.script}</span></div>
-			<a href="/sounds" class="cvd-home" aria-label={t.home} title={t.home}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
-			</a>
-			<div class="cvd-art">
-				{#if sound.cover}<ApiImage src={sound.cover} alt={sound.title[lang]} fill eager class="object-cover object-top" />{/if}
+		<div bind:this={rootEl} class="min-h-screen pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] sm:pt-28">
+			<div class="mx-auto flex max-w-[1500px] items-center px-6 pb-6 lg:px-10">
+				<a href={back.href} onclick={back.onclick} class="arrow-link text-sm text-fg-muted hover:text-safelight">
+					<span class="arr">←</span> {t.back}
+				</a>
 			</div>
-			<p class="cvd-artist">
-				<a href={`/archive/${encodeURIComponent(sound.author)}`}>{sound.author}</a>
-				{#if sound.aiGenerated}<span class="cvd-ai">{t.ai}</span>{/if}
-			</p>
-			<h1 class="cvd-title">{sound.title[lang]}</h1>
-			<div class="cvd-pills">
-				<button type="button" class="cv-pill cv-pill--dark" onclick={buyNow}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></svg>
-					{t.buy} — {fmtIDR(sound.price)}
-				</button>
-				<button type="button" class="cv-pill" onclick={addToCart}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2.5 3h2.2l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.3L21 7H6" /></svg>
-					{added ? `✓ ${t.added}` : t.addToCart}
-				</button>
-				<button type="button" class="cv-pill" aria-pressed={fav} onclick={() => store.toggleFavorite(sound!.id)}>
-					<svg viewBox="0 0 24 24" fill={fav ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
-					{fav ? t.saved : t.save}
-				</button>
-				<button type="button" class="cv-pill" onclick={() => subscribeModal.open()}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" /></svg>
-					{t.premium}{premiumFrom ? ` — ${t.from} ${fmtIDR(premiumFrom)}${t.perMonth}` : ""}
-				</button>
-			</div>
-		</section>
 
-		<!-- ───────── Kartu hitam + pratinjau ───────── -->
-		<section class="cvd-artwork">
-			<div class="cvd-artwork__img">
-				{#if sound.cover}<ApiImage src={sound.cover} alt="" fill class="object-cover object-top" />{/if}
-			</div>
-			<button type="button" class="cvd-preview" aria-pressed={playingNow} onclick={() => player.play(sound!, [sound!, ...all.filter((x) => x.id !== sound!.id)])}>
-				{#if playingNow}
-					<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M10 8.5v7M14 8.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-				{:else}
-					<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></svg>
-				{/if}
-				{playingNow ? t.pause : t.preview}
-			</button>
-		</section>
+			<div class="mx-auto flex max-w-[1500px] flex-col gap-8 px-6 pb-20 lg:grid lg:grid-cols-[1fr_22rem] lg:gap-10 lg:px-10">
+				<!-- ───────── Pelat pemutar ───────── -->
+				<div class="min-w-0 lg:col-start-1 lg:row-start-1">
+					<figure data-plate class="relative overflow-hidden rounded-[3px] border border-hair bg-fg/[0.03]">
+						<div class="pointer-events-none absolute -inset-10 bg-[radial-gradient(circle_at_30%_40%,color-mix(in_srgb,var(--safelight)_14%,transparent),transparent_60%)] blur-2xl"></div>
+						<div class="relative flex flex-col gap-6 p-5 sm:flex-row sm:items-stretch sm:gap-8 sm:p-7">
+							<!-- Sampul + tombol putar -->
+							<button
+								type="button"
+								onclick={toggle}
+								aria-label={`${playingNow ? t.pause : t.play} — ${sound.title[lang]}`}
+								aria-pressed={playingNow}
+								class="group relative aspect-square w-full max-w-[15rem] shrink-0 self-center overflow-hidden rounded-[3px] bg-ocean focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight sm:w-52 sm:self-auto lg:w-60"
+							>
+								{#if sound.cover}
+									<ApiImage src={sound.cover} alt={sound.title[lang]} fill eager class="object-cover object-top transition-transform duration-700 group-hover:scale-[1.04]" />
+								{/if}
+								<span class="absolute inset-0 grid place-items-center bg-ocean-deep/25 transition-colors group-hover:bg-ocean-deep/40">
+									<span class="grid h-16 w-16 place-items-center rounded-full bg-safelight text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform group-hover:scale-[1.06]">
+										{#if current && player.loading && player.playing}
+											<span class="h-6 w-6 animate-spin rounded-full border-2 border-ivory/30 border-t-ivory"></span>
+										{:else if playingNow}
+											<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+										{:else}
+											<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11.03-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" /></svg>
+										{/if}
+									</span>
+								</span>
+							</button>
 
-		<div class="cvd-data">
-			<div class="cvd-data__item"><p>{t.type}</p><p class="cv-mono">{kindLabel}{sound.bpm ? `, ${sound.bpm} BPM` : ""}</p></div>
-			<div class="cvd-data__item"><p>{t.date}</p><p class="cv-mono">{dateText}</p></div>
-			<div class="cvd-data__item"><p>{t.runtime}</p><p class="cv-mono">{longDur}</p></div>
-		</div>
+							<!-- Gelombang besar -->
+							<div class="flex min-w-0 flex-1 flex-col justify-between gap-5">
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="kicker rounded-full border border-hair px-3 py-1.5 text-fg">{kindLabel}</span>
+									{#if sound.bpm}<span class="kicker rounded-full border border-hair px-3 py-1.5 tabular-nums text-fg-muted">{sound.bpm} BPM</span>{/if}
+									{#if sound.format}<span class="kicker rounded-full border border-hair px-3 py-1.5 uppercase text-fg-muted">{sound.format}</span>{/if}
+								</div>
+								<Waveform
+									peaks={sound.waveform}
+									progress={current ? player.progress : 0}
+									active={current}
+									label={t.seek}
+									onseek={seek}
+									bars={120}
+									class="h-24 w-full sm:h-32"
+								/>
+								<div class="flex items-center justify-between font-mono text-[0.78rem] tabular-nums text-fg-muted">
+									<span>{current ? fmtDuration(player.time) : "0:00"}</span>
+									<span>{fmtDuration(sound.duration)}</span>
+								</div>
+							</div>
+						</div>
+					</figure>
 
-		<!-- ───────── Kartu geser ───────── -->
-		<section class="cvd-cards-wrap">
-			<div class="cvd-cards" bind:this={cardsEl}>
-				<article class="cvd-card cvd-card--grey">
-					<p class="cv-mono cvd-card__head">{t.about}</p>
-					<p class="cvd-card__story">{aboutText}</p>
-				</article>
-				<article class="cvd-card cvd-card--black">
-					<p class="cv-mono cvd-card__head">{t.making}</p>
-					<div class="cvd-polaroids">
-						<span class="cvd-polaroid cvd-polaroid--back"></span>
-						<span class="cvd-polaroid cvd-polaroid--back2"></span>
-						<figure class="cvd-polaroid">
-							<span class="cvd-polaroid__img">{#if sound.cover}<ApiImage src={sound.cover} alt="" fill class="object-cover object-top" />{/if}</span>
-							<figcaption>
-								{sound.location || cats[0] || kindLabel}
-								<span class="cv-mono">{monthYear}</span>
-							</figcaption>
-						</figure>
+					<div class="mt-3 flex items-center justify-between gap-4">
+						<p class="kicker text-fg-muted">No. {catalogNo} — {fmtDuration(sound.duration)}</p>
+						<span class="kicker text-fg-muted">{kindLabel}</span>
 					</div>
-				</article>
-				<article class="cvd-card cvd-card--white">
-					<p class="cv-mono cvd-card__head">{t.credits}</p>
-					<dl class="cvd-credits">
-						{#each [[t.creator, sound.author], [t.license, t.licenseVal], [t.format, (sound.format ?? "—").toUpperCase()], [t.tempo, sound.bpm ? `${sound.bpm} BPM` : "—"], [t.category, cats.join(", ") || "—"], [t.keywords, kws.slice(0, 4).join(", ") || "—"]] as [k, v] (k)}
-							<div class="cvd-credit"><dt class="cv-mono">{k}</dt><span aria-hidden="true"></span><dd class="cv-mono">{v}</dd></div>
+
+					<div class="mt-8">
+						<DetailTitle text={sound.title[lang]} />
+						<p class="mt-3 kicker text-fg-muted">
+							{t.by} <a href={`/archive/${encodeURIComponent(sound.author)}`} class="text-safelight underline-offset-4 transition-colors hover:text-fg hover:underline">{sound.author}</a>
+							{#if sound.aiGenerated}
+								<span title={t.aiHint} class="ml-2 inline-flex items-center rounded-full border border-hair px-2 py-0.5 align-middle text-[10px] tracking-[0.12em] text-fg">{t.ai}</span>
+							{/if}
+						</p>
+					</div>
+				</div>
+
+				<!-- ───────── Lembar lisensi ───────── -->
+				<aside class="lg:sticky lg:top-28 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+					<div class="proof-slip border border-hair">
+						<div class="flex items-baseline justify-between gap-4 border-b border-hair px-5 py-4">
+							<span class="kicker text-fg-muted">{t.slip}</span>
+							<span class="font-mono text-[0.7rem] tracking-[0.14em] text-fg-muted">{catalogNo}</span>
+						</div>
+						<div class="px-5 pt-4"><span class="kicker text-fg-muted">{t.usage}</span></div>
+						<div role="radiogroup" aria-label={t.usage} class="mt-1 divide-y divide-hair border-b border-hair">
+							{@render licenseRow(license === "personal", () => (license = "personal"), t.personal, t.personalDesc, fmtIDR(sound.price))}
+							{@render licenseRow(license === "commercial", () => (license = "commercial"), t.commercial, t.commercialDesc, premiumRowLabel)}
+						</div>
+						<div class="border-b border-hair px-5 py-5">
+							<span class="kicker text-fg-muted">{t.fee}</span>
+							<p class="mt-2 font-display text-[2.1rem] font-light leading-none tracking-[-0.02em] text-fg">
+								{#if isPremium}
+									<span class="mr-2 font-body text-base text-fg-muted">{t.fromPrice}</span>{premiumFrom ? fmtIDR(premiumFrom) : "…"}<span class="ml-1 font-body text-base text-fg-muted">{t.perMonth}</span>
+								{:else}
+									{fmtIDR(sound.price)}
+								{/if}
+							</p>
+						</div>
+						<div class="px-5 py-5">
+							<button
+								type="button"
+								onclick={handlePrimary}
+								class="press w-full rounded-full bg-safelight py-3.5 text-sm font-medium text-ivory shadow-[0_14px_40px_-12px_var(--safelight-glow)] transition-transform hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safelight"
+							>
+								{isPremium ? t.subscribe : t.buyNow}
+							</button>
+							<div class="mt-3.5 flex items-center justify-between text-sm">
+								{#if !isPremium}
+									<button type="button" onclick={handleAdd} class="inline-flex items-center gap-2 text-fg-muted transition-colors hover:text-safelight">
+										<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+											<path d="M3 3h2l2.4 12.5a2 2 0 0 0 2 1.5h7.2a2 2 0 0 0 2-1.5L21 7H6" /><circle cx="9" cy="20" r="1.3" /><circle cx="18" cy="20" r="1.3" />
+										</svg>
+										{added ? `✓ ${t.added}` : t.addToCart}
+									</button>
+								{/if}
+								<button type="button" onclick={() => store.toggleFavorite(sound!.id)} class="ml-auto text-fg-muted transition-colors hover:text-safelight">
+									{fav ? `♥ ${t.saved}` : `♡ ${t.save}`}
+								</button>
+							</div>
+						</div>
+						<div class="border-t border-hair px-5 py-4">
+							<span class="kicker text-fg-muted">{t.youGet}</span>
+							<p class="mt-2 font-mono text-[0.76rem] uppercase tabular-nums text-fg">
+								{[sound.format, fmtDuration(sound.duration), t.original].filter(Boolean).join(" · ")}
+							</p>
+							<p class="mt-2 text-xs leading-relaxed text-fg-muted">{t.previewNote}</p>
+						</div>
+					</div>
+				</aside>
+
+				<!-- Deskripsi & data karya -->
+				<div class="max-w-2xl lg:col-start-1 lg:row-start-2 lg:-mt-4">
+					<!-- Tanpa deskripsi, API mengisi desc dengan judul (bahasa mana pun) — jangan ulang judulnya. -->
+					{#if sound.desc[lang] && sound.desc[lang] !== sound.title.id && sound.desc[lang] !== sound.title.en}
+						<p class="text-[1.02rem] leading-relaxed text-fg-muted">{sound.desc[lang]}</p>
+					{/if}
+					<div class="mt-8 border-t border-hair pt-2 sm:grid sm:grid-cols-3 sm:gap-x-8 sm:gap-y-5 sm:pt-8">
+						{@render meta(t.kind, kindLabel)}
+						{@render meta(t.duration, fmtDuration(sound.duration))}
+						{@render meta(t.tempo, sound.bpm ? `${sound.bpm} BPM` : "—")}
+						{@render meta(t.format, (sound.format ?? "—").toUpperCase())}
+						{@render meta(t.cat, cats.join(", ") || "—")}
+						<div class="flex items-baseline justify-between gap-6 border-b border-hair py-3.5 sm:block sm:border-0 sm:py-0">
+							<p class="kicker shrink-0 text-fg-muted">{t.tags}</p>
+							<div class="flex flex-wrap justify-end gap-1.5 sm:mt-2 sm:justify-start">
+								{#if kws.length}
+									{#each kws as kw (kw)}
+										<a href={`/sounds?q=${encodeURIComponent(kw)}`} class="press kicker rounded-full border border-hair px-3 py-1.5 text-fg-muted transition-colors hover:border-safelight hover:text-safelight">#{kw}</a>
+									{/each}
+								{:else}
+									<span class="text-sm text-fg/40">—</span>
+								{/if}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- ───────── Audio terkait ───────── -->
+			{#if related.length > 0}
+				<section class="mx-auto max-w-[1500px] px-6 pb-28 lg:px-10">
+					<Reveal class="mb-8 flex items-end justify-between gap-x-6 gap-y-4 max-[360px]:flex-wrap">
+						<div>
+							<p data-reveal class="kicker text-safelight">{t.relatedKicker}</p>
+							<h2 data-reveal class="mt-4 font-display text-2xl font-light tracking-[-0.02em] text-fg">{t.related}</h2>
+						</div>
+						<a data-reveal href="/sounds" class="shrink-0 rounded-full border border-hair px-5 py-2.5 text-xs font-medium text-fg transition-colors hover:border-safelight hover:text-safelight">{t.seeAll}</a>
+					</Reveal>
+					<ol class="space-y-2">
+						{#each related as s (s.id)}
+							<li><SoundRow sound={s} queue={queue} /></li>
 						{/each}
-					</dl>
-					<div class="cvd-source">
-						<span class="cvd-source__avatar"><img src="/logo1-sm.png" alt="" width="200" height="36" /></span>
-						<span class="cv-mono">{t.source}</span>
-					</div>
-				</article>
-			</div>
-			<div class="cvd-nav">
-				<button type="button" onclick={() => slide(-1)} aria-label={t.prev}>←</button>
-				<button type="button" onclick={() => slide(1)} aria-label={t.next}>→</button>
-			</div>
-		</section>
-
-		<!-- ───────── Semua audio ───────── -->
-		{#if all.length > 0}
-			<section class="cvd-list">
-				<h2 class="cvd-h2">{t.order}</h2>
-				<ul class="cvd-releases">
-					{#each all as s, i (s.id)}
-						<SoundRow sound={s} queue={all} index={allTotal - i - 1} />
-					{/each}
-				</ul>
-			</section>
-		{/if}
+					</ol>
+				</section>
+			{/if}
+		</div>
 	{/if}
 </div>
-
-<style>
-	.cvd {
-		color: #1d1812;
-		font-family: "Inter", sans-serif;
-		font-size: 12px;
-		overflow-x: clip;
-	}
-	.cv-mono {
-		font-family: ui-monospace, Menlo, Monaco, monospace;
-	}
-	.cvd-empty {
-		min-height: 70vh;
-		padding: calc(var(--banner-h, 0px) + var(--nav-h) + 6em) 2em 4em;
-		text-align: center;
-		color: #524d46;
-		font-size: 1.2em;
-	}
-
-	/* ── Kepala ── */
-	.cvd-header {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: calc(var(--banner-h, 0px) + var(--nav-h) + 24px) 1.5em 6em;
-		text-align: center;
-	}
-	.cvd-script {
-		position: absolute;
-		left: 50%;
-		top: 2%;
-		z-index: 0;
-		width: 110vw;
-		pointer-events: none;
-		transform: translateX(-50%) rotate(-10deg);
-		text-align: center;
-	}
-	.cvd-script span {
-		display: inline-block;
-		font-family: "Mrs Saint Delafield", cursive;
-		font-size: clamp(7rem, 21vw, 22rem);
-		line-height: 1;
-		color: #f8f8f8;
-		white-space: nowrap;
-		clip-path: inset(0 100% 0 0);
-		animation: cvd-write 3.2s 0.2s cubic-bezier(0.45, 0, 0.25, 1) forwards;
-	}
-	@keyframes cvd-write {
-		to {
-			clip-path: inset(0 0 0 0);
-		}
-	}
-	.cvd-home {
-		position: relative;
-		z-index: 1;
-		display: grid;
-		height: 36px;
-		width: 36px;
-		place-items: center;
-		border-radius: 8px;
-		background: #1d1812;
-		color: #eeeeee;
-	}
-	.cvd-art {
-		position: relative;
-		z-index: 1;
-		height: 104px;
-		width: 104px;
-		margin-top: 56px;
-		overflow: hidden;
-		border-radius: 10px;
-		background: #dddddd;
-		box-shadow: 0 18px 30px -14px rgba(0, 0, 0, 0.45);
-		transform: rotate(-8deg);
-	}
-	.cvd-artist {
-		position: relative;
-		z-index: 1;
-		margin: 3.4em 0 0;
-		color: #524d46;
-		font-weight: 600;
-		text-transform: uppercase;
-	}
-	.cvd-artist a {
-		color: inherit;
-		text-decoration: none;
-	}
-	.cvd-ai {
-		margin-left: 0.8em;
-		padding: 0.2em 0.6em;
-		border: 1px solid rgba(0, 0, 0, 0.2);
-		border-radius: 20px;
-		font-size: 0.8em;
-	}
-	.cvd-title {
-		position: relative;
-		z-index: 1;
-		max-width: 16ch;
-		margin: 0.25em 0 0;
-		font-size: 4em;
-		font-weight: 700;
-		line-height: 1.05;
-		letter-spacing: -0.03em;
-		text-transform: uppercase;
-	}
-	.cvd-pills {
-		position: relative;
-		z-index: 1;
-		display: flex;
-		max-width: 620px;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: 12px;
-		margin-top: 3.5em;
-	}
-	.cv-pill {
-		display: flex;
-		align-items: center;
-		gap: 2em;
-		padding: 1em 1.6em;
-		border: 0;
-		border-radius: 40px;
-		background: rgba(0, 0, 0, 0.1);
-		color: #1d1812;
-		font-family: ui-monospace, Menlo, Monaco, monospace;
-		font-size: 0.85em;
-		text-transform: uppercase;
-		cursor: pointer;
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
-		transition: background 0.4s ease;
-	}
-	.cv-pill:hover {
-		background: rgba(0, 0, 0, 0.2);
-	}
-	.cv-pill svg {
-		height: 15px;
-		width: 15px;
-		flex-shrink: 0;
-	}
-	.cv-pill--dark {
-		background: #1d1812;
-		color: #eeeeee;
-	}
-	.cv-pill--dark:hover {
-		background: #000000;
-	}
-
-	/* ── Kartu hitam ── */
-	.cvd-artwork {
-		position: relative;
-		z-index: 1;
-		display: flex;
-		width: 80%;
-		min-height: 620px;
-		margin: 4em auto 1em;
-		align-items: center;
-		justify-content: center;
-		padding: 6em;
-		border-radius: 24px;
-		background: #000000;
-	}
-	.cvd-artwork__img {
-		position: relative;
-		height: min(50vh, 520px);
-		aspect-ratio: 1;
-		overflow: hidden;
-		background: #222222;
-	}
-	.cvd-preview {
-		position: absolute;
-		left: 50%;
-		bottom: 8%;
-		z-index: 2;
-		display: flex;
-		align-items: center;
-		gap: 2em;
-		padding: 1em 1.6em 1em 1em;
-		border: 0;
-		border-radius: 40px;
-		background:
-			linear-gradient(rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.18) 100%),
-			rgba(0, 0, 0, 0.3);
-		color: #ffffff;
-		font-family: ui-monospace, Menlo, Monaco, monospace;
-		font-size: 0.85em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transform: translateX(-50%);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
-	}
-	.cvd-preview:hover {
-		background:
-			linear-gradient(rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.18) 100%),
-			rgba(0, 0, 0, 0.5);
-	}
-	.cvd-preview svg {
-		height: 18px;
-		width: 18px;
-	}
-
-	/* ── Baris data ── */
-	.cvd-data {
-		display: grid;
-		width: 80%;
-		grid-template-columns: 1fr 1fr 1fr;
-		gap: 4em;
-		margin: 0 auto 4em;
-		padding: 0 2em;
-	}
-	.cvd-data__item {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.2em;
-	}
-	.cvd-data__item:nth-of-type(1) {
-		align-items: flex-start;
-	}
-	.cvd-data__item:nth-of-type(3) {
-		align-items: flex-end;
-	}
-	.cvd-data__item p {
-		margin: 0;
-		font-size: 0.85em;
-		font-weight: 600;
-		text-transform: uppercase;
-	}
-	.cvd-data__item p.cv-mono {
-		font-weight: 400;
-	}
-
-	/* ── Kartu geser ── */
-	.cvd-cards-wrap {
-		width: 80%;
-		margin: 0 auto;
-	}
-	.cvd-cards {
-		display: flex;
-		gap: 12px;
-		overflow-x: auto;
-		scroll-snap-type: x mandatory;
-		scrollbar-width: none;
-		margin-right: -12vw;
-		padding-right: 12vw;
-	}
-	.cvd-cards::-webkit-scrollbar {
-		display: none;
-	}
-	.cvd-card {
-		position: relative;
-		display: flex;
-		flex: 0 0 min(460px, 82vw);
-		min-height: 650px;
-		flex-direction: column;
-		overflow: hidden;
-		padding: 24px;
-		border-radius: 24px;
-		scroll-snap-align: start;
-	}
-	.cvd-card__head {
-		margin: 0;
-		font-size: 1em;
-		text-transform: uppercase;
-	}
-	.cvd-card--grey {
-		background: #dcdcdc;
-	}
-	.cvd-card__story {
-		margin: auto 0 0;
-		font-size: 1.6em;
-		font-weight: 500;
-		line-height: 1.4;
-		-webkit-mask-image: linear-gradient(180deg, #000 70%, transparent);
-		mask-image: linear-gradient(180deg, #000 70%, transparent);
-	}
-	.cvd-card--black {
-		background: #000000;
-		color: #ffffff;
-	}
-	.cvd-polaroids {
-		position: relative;
-		display: grid;
-		flex: 1;
-		place-items: center;
-	}
-	.cvd-polaroid {
-		position: relative;
-		z-index: 2;
-		width: 72%;
-		margin: 0;
-		padding: 12px 12px 18px;
-		background: #f4f2ee;
-		color: #1d1812;
-		box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.8);
-		text-align: center;
-	}
-	.cvd-polaroid--back,
-	.cvd-polaroid--back2 {
-		position: absolute;
-		z-index: 1;
-		height: 78%;
-		width: 64%;
-		padding: 0;
-		background: #e8e6e1;
-		transform: translate(8%, -2%) rotate(3deg);
-	}
-	.cvd-polaroid--back2 {
-		background: #dedbd5;
-		transform: translate(14%, 1%) rotate(6deg);
-	}
-	.cvd-polaroid__img {
-		position: relative;
-		display: block;
-		aspect-ratio: 1;
-		overflow: hidden;
-		background: #dddddd;
-	}
-	.cvd-polaroid figcaption {
-		margin-top: 14px;
-		font-size: 0.95em;
-	}
-	.cvd-polaroid figcaption span {
-		display: block;
-		margin-top: 4px;
-		color: #524d46;
-		font-size: 0.8em;
-		text-transform: uppercase;
-	}
-	.cvd-card--white {
-		background: #ffffff;
-	}
-	.cvd-credits {
-		margin: 3.5em 0 0;
-	}
-	.cvd-credit {
-		display: flex;
-		align-items: baseline;
-		gap: 0.8em;
-		margin: 0 0 1.4em;
-	}
-	.cvd-credit dt {
-		flex-shrink: 0;
-		text-transform: uppercase;
-	}
-	.cvd-credit span {
-		flex: 1;
-		border-bottom: 1px dashed rgba(0, 0, 0, 0.2);
-		transform: translateY(-3px);
-	}
-	.cvd-credit dd {
-		max-width: 55%;
-		margin: 0;
-		overflow: hidden;
-		text-align: right;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.cvd-source {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-top: auto;
-	}
-	.cvd-source__avatar {
-		display: grid;
-		height: 48px;
-		width: 48px;
-		place-items: center;
-		border-radius: 50%;
-		background: #fe5416;
-	}
-	.cvd-source__avatar img {
-		width: 80%;
-		height: auto;
-		filter: brightness(0) invert(1);
-	}
-	.cvd-nav {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.6em;
-		margin-top: 1.4em;
-	}
-	.cvd-nav button {
-		display: grid;
-		height: 44px;
-		width: 44px;
-		place-items: center;
-		border: 0;
-		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.1);
-		color: #1d1812;
-		font-size: 1.3em;
-		cursor: pointer;
-	}
-	.cvd-nav button:hover {
-		background: rgba(0, 0, 0, 0.2);
-	}
-
-	/* ── Semua audio ── */
-	.cvd-list {
-		width: calc(100% - 10vw);
-		margin: 12em auto 6em;
-	}
-	.cvd-h2 {
-		margin: 0;
-		text-align: center;
-		font-size: 1em;
-		font-weight: 600;
-		text-transform: uppercase;
-		color: #524d46;
-	}
-	.cvd-releases {
-		margin: 4em 0 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	@media (max-width: 768px) {
-		.cvd-title {
-			font-size: 2.6em;
-		}
-		.cvd-artwork {
-			width: 90%;
-			min-height: 250px;
-			padding: 4em 2em 6em;
-		}
-		.cvd-artwork__img {
-			height: auto;
-			width: 100%;
-			max-height: none;
-		}
-		.cvd-data {
-			display: flex;
-			width: calc(100% - 6em);
-			flex-direction: column;
-			gap: 1.4em;
-			margin: 2em auto;
-			padding: 0;
-		}
-		.cvd-data__item,
-		.cvd-data__item:nth-of-type(1),
-		.cvd-data__item:nth-of-type(3) {
-			flex-direction: row;
-			justify-content: space-between;
-			align-items: center;
-		}
-		.cvd-cards-wrap {
-			width: calc(100% - 24px);
-		}
-		.cvd-cards {
-			margin-right: -12px;
-			padding-right: 12px;
-		}
-		.cvd-card {
-			min-height: 520px;
-		}
-		.cvd-list {
-			width: calc(100% - 24px);
-			margin-top: 6em;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.cvd-script span {
-			animation: none;
-			clip-path: none;
-		}
-	}
-</style>

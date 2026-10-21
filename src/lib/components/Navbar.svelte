@@ -111,20 +111,15 @@ import { i18n } from "$lib/i18n.svelte";
 	}
 
 	const solid = $derived(scrolled || mega || open);
-	// Halaman Sounds berlatar krem terang (gaya coveomusic.com, lihat routes/sounds/+layout.svelte): teks & logo
-	// gelap, tanpa bayangan gelap di atas — bukan teks putih untuk hero foto/video.
-	const lightPage = $derived(page.url.pathname === "/sounds" || page.url.pathname.startsWith("/sounds/"));
-	const over = $derived(!solid && !lightPage);
+	const over = $derived(!solid);
 	const muted = $derived(over ? "text-ivory/80" : "text-fg/85");
 	const icon = $derived(over ? "text-ivory/85" : "text-fg/80");
 	const line = $derived(over ? "border-ivory/25" : "border-hair");
 	const bar = $derived(over ? "bg-ivory/90" : "bg-fg");
 	const logoFilter = $derived(
-		lightPage
-			? "[filter:brightness(0)]"
-			: over
-				? "[filter:brightness(0)_invert(1)]"
-				: "[filter:brightness(0)] dark:[filter:brightness(0)_invert(1)]"
+		over
+			? "[filter:brightness(0)_invert(1)]"
+			: "[filter:brightness(0)] dark:[filter:brightness(0)_invert(1)]"
 	);
 </script>
 
@@ -145,7 +140,7 @@ import { i18n } from "$lib/i18n.svelte";
 >
 	<div
 		class={`pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-ocean-deep/55 to-transparent transition-opacity duration-500 ${
-			solid || lightPage ? "opacity-0" : "opacity-100"
+			solid ? "opacity-0" : "opacity-100"
 		}`}
 	></div>
 	<div
