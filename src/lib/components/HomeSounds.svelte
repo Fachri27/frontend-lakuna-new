@@ -14,18 +14,22 @@
 	import { beforeNavigate } from "$app/navigation";
 	import { i18n } from "$lib/i18n.svelte";
 	import { player } from "$lib/soundPlayer.svelte";
-	import { fetchSounds, fmtDuration, type Sound } from "$lib/data";
+	import { fetchPhotos, fetchSounds, fmtDuration, type Photo, type Sound } from "$lib/data";
 	import ApiImage from "./ApiImage.svelte";
+	import Reveal from "./Reveal.svelte";
+	import RevealText from "./RevealText.svelte";
 	import DiscCascadeCarousel from "./ui/DiscCascadeCarousel.svelte";
 	import type { DiscCascadeItem } from "./ui/disc-cascade";
 
 	const copy = {
 		id: {
-			title: "Lakuna Sounds — musik & efek suara",
+			kicker: "Sounds",
+			heading: "Dengarkan arsipnya",
+			sub: "Musik dan efek suara bebas royalti dari hutan, laut, pasar, dan panggung budaya Nusantara. Putar pratinjaunya di sini, lalu lisensikan berkas aslinya di halaman Sounds.",
+			seeAll: "Lihat semua audio",
 			all: "Semua",
 			music: "Musik",
 			sfx: "Efek suara",
-			catalog: "Katalog",
 			index: "Daftar",
 			hint: "Geser · ← →",
 			kind: "Jenis",
@@ -45,11 +49,13 @@
 			empty: "Belum ada audio di arsip. Koleksi musik dan efek suara segera hadir.",
 		},
 		en: {
-			title: "Lakuna Sounds — music & sound effects",
+			kicker: "Sounds",
+			heading: "Listen to the archive",
+			sub: "Royalty-free music and sound effects from the forests, seas, markets and stages of the archipelago. Preview them here, then license the original files on the Sounds page.",
+			seeAll: "See all audio",
 			all: "All",
 			music: "Music",
 			sfx: "Sound effects",
-			catalog: "Catalogue",
 			index: "Tracklist",
 			hint: "Drag · ← →",
 			kind: "Type",
@@ -194,35 +200,79 @@
 		if (!toSounds && ours()) player.close();
 	});
 
-	// Saat belum ada audio (atau masih memuat): cakram hias buatan tanpa judul, tak bisa difokus (inert).
-	const blanks: DiscCascadeItem[] = Array.from({ length: 6 }, (_, i) => ({ key: "b" + i, title: "", label: "", fine: "" }));
+	// Belum ada audio: cakram hias berlabel foto arsip Lakuna (tanpa judul, tak bisa difokus — inert), supaya
+	// tetap senada dengan landing; motif buatan komponen hanya bila foto pun tak ada / selama memuat.
+	let decoPhotos = $state<Photo[]>([]);
+	$effect(() => {
+		if (!loaded || sounds.length) return;
+		let off = false;
+		fetchPhotos({ type: "FOTO", limit: 8 })
+			.then((r) => {
+				if (!off) decoPhotos = r.photos.filter((ph) => ph.thumbUrl);
+			})
+			.catch(() => {});
+		return () => {
+			off = true;
+		};
+	});
+	const blanks = $derived<DiscCascadeItem[]>(
+		decoPhotos.length
+			? decoPhotos.map((ph) => ({ key: ph.id, title: "", label: "", fine: "" }))
+			: Array.from({ length: 6 }, (_, i) => ({ key: "b" + i, title: "", label: "", fine: "" }))
+	);
 	// Latar sama dengan halaman (hitam --bg), tanpa sorotan abu — tak ada sambungan terlihat dengan section di atasnya.
 	const STAGE_BG = "var(--bg)";
-	const HEIGHT = "clamp(680px, 100svh, 980px)";
+	const HEIGHT = "clamp(560px, 88svh, 880px)";
 	// Di ponsel cakram sedikit lebih besar dari bawaan (38vw terlalu kecil di layar sempit yang tinggi).
 	const DISC = "clamp(180px, min(50vmin, 46vw), 420px)";
 </script>
 
-<!-- --dcc-top/bottom: navbar tetap di atas dan tombol Bantuan / ke-atas di bawah menimpa tepi section ini. -->
+<!-- Judul memakai pola section landing lainnya (kicker + judul besar + ringkasan + tautan); karusel di bawahnya
+	tanpa bingkai dan tepinya memudar ke --bg, jadi terbaca sebagai bagian halaman — bukan widget yang ditempel.
+	--dcc-top/bottom: navbar tetap di atas dan tombol Bantuan / ke-atas di bawah menimpa tepi karusel. -->
 <section
 	bind:this={root}
-	class="relative [--dcc-bottom:4.5rem] [--dcc-top:calc(var(--nav-h)_+_3rem)]"
-	aria-label={t.title}
+	class="relative [--dcc-bottom:4.5rem] [--dcc-top:var(--nav-h)]"
+	aria-labelledby="home-sounds-h"
+	data-home-sounds
 	data-no-hover-sound
 	data-no-click-sound
 >
-	<h2 class="sr-only">{t.title}</h2>
+	<div class="mx-auto max-w-[1500px] px-6 pt-[clamp(2rem,5vh,4rem)] lg:px-10">
+		<!-- start 97%: section ini menumpang ekor galeri orbit (margin negatif di GsapGallery). -->
+		<Reveal start="top 97%" class="relative z-10 grid gap-x-10 gap-y-6 lg:grid-cols-12 lg:items-end">
+			<div class="lg:col-span-7">
+				<p data-reveal class="kicker text-safelight">{t.kicker}</p>
+				<div id="home-sounds-h">
+					<RevealText
+						as="h2"
+						text={t.heading}
+						class="mt-6 font-display text-[clamp(2.2rem,5vw,4.2rem)] font-light leading-[1.02] tracking-[-0.02em] text-fg"
+					/>
+				</div>
+			</div>
+			<div class="lg:col-span-5">
+				<p data-reveal class="max-w-[46ch] text-[0.98rem] leading-relaxed text-fg-muted">{t.sub}</p>
+				{#if loaded && !sounds.length}
+					<!-- Katalog masih kosong: pesan di sini (bukan di atas cakram hias), tanpa tautan ke halaman kosong. -->
+					<p data-reveal class="mt-5 text-[0.98rem] text-fg">{t.empty}</p>
+				{:else}
+					<a data-reveal href="/sounds" class="hs-link mt-5 inline-block">{t.seeAll}</a>
+				{/if}
+			</div>
+		</Reveal>
+	</div>
 	{#if discs.length}
 		<DiscCascadeCarousel
 			items={discs}
 			height={HEIGHT}
 			discSize={DISC}
 			background={STAGE_BG}
-			brand="lakuna sounds"
-			nav={[
-				...filters.map(([k, label]) => ({ label, current: filter === k, onclick: () => setFilter(k) })),
-				{ label: t.catalog, href: "/sounds" },
-			]}
+			frame={false}
+			fade
+			mark="lakuna sounds"
+			serif="var(--font-display)"
+			nav={filters.map(([k, label]) => ({ label, current: filter === k, onclick: () => setFilter(k) }))}
 			indexLabel={t.index}
 			menuMeta={(it) => durationOf(it.key)}
 			loop
@@ -290,28 +340,34 @@
 			{/snippet}
 		</DiscCascadeCarousel>
 	{:else}
-		<div class="relative">
-			<div inert>
-				<DiscCascadeCarousel
-					items={blanks}
-					height={HEIGHT}
-					discSize={DISC}
-					background={STAGE_BG}
-					brand="lakuna sounds"
-					indexLabel=""
-					details={false}
-					reviews={false}
-					controls={false}
-					hint=""
-					loop
-					autoplay={4200}
-					defaultIndex={2}
-					ariaLabel={t.region}
-				/>
-			</div>
-			{#if loaded}
-				<p class="hs-empty">{t.empty}</p>
-			{/if}
+		<div inert>
+			<DiscCascadeCarousel
+				items={blanks}
+				height={HEIGHT}
+				discSize={DISC}
+				background={STAGE_BG}
+				frame={false}
+				fade
+				mark="lakuna sounds"
+				indexLabel=""
+				details={false}
+				reviews={false}
+				controls={false}
+				hint=""
+				loop
+				autoplay={4200}
+				defaultIndex={2}
+				ariaLabel={t.region}
+			>
+				{#snippet art(_item, i)}
+					{@const ph = decoPhotos[i]}
+					{#if ph?.thumbUrl}
+						<ApiImage src={ph.thumbUrl} alt="" fill class="object-cover" />
+					{:else}
+						<span class="hs-blank" aria-hidden="true"></span>
+					{/if}
+				{/snippet}
+			</DiscCascadeCarousel>
 		</div>
 	{/if}
 </section>
@@ -427,16 +483,6 @@
 	.hs-link:focus-visible {
 		color: var(--safelight);
 		text-decoration-color: var(--safelight);
-	}
-	.hs-empty {
-		position: absolute;
-		left: 50%;
-		bottom: calc(var(--dcc-bottom, 0px) + clamp(2rem, 5vh, 3.5rem));
-		width: min(34rem, calc(100% - 3rem));
-		margin: 0;
-		transform: translateX(-50%);
-		text-align: center;
-		color: var(--fg-muted);
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.hs-play.is-loading {

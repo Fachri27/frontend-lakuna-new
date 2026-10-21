@@ -72,8 +72,12 @@
 		loop?: boolean;
 		/** Milidetik antar-geser otomatis. 0 = mati. */
 		autoplay?: number;
-		/** Merek di tengah atas; juga dicetak kecil di cakram. */
+		/** Merek di tengah atas; juga dicetak kecil di cakram (kecuali `mark` diisi). */
 		brand?: string;
+		/** Teks kecil yang dicetak di cakram. Bawaan: `brand`. */
+		mark?: string;
+		/** Tepi atas & bawah memudar ke latar halaman (--bg) — untuk section yang menyatu dengan halaman. */
+		fade?: boolean;
 		nav?: DiscNavLink[];
 		/** Label menu lompat. "" = sembunyi. */
 		indexLabel?: string;
@@ -130,6 +134,8 @@
 		loop = false,
 		autoplay = 0,
 		brand = "",
+		mark,
+		fade = false,
 		nav = [],
 		indexLabel = "Index",
 		details = true,
@@ -528,8 +534,8 @@
 				<textPath href="#{id}bot" startOffset="50%">{pl.fine}</textPath>
 			</text>
 		{/if}
-		{#if brand}
-			<text x="100" y="150" fill={ink} font-size="10" font-weight="800" letter-spacing="-.4" text-anchor="middle" stroke={halo} stroke-width={w(1.2)} stroke-linejoin="round" paint-order="stroke">{brand}</text>
+		{#if mark ?? brand}
+			<text x="100" y="150" fill={ink} font-size="10" font-weight="800" letter-spacing="-.4" text-anchor="middle" stroke={halo} stroke-width={w(1.2)} stroke-linejoin="round" paint-order="stroke">{mark ?? brand}</text>
 		{/if}
 		{#if !image}
 			<text x="100" y="64" fill={ink} font-size="4" letter-spacing="1.2" text-anchor="middle" opacity=".6" transform="rotate(180 100 100)">DISC {pad(i + 1)}</text>
@@ -569,6 +575,7 @@
 	}}
 >
 	{#if frame}<div class="dcc-frame" aria-hidden="true"></div>{/if}
+	{#if fade}<div class="dcc-fade dcc-fade-t" aria-hidden="true"></div><div class="dcc-fade dcc-fade-b" aria-hidden="true"></div>{/if}
 
 	{#if brand || nav.length || (indexLabel && n > 1)}
 		<nav class="dcc-nav" data-dcc-ui aria-label={navLabel}>
@@ -789,6 +796,24 @@
 		pointer-events: none;
 		z-index: 1;
 		border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+	}
+	/* Di atas cakram (panggung tanpa z-index), di bawah kredit/nav/kontrol (z 4–5). */
+	.dcc-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		z-index: 3;
+		pointer-events: none;
+	}
+	.dcc-fade-t {
+		top: 0;
+		height: 16%;
+		background: linear-gradient(to bottom, var(--bg), transparent);
+	}
+	.dcc-fade-b {
+		bottom: 0;
+		height: 22%;
+		background: linear-gradient(to top, var(--bg), transparent);
 	}
 	.dcc-stage {
 		position: absolute;
