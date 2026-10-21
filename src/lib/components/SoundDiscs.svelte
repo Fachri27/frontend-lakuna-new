@@ -44,12 +44,10 @@
 			music: "Musik",
 			sfx: "Efek suara",
 			index: "Daftar",
-			hint: "Geser · ← →",
 			kind: "Jenis",
 			length: "Durasi",
 			tempo: "Tempo",
 			by: "Pembuat",
-			category: "Kategori",
 			play: "Putar pratinjau",
 			pause: "Jeda pratinjau",
 			seek: "Posisi putar",
@@ -65,12 +63,10 @@
 			music: "Music",
 			sfx: "Sound effects",
 			index: "Tracklist",
-			hint: "Drag · ← →",
 			kind: "Type",
 			length: "Length",
 			tempo: "Tempo",
 			by: "By",
-			category: "Category",
 			play: "Play preview",
 			pause: "Pause preview",
 			seek: "Playback position",
@@ -113,18 +109,18 @@
 
 	const discs = $derived<DiscCascadeItem[]>(
 		list.map((s) => {
-			const cats = lang === "en" && s.categoriesEn?.length ? s.categoriesEn : s.categories;
 			return {
 				key: s.id,
 				title: s.title[lang],
 				// Musik: judul di busur atas; efek suara: bertumpuk di atas lubang — jenisnya terbaca dari cakramnya.
 				labelStyle: s.kind === "SFX" ? "block" : "arc",
+				// Cakram hanya bercetak judul (tanpa teks kecil melingkar) — tulisan lain sudah di blok kredit.
+				fine: "",
 				credits: [
 					{ label: t.kind, value: s.kind === "SFX" ? t.sfx : t.music },
 					{ label: t.length, value: fmtDuration(s.duration) },
 					...(s.bpm ? [{ label: t.tempo, value: `${s.bpm} BPM` }] : []),
 					{ label: t.by, value: s.author },
-					...(cats.length ? [{ label: t.category, value: cats.slice(0, 2) }] : []),
 				],
 			};
 		})
@@ -236,7 +232,12 @@
 
 <!-- Mulai md, pemutar (footer) turun ke dekat tepi bawah: di tengah ia tak bertabrakan dengan tombol Bantuan /
 	ke-atas di pojok. Ponsel: tetap di atas tombol-tombol itu (--dcc-bottom induk). -->
-<div bind:this={root} class="relative h-full md:[--dcc-foot-bottom:clamp(1rem,3vh,2rem)] {className}">
+<!-- --dcc-inset-x: teks karusel (filter, kredit) segaris dengan kontainer halaman (max-w 1500, px-6 / lg:px-10),
+	sama dengan judul section di atasnya. -->
+<div
+	bind:this={root}
+	class="relative h-full [--dcc-inset-x:1.5rem] md:[--dcc-foot-bottom:clamp(1rem,3vh,2rem)] lg:[--dcc-inset-x:max(2.5rem,calc((100%_-_1500px)/2_+_2.5rem))] {className}"
+>
 	{#if discs.length}
 		<DiscCascadeCarousel
 			items={discs}
@@ -245,7 +246,8 @@
 			background={STAGE_BG}
 			frame={false}
 			fade
-			mark="lakuna sounds"
+			mark=""
+			navAlign="start"
 			serif="var(--font-display)"
 			nav={showFilters ? filters.map(([k, label]) => ({ label, current: filter === k, onclick: () => setFilter(k) })) : []}
 			indexLabel={t.index}
@@ -259,7 +261,7 @@
 			{playingIndex}
 			reviews={false}
 			controls={false}
-			hint={t.hint}
+			hint=""
 			ariaLabel={t.region}
 			navLabel={t.region}
 			prevLabel={t.prev}

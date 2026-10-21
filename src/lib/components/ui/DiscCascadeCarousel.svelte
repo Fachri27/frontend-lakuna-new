@@ -79,6 +79,8 @@
 		/** Tepi atas & bawah memudar ke latar halaman (--bg) — untuk section yang menyatu dengan halaman. */
 		fade?: boolean;
 		nav?: DiscNavLink[];
+		/** "start": nav rata kiri segaris dengan blok kredit (di atasnya), bukan di tengah atas. */
+		navAlign?: "center" | "start";
 		/** Label menu lompat. "" = sembunyi. */
 		indexLabel?: string;
 		details?: boolean;
@@ -137,6 +139,7 @@
 		mark,
 		fade = false,
 		nav = [],
+		navAlign = "center",
 		indexLabel = "Index",
 		details = true,
 		reviews = true,
@@ -564,6 +567,7 @@
 	data-dragging={dragging ? "" : undefined}
 	data-spin={spin > 0 ? "" : undefined}
 	data-ctl={controls && n > 1 ? "" : undefined}
+	data-nav={navAlign}
 	onkeydown={onKeyDown}
 	onpointerdown={onPointerDown}
 	onpointermove={onPointerMove}
@@ -782,6 +786,8 @@
 		--dcc-pad: clamp(16px, 3.6cqw, 44px);
 		/* Ruang bebas atas/bawah untuk elemen tetap di luar karusel (navbar, tombol mengambang). Diatur induk. */
 		--dcc-t: var(--dcc-top, 0px);
+		/* Jarak tepi kiri/kanan teks (kredit, petunjuk, kontrol). Induk boleh menyamakannya dengan kontainer halaman. */
+		--dcc-x: var(--dcc-inset-x, var(--dcc-pad));
 		--dcc-b: var(--dcc-bottom, 0px);
 	}
 	.dcc-root:focus-visible {
@@ -979,6 +985,15 @@
 		font-size: 12px;
 		white-space: nowrap;
 	}
+	/* Rata kiri: satu kolom teks bersama blok kredit di bawahnya. */
+	.dcc-root[data-nav="start"] .dcc-nav {
+		left: var(--dcc-x);
+		transform: none;
+		top: calc(var(--dcc-pad) * 0.6 + var(--dcc-t));
+	}
+	.dcc-root[data-nav="start"] .dcc-head {
+		top: calc(var(--dcc-pad) * 0.6 + var(--dcc-t) + 44px);
+	}
 	.dcc-brand {
 		font-weight: 800;
 		font-size: 15px;
@@ -1106,7 +1121,7 @@
 	.dcc-head {
 		position: absolute;
 		top: calc(var(--dcc-pad) + var(--dcc-t));
-		left: var(--dcc-pad);
+		left: var(--dcc-x);
 		z-index: 4;
 		width: clamp(170px, 21cqw, 290px);
 		pointer-events: none;
@@ -1209,7 +1224,7 @@
 
 	.dcc-ctl {
 		position: absolute;
-		right: var(--dcc-pad);
+		right: var(--dcc-x);
 		bottom: calc(var(--dcc-pad) + var(--dcc-b));
 		z-index: 5;
 		display: flex;
@@ -1261,7 +1276,7 @@
 	}
 	.dcc-hint {
 		position: absolute;
-		left: var(--dcc-pad);
+		left: var(--dcc-x);
 		bottom: calc(var(--dcc-pad) + var(--dcc-b));
 		z-index: 4;
 		font-size: 9px;
@@ -1294,6 +1309,13 @@
 		}
 		.dcc-row:nth-child(n + 3) {
 			display: none;
+		}
+		/* Nav rata kiri muat di layar sempit: tautan/filter tetap tampil, kredit tetap di bawahnya. */
+		.dcc-root[data-nav="start"] .dcc-link {
+			display: inline-block;
+		}
+		.dcc-root[data-nav="start"] .dcc-head {
+			top: calc(var(--dcc-pad) * 0.6 + var(--dcc-t) + 40px);
 		}
 	}
 	/* Layar pendek (laptop 720–780 px): blok kredit diringkas supaya tak menimpa cakram. */
