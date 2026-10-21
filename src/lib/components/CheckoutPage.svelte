@@ -16,7 +16,7 @@
 			emptyCta: "Jelajahi koleksi", items: "{n} item", total: "Total", pay: "Lanjut ke pembayaran",
 			remove: "Hapus", continue: "Lanjut belanja", eventBadge: "Event", subtotal: "Subtotal ({n} item)",
 			eventDiscount: "Diskon event", estNote: "Voucher & diskon final dihitung saat bayar",
-			kindPhoto: "Foto", kindVideo: "Video", kindPlan: "Paket langganan",
+			kindPhoto: "Foto", kindVideo: "Video", kindSound: "Audio", kindPlan: "Paket langganan",
 		},
 		en: {
 			kicker: "Cart", title: "Your cart", empty: "Your cart is empty",
@@ -24,7 +24,7 @@
 			emptyCta: "Explore the collection", items: "{n} items", total: "Total", pay: "Continue to payment",
 			remove: "Remove", continue: "Keep browsing", eventBadge: "Event", subtotal: "Subtotal ({n} items)",
 			eventDiscount: "Event discount", estNote: "Voucher & final discount calculated at payment",
-			kindPhoto: "Photo", kindVideo: "Video", kindPlan: "Membership plan",
+			kindPhoto: "Photo", kindVideo: "Video", kindSound: "Sound", kindPlan: "Membership plan",
 		},
 	};
 
@@ -48,6 +48,7 @@
 	function kindLabel(item: CartItem) {
 		if (item.kind === "plan") return t.kindPlan;
 		if (item.kind === "video") return t.kindVideo;
+		if (item.kind === "sound") return t.kindSound;
 		return t.kindPhoto;
 	}
 
@@ -107,6 +108,11 @@
 							{#if item.kind === "video"}
 								<span class="ck-thumb__play" aria-hidden="true">
 									<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+								</span>
+							{:else if item.kind === "sound"}
+								<!-- Penanda audio: sampul audio bisa mirip foto biasa. -->
+								<span class="ck-thumb__play" aria-hidden="true">
+									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
 								</span>
 							{/if}
 						</div>

@@ -81,8 +81,8 @@
 	$effect(() => {
 		fetchPhotoById(photoId).then((p) => {
 			// Tautan lama / dari luar ke /photos/<id video>: halaman detail video yang benar.
-			if (p?.assetType === "VIDEO") {
-				void goto(`/videos/${p.id}`, { replaceState: true });
+			if (p?.assetType === "VIDEO" || p?.assetType === "AUDIO") {
+				void goto(`/${p.assetType === "AUDIO" ? "sounds" : "videos"}/${p.id}`, { replaceState: true });
 				return;
 			}
 			photo = p;

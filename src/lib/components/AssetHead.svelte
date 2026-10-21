@@ -14,7 +14,7 @@
 		type AssetSeo,
 	} from "$lib/seo";
 
-	/** <head> halaman detail foto/video dari data load (lihat loadAssetPage di $lib/seo). */
+	/** <head> halaman detail foto/video/audio dari data load (lihat loadAssetPage di $lib/seo). */
 	let { data, kind }: { data: AssetPageData; kind: AssetKind } = $props();
 
 	// Navigasi klien: data datang belakangan (tak menahan perpindahan halaman) — judul tab menyusul.
@@ -34,8 +34,8 @@
 
 	const seo = $derived(data.seo ?? late);
 	const origin = $derived(siteOrigin(page.url));
-	const label = $derived(kind === "video" ? "Video" : "Foto");
-	const listPath = $derived(kind === "video" ? "/videos" : "/photos");
+	const label = $derived(kind === "video" ? "Video" : kind === "sound" ? "Sounds" : "Foto");
+	const listPath = $derived(kind === "video" ? "/videos" : kind === "sound" ? "/sounds" : "/photos");
 </script>
 
 {#if seo}
@@ -45,7 +45,7 @@
 		path={assetPath(seo)}
 		image={assetImagePath(seo.id)}
 		imageAlt={seo.titleEn && seo.titleEn !== seo.title ? `${seo.title} — ${seo.titleEn}` : seo.title}
-		type={kind === "video" ? "video.other" : "website"}
+		type={kind === "video" ? "video.other" : kind === "sound" ? "music.song" : "website"}
 		keywords={[...seo.keywords, ...seo.categories].slice(0, 20)}
 		geo={{ placename: seo.location }}
 		jsonld={[
@@ -57,5 +57,9 @@
 		]}
 	/>
 {:else}
-	<Seo title={`${label} Stok Indonesia`} description={`${label} stok Indonesia dari arsip visual Nusantara, berlisensi komersial.`} />
+	{#if kind === "sound"}
+		<Seo title="Musik & Efek Suara Indonesia" description="Musik dan efek suara bebas royalti dari arsip Nusantara, berlisensi komersial." />
+	{:else}
+		<Seo title={`${label} Stok Indonesia`} description={`${label} stok Indonesia dari arsip visual Nusantara, berlisensi komersial.`} />
+	{/if}
 {/if}

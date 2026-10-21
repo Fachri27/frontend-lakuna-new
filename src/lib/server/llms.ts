@@ -1,6 +1,6 @@
 import { FAQ } from "$lib/faq";
 import { ADDRESS, COMPANY, CONTACT_EMAIL } from "$lib/contact";
-import { DEFAULT_DESCRIPTION, SITE_ALT_NAMES, SITE_NAME, absUrl, assetPath, isAssetId } from "$lib/seo";
+import { DEFAULT_DESCRIPTION, SITE_ALT_NAMES, SITE_NAME, absUrl, assetPath, isAssetId, kindOfType } from "$lib/seo";
 import { idr, loadCatalog, loadCategories, loadPlans } from "./seoData";
 
 /**
@@ -16,8 +16,9 @@ const plain = (s: string | null | undefined) =>
 export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boolean): Promise<string> {
 	const [catalog, cats, plans] = await Promise.all([loadCatalog(fetchFn), loadCategories(fetchFn), loadPlans(fetchFn)]);
 	const u = (p: string) => absUrl(origin, p);
-	const photos = catalog.filter((a) => a.type !== "VIDEO").length;
-	const videos = catalog.length - photos;
+	const videos = catalog.filter((a) => a.type === "VIDEO").length;
+	const sounds = catalog.filter((a) => a.type === "AUDIO").length;
+	const photos = catalog.length - videos - sounds;
 	const L: string[] = [];
 
 	L.push(`# ${SITE_NAME}`, "");
@@ -30,7 +31,7 @@ export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boo
 	// Angka koleksi baru disebut setelah cukup besar — "10 foto" dikutip mesin jawab justru merugikan.
 	L.push(
 		catalog.length >= 100
-			? `- Koleksi saat ini: ${photos} foto dan ${videos} video yang sudah dikurasi (bertambah terus; setiap karya ditinjau sebelum tayang).`
+			? `- Koleksi saat ini: ${photos} foto, ${videos} video${sounds ? `, dan ${sounds} audio (musik & efek suara)` : ""} yang sudah dikurasi (bertambah terus; setiap karya ditinjau sebelum tayang).`
 			: "- Koleksi foto & video terus bertambah; setiap karya ditinjau dan dikurasi sebelum tayang."
 	);
 	L.push(
@@ -56,6 +57,7 @@ export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boo
 	L.push(
 		`- [Galeri foto](${u("/photos")}): foto stok Indonesia — alam, kota, orang, travel, bisnis, sinema.`,
 		`- [Galeri video](${u("/videos")}): video & stock footage Indonesia.`,
+		`- [Sounds](${u("/sounds")}): musik & efek suara bebas royalti — suasana alam, budaya, dan kota Indonesia.`,
 		`- [Cari arsip](${u("/archives")}): pencarian kata kunci, mis. ${u("/archives?q=bali")} (parameter \`q\`).`,
 		`- [Ekowisata Nusantara](${u("/ecotourism")}): pegunungan, hutan hujan, danau, pantai, dan terumbu karang Indonesia.`
 	);
@@ -107,8 +109,8 @@ export async function buildLlms(origin: string, fetchFn: typeof fetch, full: boo
 				const titleEn = plain(a.titleEn);
 				const en = titleEn && titleEn !== title ? ` / ${titleEn}` : "";
 				const where = plain(a.location);
-				const kind = a.type === "VIDEO" ? "video" : "photo";
-				L.push(`- [${title}${en}](${u(assetPath({ id: a.id, kind }))}) — ${kind === "video" ? "video" : "foto"}${where ? `, ${where}` : ""}`);
+				const kind = kindOfType(a.type);
+				L.push(`- [${title}${en}](${u(assetPath({ id: a.id, kind }))}) — ${kind === "video" ? "video" : kind === "sound" ? "audio" : "foto"}${where ? `, ${where}` : ""}`);
 			}
 			L.push("");
 		}

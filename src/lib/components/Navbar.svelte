@@ -126,7 +126,7 @@ import { i18n } from "$lib/i18n.svelte";
 {#snippet NavLink(href: string, mainCls: string, label: string)}
 	<a
 		{href}
-		class={`group relative py-2 text-[0.82rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight ${mainCls}`}
+		class={`group relative py-2 text-[0.76rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight lg:text-[0.82rem] ${mainCls}`}
 	>
 		{label}
 		<span class="absolute -bottom-0.5 left-0 h-px w-0 bg-safelight transition-all duration-300 group-hover:w-full"></span>
@@ -178,9 +178,12 @@ import { i18n } from "$lib/i18n.svelte";
 			</a>
 
 			<!-- Left: nav links (desktop) -->
-			<div data-no-hover-sound data-no-click-sound class="hidden items-center gap-9 md:flex">
+			<!-- Lima tautan (dengan Sounds): huruf & jarak dirapatkan di bawah xl supaya tak menabrak logo di tengah
+			     (900–1279 px). -->
+			<div data-no-hover-sound data-no-click-sound class="hidden items-center gap-4 md:flex lg:gap-6 xl:gap-9">
 				{@render NavLink("/photos", muted, i18n.c.nav.photos)}
 				{@render NavLink("/videos", muted, i18n.c.nav.videos)}
+				{@render NavLink("/sounds", muted, i18n.c.nav.sounds)}
 
 				<!-- Categories: mega-menu dibuka via KLIK (bukan hover) — hover
 					tak sengaja membuka di desktop dan mustahil di sentuh. -->
@@ -194,7 +197,7 @@ import { i18n } from "$lib/i18n.svelte";
 						aria-expanded={mega}
 						aria-haspopup="true"
 						aria-controls="mega-menu-categories"
-						class={`group relative z-50 inline-flex items-center gap-1.5 py-2 text-[0.82rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight ${muted}`}
+						class={`group relative z-50 inline-flex items-center gap-1.5 py-2 text-[0.76rem] font-medium tracking-wide transition-colors duration-500 hover:text-safelight lg:text-[0.82rem] ${muted}`}
 						onclick={() => (mega = !mega)}
 					>
 						{i18n.c.nav.categories}
@@ -392,6 +395,7 @@ import { i18n } from "$lib/i18n.svelte";
 				<div class="flex flex-col gap-1">
 					<a href="/photos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.photos}</a>
 					<a href="/videos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.videos}</a>
+					<a href="/sounds" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.sounds}</a>
 					<a href="/photos" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.categories}</a>
 					<a href="/pricing" class="flex min-h-[48px] items-center font-display text-[1.4rem] text-fg transition-colors active:text-safelight" onclick={() => (open = false)}>{i18n.c.nav.pricing}</a>
 					<div class="my-3 border-t border-hair"></div>

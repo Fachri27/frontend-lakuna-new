@@ -8,6 +8,7 @@
 	import { i18n } from "$lib/i18n.svelte";
 	import { apiGet } from "$lib/api";
 	import type { ApiResponse } from "$lib/types";
+	import { assetPath, kindOfType } from "$lib/seo";
 
 	const copy = {
 		id: { opening: "Membuka karya…", missing: "Tautan ini tidak ditemukan", missingBody: "Karyanya mungkin sudah tidak tersedia.", browse: "Jelajahi koleksi" },
@@ -24,10 +25,10 @@
 			return;
 		}
 		let alive = true;
-		apiGet<ApiResponse<{ id: string; type: "FOTO" | "VIDEO" }>>(`/api/photos/short/${code}`)
+		apiGet<ApiResponse<{ id: string; type: "FOTO" | "VIDEO" | "AUDIO" }>>(`/api/photos/short/${code}`)
 			.then((res) => {
 				if (!alive) return;
-				void goto(`/${res.data.type === "VIDEO" ? "videos" : "photos"}/${res.data.id}`, { replaceState: true });
+				void goto(assetPath({ id: res.data.id, kind: kindOfType(res.data.type) }), { replaceState: true });
 			})
 			.catch(() => {
 				if (alive) missing = true;

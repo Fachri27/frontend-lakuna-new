@@ -4,7 +4,7 @@ import type { ApiResponse, ApiCartItem, ApiFavorite, ApiUser } from "./types";
 
 export type CartItem = {
 	id: string;
-	kind: "photo" | "video" | "plan";
+	kind: "photo" | "video" | "sound" | "plan";
 	title: string;
 	/** Judul Inggris (foto/video) bila ada — tampil saat bahasa EN. */
 	titleEn?: string;
@@ -71,7 +71,7 @@ class AppStore {
 			if (res.success) {
 				this.cart = res.data.map((item) => ({
 					id: item.id,
-					kind: "photo" as const,
+					kind: item.photo.type === "VIDEO" ? ("video" as const) : item.photo.type === "AUDIO" ? ("sound" as const) : ("photo" as const),
 					title: item.photo.title,
 					titleEn: item.photo.titleEn ?? undefined,
 					price: item.price,
@@ -118,11 +118,12 @@ class AppStore {
 
 	async addToCart(item: CartItem) {
 		if (!this.#requireAuth()) return;
-		// Foto: wajib lolos backend dulu baru tampil di cart. Jangan
+		// Foto, video & audio: wajib lolos backend dulu baru tampil di cart. Jangan
 		// optimistic-push saat API gagal: item yang tidak dikenal backend
 		// (mis. foto dummy) membuat cart lokal ≠ cart server dan berujung
-		// EMPTY_CART saat bayar.
-		if (item.kind === "photo" && item.meta) {
+		// EMPTY_CART saat bayar. (Dulu hanya foto — video dari halaman Video
+		// hanya tersimpan lokal, lalu checkout menolaknya karena keranjang server kosong.)
+		if (item.kind !== "plan" && item.meta) {
 			try {
 				await apiPost<ApiResponse<ApiCartItem>>("/api/cart", {
 					photoId: item.meta,

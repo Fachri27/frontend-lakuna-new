@@ -27,8 +27,8 @@ export type Photo = {
   location?: string;
   /** Tanggal & waktu pengambilan (ISO) dari API; null = tidak diisi (baris meta disembunyikan). */
   takenAt?: string | null;
-  /** Tipe aset dari API — beranda perlu memisahkan foto dari video. */
-  assetType?: "FOTO" | "VIDEO";
+  /** Tipe aset dari API — beranda perlu memisahkan foto dari video (AUDIO = halaman Sounds). */
+  assetType?: "FOTO" | "VIDEO" | "AUDIO";
   cat: Cat;
   seed: string;
   w: number;
@@ -259,7 +259,7 @@ export function adaptPhoto(api: ApiPhoto): Photo {
     aiGenerated: !!api.aiGenerated,
     location: api.location || undefined,
     takenAt: api.takenAt ?? null,
-    assetType: api.type === "VIDEO" ? "VIDEO" : "FOTO",
+    assetType: api.type === "VIDEO" ? "VIDEO" : api.type === "AUDIO" ? "AUDIO" : "FOTO",
     cat,
     seed: api.id,
     w: api.width || 1600,
@@ -345,6 +345,130 @@ export function adaptVideo(api: ApiPhoto): Video {
   };
 }
 
+/* ───────────────────────── Sounds (AUDIO) ───────────────────────── */
+
+export type Sound = {
+  id: string;
+  title: Localized;
+  author: string;
+  aiGenerated?: boolean;
+  /** Musik atau efek suara. */
+  kind: "MUSIC" | "SFX";
+  /** Detik (dari berkas); 0 = belum diketahui. */
+  duration: number;
+  bpm: number | null;
+  /** Puncak gelombang 0–100 (±160 titik) — digambar <Waveform>. */
+  waveform: number[];
+  price: number;
+  desc: Localized;
+  location?: string;
+  /** Format berkas asli yang diterima pembeli (wav, flac, mp3, …). */
+  format: string | null;
+  /** Sampul persegi (teracak dari API → dirender ApiImage). */
+  cover?: string;
+  /** Pratinjau MP3 bertanda suara (URL presigned; diminta ulang lewat /view bila kedaluwarsa). */
+  previewUrl: string | null;
+  categories: string[];
+  categoriesEn?: string[];
+  keywords: string[];
+  keywordsEn?: string[];
+  createdAt?: string;
+};
+
+export function adaptSound(api: ApiPhoto): Sound {
+  const cats = (api.photoCategories ?? []).map((pc) => pc.category.name);
+  const { id: keywords, en: keywordsEn } = splitKeywords(api);
+  const preview = api.watermarkUrl && !api.watermarkUrl.includes("picsum.photos") ? api.watermarkUrl : null;
+  return {
+    id: api.id,
+    title: titleOf(api),
+    author: api.photographer || "Unknown",
+    aiGenerated: !!api.aiGenerated,
+    kind: api.audioKind === "SFX" ? "SFX" : "MUSIC",
+    duration: Number(api.duration) || 0,
+    bpm: api.bpm ?? null,
+    waveform: Array.isArray(api.waveform) ? api.waveform.map((v) => Math.max(0, Math.min(100, Number(v) || 0))) : [],
+    price: api.price,
+    desc: descOf(api),
+    location: api.location || undefined,
+    format: api.format || null,
+    cover: api.thumbUrl && !api.thumbUrl.includes("picsum.photos") ? api.thumbUrl : undefined,
+    previewUrl: preview,
+    categories: [...new Set(cats.filter(Boolean))],
+    categoriesEn: catsEnOf(api),
+    keywords: [...new Set(keywords.filter(Boolean))],
+    keywordsEn: [...new Set(keywordsEn.filter(Boolean))],
+    createdAt: api.createdAt,
+  };
+}
+
+/** 92.4 → "1:32"; 3725 → "1:02:05". */
+export function fmtDuration(sec: number): string {
+  if (!(sec > 0)) return "0:00";
+  const s = Math.round(sec);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
+}
+
+export async function fetchSounds(opts: {
+  kind?: "MUSIC" | "SFX";
+  cat?: string;
+  search?: string;
+  photographer?: string;
+  sort?: "newest" | "popular" | "oldest";
+  page?: number;
+  limit?: number;
+} = {}): Promise<{ sounds: Sound[]; total: number; totalPages: number }> {
+  const params = new URLSearchParams({ type: "AUDIO", page: String(opts.page ?? 1), limit: String(opts.limit ?? 20) });
+  if (opts.kind) params.set("audioKind", opts.kind);
+  if (opts.cat) params.set("categoryId", opts.cat);
+  if (opts.search) params.set("search", opts.search);
+  if (opts.photographer) params.set("photographer", opts.photographer);
+  if (opts.sort) params.set("sort", opts.sort);
+  const res = await apiGet<ApiResponse<ApiPhoto[]>>(`/api/photos?${params}`);
+  return {
+    sounds: (res.data ?? []).filter((p) => p.type === "AUDIO").map(adaptSound),
+    total: res.meta?.total ?? 0,
+    totalPages: res.meta?.totalPages ?? 0,
+  };
+}
+
+export async function fetchSoundById(id: string): Promise<{ sound: Sound | null; type: ApiPhoto["type"] | null }> {
+  try {
+    const res = await apiGet<ApiResponse<ApiPhoto>>(`/api/photos/${encodeURIComponent(id)}`);
+    if (!res.success || !res.data) return { sound: null, type: null };
+    return { sound: res.data.type === "AUDIO" ? adaptSound(res.data) : null, type: res.data.type };
+  } catch {
+    return { sound: null, type: null };
+  }
+}
+
+/** Audio terkait (keyword sama); tak ada → audio terbaru sejenis. */
+export async function fetchRelatedSounds(id: string, kind: "MUSIC" | "SFX", limit = 6): Promise<Sound[]> {
+  try {
+    const res = await apiGet<ApiResponse<ApiPhoto[]> & { photos?: ApiPhoto[] }>(
+      `/api/photos/${encodeURIComponent(id)}/related?type=AUDIO&limit=${limit}`,
+    );
+    const rows = (Array.isArray(res.data) ? res.data : (res.photos ?? [])).filter((r) => r.type === "AUDIO");
+    if (rows.length > 0) return rows.map(adaptSound).slice(0, limit);
+  } catch {
+    /* jatuh ke terbaru */
+  }
+  const { sounds } = await fetchSounds({ kind, limit: limit + 1 }).catch(() => ({ sounds: [] as Sound[] }));
+  return sounds.filter((s) => s.id !== id).slice(0, limit);
+}
+
+/** Ubin mood/genre halaman Sounds: kategori yang berisi audio, dengan jumlah & sampul. */
+export type SoundCategory = ApiCatItem & { count: number; coverUrl: string | null };
+export async function fetchSoundCategories(): Promise<SoundCategory[]> {
+  try {
+    const res = await apiGet<ApiResponse<SoundCategory[]>>("/api/categories?type=AUDIO&limit=50");
+    return (res.data ?? []).filter((c) => c.count > 0).sort((a, b) => b.count - a.count);
+  } catch {
+    return [];
+  }
+}
+
 export function adaptPlan(api: ApiPlan): Plan {
   return {
     id: api.id as Plan["id"],
@@ -368,7 +492,9 @@ export async function fetchPhotos(opts?: {
   search?: string;
   /** Karya satu fotografer (nama persis); beda dengan `search` yang hanya judul & keyword. */
   photographer?: string;
-  type?: "FOTO" | "VIDEO";
+  type?: "FOTO" | "VIDEO" | "AUDIO";
+  /** AUDIO saja: musik / efek suara. */
+  audioKind?: "MUSIC" | "SFX";
   /** Urutan hasil; default terbaru. */
   sort?: "newest" | "oldest" | "popular" | "price_asc" | "price_desc";
   /** Hanya yang diunggah dalam rentang ini; kosong = semua waktu. */
@@ -385,6 +511,7 @@ export async function fetchPhotos(opts?: {
   if (opts?.search) params.set("search", opts.search);
   if (opts?.photographer) params.set("photographer", opts.photographer);
   if (opts?.type) params.set("type", opts.type);
+  if (opts?.audioKind) params.set("audioKind", opts.audioKind);
   if (opts?.sort) params.set("sort", opts.sort);
   if (opts?.period) params.set("period", opts.period);
   params.set("page", String(opts?.page ?? 1));
@@ -413,7 +540,7 @@ export async function fetchPhotos(opts?: {
 function dummyPhotoPage(opts?: {
   cat?: string;
   search?: string;
-  type?: "FOTO" | "VIDEO";
+  type?: "FOTO" | "VIDEO" | "AUDIO";
   page?: number;
   limit?: number;
 }): { photos: Photo[]; total: number; totalPages: number } {
@@ -721,7 +848,8 @@ export async function fetchCartEventDiscounts(
   const perItem: Record<string, { name: string; amount: number }> = {};
   let total = 0;
   const photoItems = items.filter(
-    (i) => i.kind === "photo" && !!i.meta && UUID_RE.test(i.meta) && i.price > 0,
+    // Semua item karya (foto/video/audio) — keranjang server kini memberi jenisnya; dulu semua dipetakan "photo".
+    (i) => i.kind !== "plan" && !!i.meta && UUID_RE.test(i.meta) && i.price > 0,
   );
   await Promise.all(
     photoItems.map(async (it) => {

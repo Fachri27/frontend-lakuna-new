@@ -21,7 +21,7 @@
 			orders: "Pesanan Saya", subscription: "Langganan", premium: "Member Premium", free: "Member",
 			avChange: "Ganti foto", avTooBig: "Foto maksimal 5 MB", avFail: "Gagal mengganti foto profil",
 			planLine: "Paket {plan} · aktif s/d {date}",
-			all: "Semua", photo: "Foto", video: "Video", save: "Simpan", saved: "Tersimpan",
+			all: "Semua", photo: "Foto", video: "Video", sound: "Audio", save: "Simpan", saved: "Tersimpan",
 			nextPage: "Halaman berikutnya", prevPage: "Sebelumnya",
 			noFav: "Belum ada favorit", noFavCta: "Cari bingkai favoritmu", noFavFiltered: "Belum ada favorit di jenis ini", logout: "Keluar",
 			account: "Akun", id: "ID", username: "Nama pengguna", email: "Email",
@@ -88,7 +88,7 @@
 			orders: "My Orders", subscription: "Subscription", premium: "Premium Member", free: "Member",
 			avChange: "Change photo", avTooBig: "Photo must be 5 MB or less", avFail: "Couldn't change your profile photo",
 			planLine: "{plan} plan · active until {date}",
-			all: "All", photo: "Photo", video: "Video", save: "Save", saved: "Saved",
+			all: "All", photo: "Photo", video: "Video", sound: "Sound", save: "Save", saved: "Saved",
 			nextPage: "Next Page", prevPage: "Previous",
 			noFav: "No favourites yet", noFavCta: "Find your favourite frames", noFavFiltered: "No favourites of this type yet", logout: "Sign out",
 			account: "Account", id: "ID", username: "Username", email: "Email",
@@ -152,11 +152,11 @@
 	type Section = "profile" | "orders" | "favorites" | "downloads" | "cart" | "upload" | "payout";
 	const SECTIONS: Section[] = ["profile", "orders", "favorites", "downloads", "cart"];
 
-	type AssetFilter = "all" | "FOTO" | "VIDEO";
+	type AssetFilter = "all" | "FOTO" | "VIDEO" | "AUDIO";
 	/** 6 baris × 3 kolom, sesuai grid favorit di desktop. */
 	const PER_PAGE = 18;
 
-	type FavItem = { id: string; title: string; titleEn?: string | null; thumbUrl: string; type: "FOTO" | "VIDEO" };
+	type FavItem = { id: string; title: string; titleEn?: string | null; thumbUrl: string; type: "FOTO" | "VIDEO" | "AUDIO" };
 
 	type OrderCopy = { paid: string; pending: string; cancelled: string; otherStatus: string };
 
@@ -814,7 +814,7 @@
 					title: f.photo.title,
 					titleEn: f.photo.titleEn,
 					thumbUrl: f.photo.thumbUrl,
-					type: f.photo.type === "VIDEO" ? "VIDEO" : "FOTO",
+					type: f.photo.type === "VIDEO" ? "VIDEO" : f.photo.type === "AUDIO" ? "AUDIO" : "FOTO",
 				}));
 			}
 		}).catch(() => {});
@@ -1074,7 +1074,7 @@
 				{#if section === "favorites"}
 					<h2 class="pp-title">{t.favorites}</h2>
 					<div class="mt-5 flex flex-wrap gap-2" role="group" aria-label={t.favorites}>
-						{#each ([["all", t.all], ["FOTO", t.photo], ["VIDEO", t.video]] as [AssetFilter, string][]) as [f, label] (f)}
+						{#each ([["all", t.all], ["FOTO", t.photo], ["VIDEO", t.video], ...(favItems.some((x) => x.type === "AUDIO") ? [["AUDIO", t.sound]] : [])] as [AssetFilter, string][]) as [f, label] (f)}
 							<button type="button" class="pp-chip" aria-pressed={filter === f} onclick={() => setFilter(f)}>{label}</button>
 						{/each}
 					</div>
@@ -1088,10 +1088,10 @@
 							{#each pageItems as f (f.id)}
 								{@const fav = store.isFavorite(f.id)}
 								<li class="pp-tile on-darkroom group">
-									<a href={f.type === "VIDEO" ? `/videos/${f.id}` : `/photos/${f.id}`} class="pp-tile__link">
-										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} photoId={f.type === "VIDEO" ? undefined : f.id} alt={pickTitle(f.title, f.titleEn, lang)} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
+									<a href={f.type === "VIDEO" ? `/videos/${f.id}` : f.type === "AUDIO" ? `/sounds/${f.id}` : `/photos/${f.id}`} class="pp-tile__link">
+										<ApiImage src={imgFor(f.id, 800, 600, f.thumbUrl)} photoId={f.type === "FOTO" ? f.id : undefined} alt={pickTitle(f.title, f.titleEn, lang)} fill class="object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
 										<span class="pp-tile__title">{pickTitle(f.title, f.titleEn, lang)}</span>
-										<span class="pp-tile__tag">{f.type === "VIDEO" ? t.video : "HD"}</span>
+										<span class="pp-tile__tag">{f.type === "VIDEO" ? t.video : f.type === "AUDIO" ? t.sound : "HD"}</span>
 									</a>
 									<button
 										type="button"

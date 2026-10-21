@@ -12,7 +12,12 @@ export type ApiPhoto = {
   /** Tanggal & waktu pengambilan (ISO, opsional); null = tidak diisi. */
   takenAt?: string | null;
   price: number;
-  type: "FOTO" | "VIDEO";
+  type: "FOTO" | "VIDEO" | "AUDIO";
+  /** AUDIO (halaman Sounds): durasi detik, tempo, jenis, dan puncak waveform 0–100. */
+  duration?: number | null;
+  bpm?: number | null;
+  audioKind?: "MUSIC" | "SFX" | null;
+  waveform?: number[] | null;
   /** Foto eksklusif: tetap FOTO di semua filter/galeri. */
   isExclusive?: boolean | null;
   status: "APPROVED" | "PENDING" | "REJECTED";
@@ -92,7 +97,7 @@ export type ApiCartItem = {
   createdAt: string;
   price: number;
   thumbUrl: string;
-  photo: { id: string; title: string; titleEn?: string | null; thumbKey: string; price: number };
+  photo: { id: string; title: string; titleEn?: string | null; thumbKey: string; price: number; type?: "FOTO" | "VIDEO" | "AUDIO" };
 };
 
 export type ApiFavorite = {

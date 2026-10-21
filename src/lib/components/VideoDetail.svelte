@@ -117,8 +117,8 @@
 		const originalPromise = fetchPhotoOriginal(videoId).catch(() => null);
 		fetchPhotoById(videoId).then((p) => {
 			// Tautan ke /videos/<id foto>: halaman detail foto yang benar.
-			if (p?.assetType === "FOTO") {
-				void goto(`/photos/${p.id}`, { replaceState: true });
+			if (p?.assetType === "FOTO" || p?.assetType === "AUDIO") {
+				void goto(`/${p.assetType === "AUDIO" ? "sounds" : "photos"}/${p.id}`, { replaceState: true });
 				return;
 			}
 			if (p) {

@@ -164,9 +164,12 @@ export function collectionLd(origin: string, path: string, name: string, descrip
 	};
 }
 
-/* ───────────────────────── Aset (foto / video) ───────────────────────── */
+/* ───────────────────────── Aset (foto / video / audio) ───────────────────────── */
 
-export type AssetKind = "photo" | "video";
+export type AssetKind = "photo" | "video" | "sound";
+/** Tipe aset API → jenis halaman (AUDIO = halaman Sounds). */
+export const kindOfType = (type: string | null | undefined): AssetKind =>
+	type === "VIDEO" ? "video" : type === "AUDIO" ? "sound" : "photo";
 export type AssetSeo = {
 	id: string;
 	kind: AssetKind;
@@ -186,11 +189,16 @@ export type AssetSeo = {
 	keywords: string[];
 	/** Dibuat dengan AI generatif → dilabeli (digitalSourceType) & tanpa lokasi/kreator orang. */
 	aiGenerated: boolean;
+	/** Audio saja: durasi (detik) & jenis (musik / efek suara). */
+	duration?: number | null;
+	audioKind?: "MUSIC" | "SFX" | null;
 };
 
 type ApiAsset = {
 	id: string;
-	type?: "FOTO" | "VIDEO";
+	type?: "FOTO" | "VIDEO" | "AUDIO";
+	duration?: number | null;
+	audioKind?: "MUSIC" | "SFX" | null;
 	title?: string;
 	titleEn?: string | null;
 	description?: string | null;
@@ -240,7 +248,7 @@ export async function loadAssetSeo(fetchFn: typeof fetch, id: string): Promise<A
 		if (!json?.success || !d?.id || !d.title) return null;
 		return {
 			id: d.id,
-			kind: d.type === "VIDEO" ? "video" : "photo",
+			kind: kindOfType(d.type),
 			title: d.title.trim(),
 			titleEn: d.titleEn?.trim() || null,
 			description: d.description?.trim() || null,
@@ -256,17 +264,23 @@ export async function loadAssetSeo(fetchFn: typeof fetch, id: string): Promise<A
 			categories: uniq((d.photoCategories ?? []).map((c) => c.category?.name)),
 			keywords: uniq((d.photoKeywords ?? []).map((k) => k.keyword?.name)),
 			aiGenerated: d.aiGenerated === true,
+			duration: typeof d.duration === "number" ? d.duration : null,
+			audioKind: d.audioKind ?? null,
 		};
 	} catch {
 		return null;
 	}
 }
 
-export const assetPath = (a: { id: string; kind: AssetKind }) => `/${a.kind === "video" ? "videos" : "photos"}/${a.id}`;
+export const assetPath = (a: { id: string; kind: AssetKind }) =>
+	`/${a.kind === "video" ? "videos" : a.kind === "sound" ? "sounds" : "photos"}/${a.id}`;
 /** Gambar pratinjau tautan per aset — ber-watermark & tak teracak (lihat routes/og/[file]/+server.ts). */
 export const assetImagePath = (id: string) => `/og/${id}.jpg`;
 
-const kindLabel = (a: AssetSeo) => (a.aiGenerated ? (a.kind === "video" ? "Video AI" : "Gambar AI") : a.kind === "video" ? "Video Stok" : "Foto Stok");
+const kindLabel = (a: AssetSeo) =>
+	a.kind === "sound"
+		? a.audioKind === "SFX" ? "Efek Suara" : "Musik Stok"
+		: a.aiGenerated ? (a.kind === "video" ? "Video AI" : "Gambar AI") : a.kind === "video" ? "Video Stok" : "Foto Stok";
 
 export function assetTitle(a: AssetSeo): string {
 	return `${a.title} — ${kindLabel(a)}${a.location ? ` ${a.location}` : ""}`;
@@ -276,20 +290,30 @@ export function assetDescription(a: AssetSeo): string {
 	// Ekor (jenis, lokasi, lisensi) selalu utuh; yang dipendekkan deskripsinya.
 	const tail = a.aiGenerated
 		? `${kindLabel(a)} berlisensi komersial di ${SITE_NAME}.`
-		: `${a.kind === "video" ? "Video" : "Foto"} stok ${a.location ?? "Indonesia"}, berlisensi komersial di ${SITE_NAME}.`;
+		: a.kind === "sound"
+			? `${a.audioKind === "SFX" ? "Efek suara" : "Musik"} bebas royalti${a.location ? ` dari ${a.location}` : ""}, berlisensi komersial di ${SITE_NAME}.`
+			: `${a.kind === "video" ? "Video" : "Foto"} stok ${a.location ?? "Indonesia"}, berlisensi komersial di ${SITE_NAME}.`;
 	const en = a.titleEn && a.titleEn.toLowerCase() !== a.title.toLowerCase() ? ` (${stripEnd(a.titleEn)})` : "";
 	const lead = clip(`${stripEnd(a.description || a.title)}${en}`, Math.max(60, 159 - tail.length));
 	return `${/[.…]$/.test(lead) ? lead : `${lead}.`} ${tail}`;
 }
 
+/** 92.4 → "PT1M32S". */
+function isoDuration(sec: number): string {
+	const s = Math.max(1, Math.round(sec));
+	const m = Math.floor(s / 60);
+	return `PT${m ? `${m}M` : ""}${s % 60 || !m ? `${s % 60}S` : ""}`;
+}
+
 /**
- * ImageObject / VideoObject lengkap dengan metadata lisensi — Google Images menampilkan lencana "Dapat
+ * ImageObject / VideoObject / AudioObject lengkap dengan metadata lisensi — Google Images menampilkan lencana "Dapat
  * dilisensikan" dari license + acquireLicensePage + creditText + copyrightNotice + creator.
  */
 export function assetLd(origin: string, a: AssetSeo): Record<string, unknown> {
 	const page = absUrl(origin, assetPath(a));
 	const image = absUrl(origin, assetImagePath(a.id));
 	const isVideo = a.kind === "video";
+	const isSound = a.kind === "sound";
 	const owner = a.photographer || COMPANY;
 	// Karya tim sendiri (fotografer = nama perusahaan) atau karya AI (dibuat & dikurasi Lakuna) → Organization, bukan Person.
 	const inHouse = a.aiGenerated || !a.photographer || a.photographer.toLowerCase() === COMPANY.toLowerCase();
@@ -297,14 +321,16 @@ export function assetLd(origin: string, a: AssetSeo): Record<string, unknown> {
 	const year = new Date(a.takenAt || a.createdAt).getFullYear();
 	const description = [a.description, a.descriptionEn].filter(Boolean).join(" — ") || assetDescription(a);
 	return {
-		"@type": isVideo ? "VideoObject" : "ImageObject",
+		"@type": isVideo ? "VideoObject" : isSound ? "AudioObject" : "ImageObject",
 		"@id": `${page}#asset`,
 		url: page,
 		mainEntityOfPage: page,
 		name: a.title,
 		alternateName: a.titleEn && a.titleEn !== a.title ? a.titleEn : undefined,
 		description,
-		...(isVideo ? { thumbnailUrl: [image] } : { contentUrl: image, thumbnailUrl: image }),
+		...(isVideo || isSound ? { thumbnailUrl: [image] } : { contentUrl: image, thumbnailUrl: image }),
+		// Durasi ISO 8601 (PT1M32S) — pratinjau audio tak dicantumkan: URL-nya presigned & cepat kedaluwarsa.
+		duration: isSound && a.duration ? isoDuration(a.duration) : undefined,
 		uploadDate: a.createdAt,
 		datePublished: a.createdAt,
 		dateModified: a.updatedAt,

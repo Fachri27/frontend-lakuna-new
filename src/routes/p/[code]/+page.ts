@@ -1,5 +1,5 @@
 import { redirect } from "@sveltejs/kit";
-import { apiBase, isAssetId, isClientNavigation } from "$lib/seo";
+import { apiBase, assetPath, isAssetId, isClientNavigation, kindOfType } from "$lib/seo";
 import type { PageLoad } from "./$types";
 
 /**
@@ -14,7 +14,7 @@ export const load: PageLoad = async ({ params, fetch }) => {
 	try {
 		const r = await fetch(`${apiBase()}/api/photos/short/${code}`, { signal: AbortSignal.timeout(4000) });
 		const d = r.ok ? ((await r.json()) as { data?: { id?: string; type?: string } }).data : null;
-		if (d?.id && isAssetId(d.id)) target = `/${d.type === "VIDEO" ? "videos" : "photos"}/${d.id}`;
+		if (d?.id && isAssetId(d.id)) target = assetPath({ id: d.id, kind: kindOfType(d.type) });
 	} catch {
 		/* API tak terjangkau → diteruskan di klien */
 	}

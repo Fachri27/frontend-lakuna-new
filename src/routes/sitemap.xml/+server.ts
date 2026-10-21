@@ -1,5 +1,5 @@
 import type { RequestHandler } from "./$types";
-import { assetImagePath, siteOrigin } from "$lib/seo";
+import { assetImagePath, assetPath, kindOfType, siteOrigin } from "$lib/seo";
 import { loadCatalog, loadCategories, redirectToCleanPath } from "$lib/server/seoData";
 
 /**
@@ -15,6 +15,7 @@ const STATIC_PATHS = [
 	"/",
 	"/photos",
 	"/videos",
+	"/sounds",
 	"/archives",
 	"/ecotourism",
 	"/pricing",
@@ -54,7 +55,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 		...STATIC_PATHS.map((p) => urlEntry(`${origin}${p}`)),
 		...cats.map((c) => urlEntry(`${origin}/categories/${encodeURIComponent(c.name)}`, c.updatedAt)),
 		...assets.map((a) =>
-			urlEntry(`${origin}/${a.type === "VIDEO" ? "videos" : "photos"}/${a.id}`, a.updatedAt, `${origin}${assetImagePath(a.id)}`)
+			urlEntry(`${origin}${assetPath({ id: a.id, kind: kindOfType(a.type) })}`, a.updatedAt, `${origin}${assetImagePath(a.id)}`)
 		),
 	];
 

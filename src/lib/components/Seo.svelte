@@ -32,7 +32,7 @@
 		imageAlt?: string;
 		imageWidth?: number;
 		imageHeight?: number;
-		type?: "website" | "article" | "video.other";
+		type?: "website" | "article" | "video.other" | "music.song";
 		noindex?: boolean;
 		rawTitle?: boolean;
 		keywords?: string[];
