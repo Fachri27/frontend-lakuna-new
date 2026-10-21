@@ -51,8 +51,9 @@
 	// koridor_kiri) menang bila diisi; kosong = arsip terbaru DIBAGI DUA
 	// (kanan dan kiri selalu beda foto). Thumbnail cukup — kartu kecil di
 	// kejauhan, besar hanya sesaat sebelum keluar layar.
-	let streamPhotos = $state<Photo[]>([]);
-	let streamPhotosAlt = $state<Photo[]>([]);
+	let curated = $state<{ right: Photo[]; left: Photo[] } | null>(null);
+	/** Arsip terbaru (cadangan bila kurasi kosong) — dipilih lagi per layar, lihat `streamPick`. */
+	let latestPool = $state<Photo[]>([]);
 	// Foto di rel membesar sampai ±61% lebar layar saat mendekati penonton — thumbnail 800 px jadi buram. Begitu
 	// footer mendekati layar, tiap foto diganti versi turunan file asli: 3200 px di laptop, 5120 px di layar
 	// 4K/5K. 5120 di semua layar membuat 12 foto ±17 MP dirasterisasi sekaligus saat footer masuk (frame ±50 ms),
@@ -82,6 +83,27 @@
 		const fit = natH / (STREAM_PEAK * vw * dpr);
 		return Math.min(STREAM_EXIT, STREAM_EXIT * fit * 0.97);
 	});
+	/** Tinggi piksel yang bisa dipakai kartu dari sebuah foto: turunan selebar streamTier, atau aslinya bila lebih kecil. */
+	const usableH = (ph: Photo) => (ph.nativeW && ph.nativeH ? (Math.min(streamTier, ph.nativeW) * ph.nativeH) / ph.nativeW : null);
+	const STREAM_MIN = 8;
+	// Cadangan arsip terbaru: foto yang terlalu kecil untuk layar ini dilewati selama masih ada ≥ STREAM_MIN foto lain.
+	// Puncak kartu (streamExit) mengikuti foto TERKECIL di rel, jadi satu foto kecil (mis. hasil AI 936×624) dulu
+	// memangkas seluruh koridor sampai kartunya tak lagi mencapai tepi layar — terutama di layar retina. Bila foto
+	// tajam kurang, diambil STREAM_MIN foto beresolusi tertinggi (urutan terbaru tetap). Kurasi CMS dipakai apa adanya.
+	const streamPick = $derived.by(() => {
+		if (curated) return curated;
+		const need = (STREAM_PEAK * vw * dpr) / 0.97;
+		const sharp = latestPool.filter((ph) => (usableH(ph) ?? need) >= need);
+		let pool = sharp;
+		if (sharp.length < STREAM_MIN) {
+			const best = new Set([...latestPool].sort((a, b) => (usableH(b) ?? 0) - (usableH(a) ?? 0)).slice(0, STREAM_MIN));
+			pool = latestPool.filter((ph) => best.has(ph));
+		}
+		const half = Math.max(1, Math.ceil(pool.length / 2));
+		return { right: pool.slice(0, half), left: pool.slice(half) };
+	});
+	const streamPhotos = $derived(streamPick.right);
+	const streamPhotosAlt = $derived(streamPick.left);
 	// Ponsel (< 640 px): koridor dipendekkan (CSS .ft-stream: 160px + 50vw) dan sumbunya diturunkan supaya pita kartu
 	// (±25cqw di sekitar sumbu) duduk tepat di bawah tagline (±150 px) — dulu sumbu 55% dari 50svh menyisakan ±100 px
 	// kosong di bawah kartu sebelum kolom footer.
@@ -125,20 +147,16 @@
 		let alive = true;
 		Promise.all([
 			fetchHomepage().catch(() => ({})),
-			fetchPhotos({ type: "FOTO", limit: 12 }).catch(() => null),
+			// 24, bukan 12: ada ruang memilih foto yang cukup tajam (lihat streamPick); hanya JSON, gambar dimuat
+			// untuk foto yang terpilih saja.
+			fetchPhotos({ type: "FOTO", limit: 24 }).catch(() => null),
 		])
 			.then(([hp, latest]) => {
 				if (!alive) return;
 				const rk = (hp as Record<string, HomepageSection>)["koridor_kanan"]?.photos;
 				const lk = (hp as Record<string, HomepageSection>)["koridor_kiri"]?.photos;
-				if (rk?.length && lk?.length) {
-					streamPhotos = rk.map(adaptPhoto);
-					streamPhotosAlt = lk.map(adaptPhoto);
-				} else if (latest) {
-					const half = Math.max(1, Math.ceil(latest.photos.length / 2));
-					streamPhotos = latest.photos.slice(0, half);
-					streamPhotosAlt = latest.photos.slice(half);
-				}
+				if (rk?.length && lk?.length) curated = { right: rk.map(adaptPhoto), left: lk.map(adaptPhoto) };
+				else if (latest) latestPool = latest.photos;
 			})
 			.catch(() => {});
 		return () => {
