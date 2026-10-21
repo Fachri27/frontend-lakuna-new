@@ -13,6 +13,7 @@
 	import SortSelect from "./SortSelect.svelte";
 	import ApiImage from "./ApiImage.svelte";
 	import SoundRow from "./SoundRow.svelte";
+	import SoundDiscs from "./SoundDiscs.svelte";
 
 	let { initialQ, initialKind, initialCat }: { initialQ?: string; initialKind?: string; initialCat?: string } = $props();
 
@@ -146,19 +147,45 @@
 		void load(1);
 	});
 
+	// Bagian atas = karusel cakram yang sama dengan section Sounds di landing — kecuali halaman dibuka untuk hasil
+	// pencarian / kategori (dari URL: navbar, tautan dibagikan): hasilnya yang langsung ditampilkan.
+	const showDiscs = $derived(!initialQ && !initialCat);
+
 	// Ubin: sampul kategori dari CMS dulu, lalu sampul audio terbarunya.
 	const tiles = $derived(categories.slice(0, 12));
 </script>
 
 <div data-no-hover-sound data-no-click-sound>
-	<section class="mx-auto max-w-[1500px] px-6 pb-10 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:px-10 lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
+	<!-- Dengan karusel: judul + karusel tepat satu layar mulai md (karusel mengisi sisa tinggi, cakram diukur dari
+		tinggi layar), sama dengan section Sounds di landing. --dcc-bottom: tombol Bantuan / ke-atas di dasar layar. -->
+	<section class={showDiscs ? "snd-hero relative flex flex-col [--dcc-bottom:4.5rem]" : ""}>
+		<!-- relative z-10: ekor huruf judul (leading < 1) tak tertutup latar karusel di bawahnya. -->
+		<div class="relative z-10 mx-auto w-full max-w-[1500px] px-6 pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.15rem)] lg:px-10 lg:pt-[calc(var(--banner-h,0px)+var(--nav-h)+1.9rem)]">
+			<Reveal class="grid gap-x-10 gap-y-5 lg:grid-cols-12 lg:items-end">
+				<div class="lg:col-span-7">
+					<p data-reveal class="kicker text-safelight">{query || cat ? t.kickerMixed : t.kicker}</p>
+					<h1
+						data-reveal
+						class={`mt-5 max-w-5xl font-display font-light leading-[0.98] tracking-[-0.03em] text-fg ${
+							showDiscs ? "text-[clamp(2rem,4vw,3.4rem)]" : "text-[clamp(2.4rem,6vw,5rem)]"
+						}`}
+					>
+						{query ? t.titleSearch(query) : t.title}
+					</h1>
+				</div>
+				<p data-reveal class="max-w-2xl text-[1.02rem] leading-relaxed text-fg-muted lg:col-span-5">{t.sub}</p>
+			</Reveal>
+		</div>
+		{#if showDiscs}
+			<div class="snd-hero-stage">
+				<SoundDiscs filters={false} />
+			</div>
+		{/if}
+	</section>
+
+	<section class={`mx-auto max-w-[1500px] px-6 pb-10 lg:px-10 ${showDiscs ? "pt-6" : "pt-8"}`}>
 		<Reveal>
-			<p data-reveal class="kicker text-safelight">{query || cat ? t.kickerMixed : t.kicker}</p>
-			<h1 data-reveal class="mt-5 max-w-5xl font-display text-[clamp(2.4rem,6vw,5rem)] font-light leading-[0.98] tracking-[-0.03em] text-fg">
-				{query ? t.titleSearch(query) : t.title}
-			</h1>
-			<p data-reveal class="mt-6 max-w-2xl text-[1.02rem] leading-relaxed text-fg-muted">{t.sub}</p>
-			<div data-reveal class="relative z-40 mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+			<div data-reveal class="relative z-40 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
 				<SearchField
 					bind:value={sq}
 					placeholder={t.searchPlaceholder}
@@ -317,6 +344,21 @@
 </div>
 
 <style>
+	.snd-hero-stage {
+		position: relative;
+		height: clamp(600px, 92svh, 780px);
+	}
+	@media (min-width: 768px) {
+		.snd-hero {
+			height: 100svh;
+			min-height: 680px;
+		}
+		.snd-hero-stage {
+			flex: 1 1 auto;
+			min-height: 0;
+			height: auto;
+		}
+	}
 	.snd-head {
 		grid-template-columns: auto minmax(0, 15rem) minmax(0, 1fr) 4.25rem auto;
 	}

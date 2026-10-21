@@ -1294,6 +1294,15 @@
 			display: none;
 		}
 	}
+	/* Layar pendek (laptop 720–780 px): blok kredit diringkas supaya tak menimpa cakram. */
+	@media (max-height: 780px) {
+		.dcc-row:nth-child(n + 3) {
+			display: none;
+		}
+		.dcc-title {
+			font-size: clamp(18px, 2.1cqw, 28px);
+		}
+	}
 	@container (max-width: 420px) {
 		.dcc-revs,
 		.dcc-foot {
