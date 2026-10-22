@@ -110,6 +110,10 @@ import { i18n } from "$lib/i18n.svelte";
 		}
 	}
 
+	// Halaman Sounds punya pemutarnya sendiri: saklar suara tombol disembunyikan di sana
+	// (bunyi UI-nya pun senyap — lihat SILENT_SOUND di +layout.svelte).
+	const onSounds = $derived(/^\/sounds(\/|$)/.test(page.url.pathname));
+
 	const solid = $derived(scrolled || mega || open);
 	const over = $derived(!solid);
 	const muted = $derived(over ? "text-ivory/80" : "text-fg/85");
@@ -283,6 +287,7 @@ import { i18n } from "$lib/i18n.svelte";
 					gelombang yang bergerak saat bersuara, rebah jadi garis datar saat
 					dibisukan. HANYA membisukan suara UI (hover/klik tombol) — suara
 					lain seperti audio video hero punya saklarnya sendiri. -->
+				{#if !onSounds}
 				<button
 					type="button"
 					data-no-hover-sound
@@ -302,6 +307,7 @@ import { i18n } from "$lib/i18n.svelte";
 						<path class="nav-sound-flat" d="M2 12 H 42" />
 					</svg>
 				</button>
+				{/if}
 				<!-- Aksesibilitas (dulu tombol mengambang di pojok kanan-bawah): lingkaran
 					yang sama dengan tombol suara & keranjang. Di bawah md navbar sudah
 					penuh, jadi aksinya ada di lembar menu. -->

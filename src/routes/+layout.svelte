@@ -115,7 +115,8 @@
 	// kategori/tema yang lalu membuka /categories — saat klik, path masih "/").
 	// Pengecualian per elemen: `data-sound` tetap berbunyi di halaman senyap
 	// (mis. CTA "Check all destination" di landing).
-	const SILENT_SOUND = /^\/$|^\/(photos|videos|pricing|profile|license|checkout|payment|archive|categories|archives|ecotourism|about|reviews|contributor|terms|privacy|cookies|help|faq|customer-service)(\/|$)/;
+	// /sounds ikut senyap: bunyi hover/klik akan menabrak pratinjau audio, dan saklarnya disembunyikan di sana.
+	const SILENT_SOUND = /^\/$|^\/(photos|videos|pricing|profile|license|checkout|payment|archive|categories|archives|ecotourism|sounds|about|reviews|contributor|terms|privacy|cookies|help|faq|customer-service)(\/|$)/;
 	function soundMuted(): boolean {
 		try {
 			return SILENT_SOUND.test(page.url.pathname);
